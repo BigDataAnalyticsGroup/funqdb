@@ -1,21 +1,29 @@
 import pytest
 
-from lib.core import AttributeFunction, DictionaryAttributeFunction, B, Point
+from lib.core import DictionaryAttributeFunction
 
-
-def test_example():
-    #factorial_of = Factorial()
-    #assert factorial_of(5) == 120
-
-    tf: AttributeFunction = AttributeFunction()
-    print(tf.bla)
-    tf.bla=5
 
 def test_DictionaryAttributeFunction():
-    # factorial_of = Factorial()
-    # assert factorial_of(5) == 120
+    daf = DictionaryAttributeFunction()
+    assert daf.x == 0
+    assert daf.y == 0
 
-    point = Point(21, 42)
-    print(point.x)
-    point.y=10
-    print(point.y)
+    # accessing a non-existing attribute raises AttributeError
+    with pytest.raises(AttributeError):
+        assert daf.z == 0
+
+    daf.x = 42
+    assert daf.x == 42
+    assert "x" in daf
+    assert "y" in daf
+    assert "z" not in daf
+
+    # create a new attribute:
+    daf.z = 100
+    assert daf.z == 100
+    assert "z" in daf
+    assert len(daf) == 3
+
+    # delete an attribute:
+    del daf.z
+    assert len(daf) == 2
