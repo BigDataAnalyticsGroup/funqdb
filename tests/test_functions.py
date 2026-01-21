@@ -1,6 +1,6 @@
 import pytest
 
-from lib.functions import DictionaryAttributeFunction, TF, RF, DBF
+from lib.functions import DictionaryAttributeFunction, TF, RF, DBF, DictionaryItem
 from lib.operators import Operator, Map
 
 
@@ -100,13 +100,14 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert users[1].department.budget == "15M"
 
     # test iterating over users in the database:
-    for key, user in db.users:
-        assert isinstance(user, TF)
-        assert user.name in {"Horst", "Tom", "John"}
+    item: DictionaryItem
+    for item in db.users:
+        assert isinstance(item.value, TF)
+        assert item.value.name in {"Horst", "Tom", "John"}
 
     # test python-side filtering:
     # comprehension:
-    advisory_users = [user for key, user in db.users if user.department.name == "Advisory"]
+    advisory_users = [item.value for item in db.users if item.value.department.name == "Advisory"]
     assert len(advisory_users) == 2
     assert {user.name for user in advisory_users} == {"Horst", "Tom"}
 
@@ -121,8 +122,8 @@ def test_operators():
 
     map: Operator[RF,RF] = Map[RF,RF]()
 
-    def mapping_function(el: tuple[str,TF]) -> tuple[str,TF]:
-        el[1].name = el[1].name + " User"
+    def mapping_function(el: DictionaryItem) -> DictionaryItem:
+        el.value.name = el.value.name + " User"
         return el
 
     db2: DBF = _create_testdata()
@@ -130,5 +131,5 @@ def test_operators():
     users_old_iter = iter(users_old)
 
     for ur in map(mapping_function, users):
-        assert ur[1].name == next(users_old_iter)[1].name + " User"
+        assert ur.value.name == next(users_old_iter).value.name + " User"
 

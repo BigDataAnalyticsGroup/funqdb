@@ -1,7 +1,7 @@
 # good article:
 # https://realpython.com/python-magic-methods/
 from abc import ABC, abstractmethod
-
+from typing import ItemsView
 
 
 class AttributeFunction[Key, Value](ABC):
@@ -27,6 +27,13 @@ class AttributeFunction[Key, Value](ABC):
         """Customize attribute deletion. Redirects to __delitem__ for actual deletion."""
         self.__delitem__(name)
 
+
+class DictionaryItem[Key, Value]:
+    """A simple key-value pair class."""
+
+    def __init__(self, key: Key, value: Value):
+        self.key = key
+        self.value = value
 
 class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     """An AttributeFunction that uses a dictionary to store its attributes."""
@@ -68,7 +75,10 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         return len(self.__dict__["data"])
 
     def __iter__(self):
-        return iter(self.__dict__["data"].items())
+        def mapper(item):
+            return DictionaryItem(item[0], item[1])
+
+        return map(mapper,self.__dict__["data"].items())
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
