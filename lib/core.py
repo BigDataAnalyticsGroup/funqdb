@@ -10,18 +10,18 @@ class AttributeFunction(ABC):
     def __init__(self):
         pass
 
-    def __getattr__(self, name: Any):
-        """Customize attribute access.
+    def __getattr__(self, name: str):
+        """Customize attribute access. Redirects to __getitem__ for actual retrieval.
         @param name: Name of the attribute being accessed. Notice that the 'name' parameter is of type 'Any' to allow
         flexibility in attribute types.
         @return: The value of the requested attribute.
         """
-        pass
+        return self.__getitem__(name)
 
-    def __setattr__(self, name: Any, value: Any):
+    def __setattr__(self, name: str, value: Any):
         """Customize attribute assignment. Note that the 'name' parameter is of type 'Any' to allow flexibility in
-        attribute types."""
-        pass
+        attribute types. Redirects to __setitem__ for actual storage."""
+        self.__setitem__(name, value)
 
     def __delattr__(self, name: Any):
         """Customize attribute deletion. Note that the 'name' parameter is of type 'Any' to allow flexibility in
@@ -32,17 +32,27 @@ class AttributeFunction(ABC):
 class DictionaryAttributeFunction(AttributeFunction):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
-    def __init__(self):
+    def __init__(self, data=None):
         super().__init__()
-        self.__dict__[f"data"] = {"x": 0, "y": 0}
+        if data is None:
+            data = {}
+        self.__dict__[f"data"] = data or {}
 
-    def __getattr__(self, name: str):
+    def __getitem__(self, name: Any) -> Any:
+        """Customize item access. This must be used for non-str-type keys.
+        @param key: The key of the item being accessed.
+        @return: The value of the requested item.
+        """
         if name in self.__dict__["data"]:
             return self.__dict__["data"][name]
         else:
             raise AttributeError
 
-    def __setattr__(self, name, value):
+    def __setitem__(self, name: Any, value: Any):
+        """Customize item assignment. This must be used for non-str-type keys.
+        @param key: The key of the item being assigned.
+        @param value: The value to assign to the item.
+        """
         self.__dict__["data"][name] = value
 
     def __delattr__(self, name):
@@ -56,3 +66,18 @@ class DictionaryAttributeFunction(AttributeFunction):
 
     def __len__(self):
         return len(self.__dict__["data"])
+
+
+class TF(DictionaryAttributeFunction):
+    """A dictionary-based attribute function that behaves like a tuple."""
+    pass
+
+
+class RF(DictionaryAttributeFunction):
+    """A dictionary-based attribute function that behaves like a relation."""
+    pass
+
+
+class DBF(DictionaryAttributeFunction):
+    """A dictionary-based attribute function that behaves like a database."""
+    pass
