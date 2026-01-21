@@ -1,6 +1,6 @@
 import pytest
 
-from lib.functions import DictionaryAttributeFunction, TF, RF, DBF, DictionaryItem
+from lib.functions import DictionaryAttributeFunction, TF, RF, DBF, Item
 from lib.operators import Operator, Map
 
 
@@ -78,6 +78,7 @@ def _create_testdata():
     db: DBF = DBF({"departments": departments, "users": users})
     return db
 
+
 def test_DictionaryTupleRelationDatabaseFunction():
     db: DBF = _create_testdata()
     users: RF = db.users
@@ -100,7 +101,7 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert users[1].department.budget == "15M"
 
     # test iterating over users in the database:
-    item: DictionaryItem
+    item: Item
     for item in db.users:
         assert isinstance(item.value, TF)
         assert item.value.name in {"Horst", "Tom", "John"}
@@ -112,17 +113,18 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert {user.name for user in advisory_users} == {"Horst", "Tom"}
 
     # same with filter operator:
-    #advisory_users_filter = list(filter(lambda k,u: u.department.name == "Advisory", db.users))
-    #assert len(advisory_users_filter) == 2
-    #assert {user.name for user in advisory_users_filter} == {"Horst", "Tom"}
+    advisory_users_filter = list(filter(lambda i: i.value.department.name == "Advisory", db.users))
+    assert len(advisory_users_filter) == 2
+    assert {i.value.name for i in advisory_users_filter} == {"Horst", "Tom"}
+
 
 def test_operators():
     db: DBF = _create_testdata()
     users: RF = db.users
 
-    map: Operator[RF,RF] = Map[RF,RF]()
+    map: Operator[RF, RF] = Map[RF, RF]()
 
-    def mapping_function(el: DictionaryItem) -> DictionaryItem:
+    def mapping_function(el: Item) -> Item:
         el.value.name = el.value.name + " User"
         return el
 
@@ -130,6 +132,17 @@ def test_operators():
     users_old = db2.users
     users_old_iter = iter(users_old)
 
-    for ur in map(mapping_function, users):
-        assert ur.value.name == next(users_old_iter).value.name + " User"
+    i: Item[int, TF]
+    for i in map(mapping_function, users):
+        assert i.value.name == next(users_old_iter).value.name + " User"
 
+    db: DBF = _create_testdata()
+    users: RF = db.users
+    users_old_iter = iter(users_old)
+    # same thing with a lambda
+    for i in map(lambda i: Item(i.key, i.value.update("name", i.value.name + " User")), users):
+        assert i.value.name == next(users_old_iter).value.name + " User"
+
+    users_old_iter = iter(users_old)
+    for i in map(lambda i: Item(i.key, i.value.update("name", i.value.name + " User")), users):
+        assert i.value.name == next(users_old_iter).value.name + " User User"

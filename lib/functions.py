@@ -27,13 +27,23 @@ class AttributeFunction[Key, Value](ABC):
         """Customize attribute deletion. Redirects to __delitem__ for actual deletion."""
         self.__delitem__(name)
 
+    def update(self, name, value):
+        """Update or add an attribute. In addition to setting the attribute, this method returns the object itself,
+        allowing for method chaining.
+        @param name: The name of the attribute to update or add.
+        @param value: The new value for the attribute.
+        """
+        self.__setitem__(name, value)
+        return self
 
-class DictionaryItem[Key, Value]:
-    """A simple key-value pair class."""
+
+class Item[Key, Value]:
+    """A simple key-value pair (aka item) representation."""
 
     def __init__(self, key: Key, value: Value):
         self.key = key
         self.value = value
+
 
 class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     """An AttributeFunction that uses a dictionary to store its attributes."""
@@ -76,9 +86,9 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
 
     def __iter__(self):
         def mapper(item):
-            return DictionaryItem(item[0], item[1])
+            return Item(item[0], item[1])
 
-        return map(mapper,self.__dict__["data"].items())
+        return map(mapper, self.__dict__["data"].items())
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
