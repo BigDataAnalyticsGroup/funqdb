@@ -4,13 +4,13 @@ from abc import ABC
 from typing import Any, Iterator
 
 
-class AttributeFunction(ABC):
+class AttributeFunction[Key, Value](ABC):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
     def __init__(self):
         pass
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Value:
         """Customize attribute access. Redirects to __getitem__ for actual retrieval.
         @param name: Name of the attribute being accessed. Notice that the 'name' parameter is of type 'Any' to allow
         flexibility in attribute types.
@@ -18,18 +18,17 @@ class AttributeFunction(ABC):
         """
         return self.__getitem__(name)
 
-    def __setattr__(self, name: str, value: Any):
+    def __setattr__(self, name: str, value: Value):
         """Customize attribute assignment. Note that the 'name' parameter is of type 'Any' to allow flexibility in
         attribute types. Redirects to __setitem__ for actual storage."""
         self.__setitem__(name, value)
 
-    def __delattr__(self, name: Any):
-        """Customize attribute deletion. Note that the 'name' parameter is of type 'Any' to allow flexibility in
-        attribute types."""
-        pass
+    def __delattr__(self, name):
+        """Customize attribute deletion. Redirects to __delitem__ for actual deletion."""
+        self.__delitem__(name)
 
 
-class DictionaryAttributeFunction(AttributeFunction):
+class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
     def __init__(self, data=None):
@@ -38,26 +37,27 @@ class DictionaryAttributeFunction(AttributeFunction):
             data = {}
         self.__dict__[f"data"] = data or {}
 
-    def __getitem__(self, name: Any) -> Any:
+    def __getitem__(self, key: Key) -> Value:
         """Customize item access. This must be used for non-str-type keys.
         @param key: The key of the item being accessed.
         @return: The value of the requested item.
         """
-        if name in self.__dict__["data"]:
-            return self.__dict__["data"][name]
+        if key in self.__dict__["data"]:
+            return self.__dict__["data"][key]
         else:
             raise AttributeError
 
-    def __setitem__(self, name: Any, value: Any):
+    def __setitem__(self, key: Key, value: Value):
         """Customize item assignment. This must be used for non-str-type keys.
         @param key: The key of the item being assigned.
         @param value: The value to assign to the item.
         """
-        self.__dict__["data"][name] = value
+        self.__dict__["data"][key] = value
 
-    def __delattr__(self, name):
-        if name in self.__dict__["data"]:
-            del self.__dict__["data"][name]
+    def __delitem__(self, key):
+        """Customize item deletion. This must be used for non-str-type keys."""
+        if key in self.__dict__["data"]:
+            del self.__dict__["data"][key]
         else:
             raise AttributeError
 
@@ -67,17 +67,20 @@ class DictionaryAttributeFunction(AttributeFunction):
     def __len__(self):
         return len(self.__dict__["data"])
 
+    def __iter__(self):
+        return iter(self.__dict__["data"].values())
 
-class TF(DictionaryAttributeFunction):
+
+class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
     """A dictionary-based attribute function that behaves like a tuple."""
     pass
 
 
-class RF(DictionaryAttributeFunction):
+class RF[Key](DictionaryAttributeFunction[Key, TF]):
     """A dictionary-based attribute function that behaves like a relation."""
     pass
 
 
-class DBF(DictionaryAttributeFunction):
+class DBF[Key](DictionaryAttributeFunction[Key, RF]):
     """A dictionary-based attribute function that behaves like a database."""
     pass
