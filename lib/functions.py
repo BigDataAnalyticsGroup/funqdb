@@ -1,14 +1,14 @@
 # good article:
 # https://realpython.com/python-magic-methods/
-from abc import ABC
-from typing import Any, Iterator
+from abc import ABC, abstractmethod
+
 
 
 class AttributeFunction[Key, Value](ABC):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
     def __init__(self):
-        pass
+        super().__init__()
 
     def __getattr__(self, name: str) -> Value:
         """Customize attribute access. Redirects to __getitem__ for actual retrieval.
@@ -68,19 +68,19 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         return len(self.__dict__["data"])
 
     def __iter__(self):
-        return iter(self.__dict__["data"].values())
+        return iter(self.__dict__["data"].items())
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
-    """A dictionary-based attribute function that behaves like a tuple."""
+    """A dictionary-based attribute mapping_function that behaves like a tuple."""
     pass
 
 
 class RF[Key](DictionaryAttributeFunction[Key, TF]):
-    """A dictionary-based attribute function that behaves like a relation."""
+    """A dictionary-based attribute mapping_function that behaves like a relation."""
     pass
 
 
 class DBF[Key](DictionaryAttributeFunction[Key, RF]):
-    """A dictionary-based attribute function that behaves like a database."""
+    """A dictionary-based attribute mapping_function that behaves like a database."""
     pass

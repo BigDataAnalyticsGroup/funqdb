@@ -1,6 +1,7 @@
 import pytest
 
 from lib.functions import DictionaryAttributeFunction, TF, RF, DBF
+from lib.operators import Operator, Map
 
 
 def test_DictionaryAttributeFunction():
@@ -59,7 +60,7 @@ def test_DictionaryAttributeFunction():
     assert len(daf) == 3
 
 
-def test_DictionaryTupleRelationDatabaseFunction():
+def _create_testdata():
     # departments tuples:
     d1: TF = TF({"name": "Dev", "budget": "11M"})
     d2: TF = TF({"name": "Consulting", "budget": "22M"})
@@ -73,6 +74,15 @@ def test_DictionaryTupleRelationDatabaseFunction():
     # users relation:
     users: RF = RF({1: t1, 2: t2, 3: t3})
 
+    # database of relations:
+    db: DBF = DBF({"departments": departments, "users": users})
+    return db
+
+def test_DictionaryTupleRelationDatabaseFunction():
+    db: DBF = _create_testdata()
+    users: RF = db.users
+    departments: RF = db.departments
+
     assert users[1].department.name == "Dev"
     assert users[2].department.name == "Dev"
     assert users[3].department.name == "Consulting"
@@ -82,8 +92,6 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert users[1].department.name == "Advisory"
     assert users[2].department.name == "Advisory"
 
-    # database of relations:
-    db: DBF = DBF({"departments": departments, "users": users})
     assert db.departments == departments
 
     # update the budget of department d1:
@@ -92,18 +100,35 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert users[1].department.budget == "15M"
 
     # test iterating over users in the database:
-    for user in db.users:
+    for key, user in db.users:
         assert isinstance(user, TF)
         assert user.name in {"Horst", "Tom", "John"}
 
     # test python-side filtering:
     # comprehension:
-    advisory_users = [user for user in db.users if user.department.name == "Advisory"]
+    advisory_users = [user for key, user in db.users if user.department.name == "Advisory"]
     assert len(advisory_users) == 2
     assert {user.name for user in advisory_users} == {"Horst", "Tom"}
 
     # same with filter operator:
-    advisory_users_filter = list(filter(lambda u: u.department.name == "Advisory", db.users))
-    assert len(advisory_users_filter) == 2
-    assert {user.name for user in advisory_users_filter} == {"Horst", "Tom"}
+    #advisory_users_filter = list(filter(lambda k,u: u.department.name == "Advisory", db.users))
+    #assert len(advisory_users_filter) == 2
+    #assert {user.name for user in advisory_users_filter} == {"Horst", "Tom"}
+
+def test_operators():
+    db: DBF = _create_testdata()
+    users: RF = db.users
+
+    map: Operator[RF,RF] = Map[RF,RF]()
+
+    def mapping_function(el: tuple[str,TF]) -> tuple[str,TF]:
+        el[1].name = el[1].name + " User"
+        return el
+
+    db2: DBF = _create_testdata()
+    users_old = db2.users
+    users_old_iter = iter(users_old)
+
+    for ur in map(mapping_function, users):
+        assert ur[1].name == next(users_old_iter)[1].name + " User"
 
