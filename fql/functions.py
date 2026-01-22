@@ -1,13 +1,13 @@
 # good article:
 # https://realpython.com/python-magic-methods/
 from fql.APIs import AttributeFunction, Item
+from fql.util import ReadOnlyError
 
 
 class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
     def __init__(self, data=None, read_only=False):
-        # init via dictionary to avoid recursion in __setattr__
         self.__dict__["data"] = data or {}
         self.__dict__["read_only"] = read_only
         super().__init__()
@@ -28,13 +28,17 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         @param value: The value to assign to the item.
         """
         if self.__dict__["read_only"]:
-            raise AttributeError("This DictionaryAttributeFunction is read-only.")
+            raise ReadOnlyError(
+                f"Write attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
+            )
         self.__dict__["data"][key] = value
 
     def __delitem__(self, key):
         """Customize item deletion. This must be used for non-str-type keys."""
         if self.__dict__["read_only"]:
-            raise AttributeError("This DictionaryAttributeFunction is read-only.")
+            raise ReadOnlyError(
+                f"Delete attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
+            )
 
         if key in self.__dict__["data"]:
             del self.__dict__["data"][key]

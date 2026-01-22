@@ -65,7 +65,7 @@ class AttributeFunction[Key, Value](PureFunction):
         pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Item[Key, Value]:
     """A simple key-value pair (aka item) representation."""
 

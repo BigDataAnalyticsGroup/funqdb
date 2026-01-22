@@ -62,7 +62,7 @@ def test_DictionaryAttributeFunction():
 
 
 def test_DictionaryTupleRelationDatabaseFunction():
-    db: DBF = _create_testdata()
+    db: DBF = _create_testdata(read_only=False)
     users: RF = db.users
     departments: RF = db.departments
 

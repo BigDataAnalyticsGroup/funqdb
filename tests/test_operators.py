@@ -7,7 +7,7 @@ from tests.lib import _create_testdata
 
 
 def test_MapInstance():
-    """map input RF to putput RF using identity mapping function."""
+    """map input RF to output RF using identity mapping function."""
     db: DBF = _create_testdata()
     users: RF = db.users
     map_instance: Operator[RF, RF] = MapInstance[RF, RF](mapping_function=lambda el: el)
@@ -16,8 +16,8 @@ def test_MapInstance():
     assert users == users_mapped
 
 
-# an item transformation_function that returns the item as is
 def transformation_function(item: Item) -> Item | None:
+    """an item transformation_function modifying the input and returning it"""
     user: TF = item.value
     user.name = user.name.upper()
     return item
@@ -25,7 +25,7 @@ def transformation_function(item: Item) -> Item | None:
 
 def test_TransformValues():
     """map input RF to output RF using filter mapping function to return only some values in the input RF."""
-    db: DBF = _create_testdata()
+    db: DBF = _create_testdata(read_only=False)
     users: RF = db.users
 
     # transform the values in the users relation (note: this will modify the original RF in the db)
