@@ -150,3 +150,20 @@ class FilterValuesComplement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     ) -> OUTPUT_AttributeFunction:
         """Call the FilterValues operator with the negated predicate."""
         super.__call__(lambda x: not self.filter_predicate)
+
+
+class Join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+):
+    def __init__(
+        self,
+        join_predicate: Callable[..., Any],
+        output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
+    ):
+        self.join_predicate = join_predicate
+        self.output_factory = output_factory
+
+    def __call__(
+        self, input_function: INPUT_AttributeFunction
+    ) -> OUTPUT_AttributeFunction:
+        pass

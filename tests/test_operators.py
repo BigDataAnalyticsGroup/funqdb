@@ -120,3 +120,14 @@ def test_FilterValuesComplement():
         assert item.value.department.name == "Consulting"
     filtered_user_names = {user.value.name for user in users_filtered}
     assert filtered_user_names == {"John"}
+
+
+def test_Join():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    # note the idea to join along fk-relationships does not make much sense here as we do not have relational
+    # data islands as in the relational model. In FDM, everything is connected via references. So, no need to
+    # reconstruct those references: we can simply look them up.
+    # So, what may make sense is to join users based on some attribute values, e.g., department name.
+    pass
