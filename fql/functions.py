@@ -1,16 +1,30 @@
 # good article:
 # https://realpython.com/python-magic-methods/
-from fql.APIs import AttributeFunction, Item
-from fql.util import ReadOnlyError
+from fql.APIs import AttributeFunction
+from fql.util import ReadOnlyError, Item
 
 
 class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
-    def __init__(self, data=None, read_only=False):
+    def __init__(self, data=None, frozen=False):
         self.__dict__["data"] = data or {}
-        self.__dict__["read_only"] = read_only
+        self.__dict__["frozen"] = frozen
         super().__init__()
+
+    def freeze(self):
+        """Make the AttributeFunction read-only."""
+        self.__dict__["frozen"] = True
+
+    def unfreeze(self):
+        """Make the AttributeFunction writable."""
+        self.__dict__["frozen"] = False
+
+    def frozen(self) -> bool:
+        """Check if the AttributeFunction is read-only.
+        @return: True if the AttributeFunction is read-only, False otherwise.
+        """
+        return self.__dict__["frozen"]
 
     def __getitem__(self, key: Key) -> Value:
         """Customize item access. This must be used for non-str-type keys.
@@ -27,7 +41,7 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         @param key: The key of the item being assigned.
         @param value: The value to assign to the item.
         """
-        if self.__dict__["read_only"]:
+        if self.__dict__["frozen"]:
             raise ReadOnlyError(
                 f"Write attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )
@@ -35,7 +49,7 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
 
     def __delitem__(self, key):
         """Customize item deletion. This must be used for non-str-type keys."""
-        if self.__dict__["read_only"]:
+        if self.__dict__["frozen"]:
             raise ReadOnlyError(
                 f"Delete attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )

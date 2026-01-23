@@ -1,7 +1,7 @@
 import pytest
 
 from fql.functions import DictionaryAttributeFunction, TF, RF, DBF
-from fql.APIs import Item
+from fql.util import Item
 from tests.lib import _create_testdata
 
 
@@ -62,7 +62,7 @@ def test_DictionaryAttributeFunction():
 
 
 def test_DictionaryTupleRelationDatabaseFunction():
-    db: DBF = _create_testdata(read_only=False)
+    db: DBF = _create_testdata(frozen=False)
     users: RF = db.users
     departments: RF = db.departments
 
