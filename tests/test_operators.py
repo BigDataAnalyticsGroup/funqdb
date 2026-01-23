@@ -105,12 +105,12 @@ def test_FilterValuesComplement():
     users: RF = db.users
 
     # filter the values in the users relation to only keep those NOT in the "Dev" department
-    def filter_predicate(item: Item) -> bool:
+    def filter_predicate_complement(item: Item) -> bool:
         user: TF = item.value
         return user.department.name != "Dev"
 
     filtered_values: Operator[RF, RF] = FilterValues[RF, RF](
-        filter_predicate=filter_predicate,
+        filter_predicate=filter_predicate_complement,
         output_factory=lambda: RF(),
     )
     users_filtered: RF = filtered_values(users)
