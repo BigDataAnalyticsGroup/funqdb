@@ -1,5 +1,7 @@
 # good article:
 # https://realpython.com/python-magic-methods/
+import json
+
 from fql.APIs import AttributeFunction
 from fql.util import ReadOnlyError, Item
 
@@ -82,6 +84,46 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         self_items: set[Item] = {item for item in self}
         other_items: set[Item] = {item for item in other}
         return self_items == other_items
+
+    def update(self, AttributeFunction: "AttributeFunction[Key, Value]"):
+        """Update the current AttributeFunction with another one.
+        @param AttributeFunction: The AttributeFunction to update with.
+        """
+        for item in AttributeFunction:
+            self.__setitem__(item.key, item.value)
+
+    def print(self, flat=False, recursion_depth: int = 0):
+        """Print representation of the current AttributeFunction."""
+        prefix: str = "    " * recursion_depth
+        for key, value in self.__dict__["data"].items():
+            if isinstance(value, AttributeFunction):
+                if flat:
+                    print(prefix + f"{key}: {value}")
+                else:
+                    print(prefix + f"{key}:")
+                    value.print(flat=flat, recursion_depth=recursion_depth + 1)
+            else:
+                print(prefix + f"{key}: {value}")
+
+    def _my_str_(self, flat=False, recursion_depth: int = 0):
+        ret: str = ""
+        prefix: str = "    " * recursion_depth
+        for key, value in self.__dict__["data"].items():
+            if isinstance(value, AttributeFunction):
+                if flat:
+                    ret += prefix + f"{key}: {value.__repr__()}\n"
+                else:
+                    ret += prefix + f"{key}:\n"
+                    ret += value._my_str_(
+                        flat=flat, recursion_depth=recursion_depth + 1
+                    )
+            else:
+                ret += prefix + f"{key}: {value}\n"
+        return ret
+
+    def __str__(self):
+        """String representation of the current AttributeFunction."""
+        return self._my_str_(flat=True)
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):

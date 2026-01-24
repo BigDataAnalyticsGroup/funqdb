@@ -16,4 +16,6 @@ def test_Item():
     assert hash(item1) != hash(item3)
 
     with pytest.raises(FrozenInstanceError):
+        # following line is marked as an error in PyCharm: "Cannot assign to field 'value'"
+        # neverthe, it can be executed and raises the expected exception
         item3.value = 3

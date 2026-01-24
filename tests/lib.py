@@ -17,9 +17,9 @@ def _create_testdata(frozen: bool = False) -> DBF:
     )
 
     # users tuples:
-    t1: TF = TF({"name": "Horst", "department": departments.d1}, frozen)
-    t2: TF = TF({"name": "Tom", "department": departments.d1}, frozen)
-    t3: TF = TF({"name": "John", "department": departments.d2}, frozen)
+    t1: TF = TF({"name": "Horst", "yob": 1972, "department": departments.d1}, frozen)
+    t2: TF = TF({"name": "Tom", "yob": 1983, "department": departments.d1}, frozen)
+    t3: TF = TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen)
     # users relation:
     users: RF = RF({1: t1, 2: t2, 3: t3}, frozen)
 

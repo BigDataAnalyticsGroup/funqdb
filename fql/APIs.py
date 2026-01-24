@@ -47,19 +47,17 @@ class AttributeFunction[Key, Value](PureFunction):
         """
         return self.__getitem__(*args, **kwargs)
 
-    def update(self, name, value):
-        """Update or add an attribute. In addition to setting the attribute, this method returns the object itself,
-        allowing for method chaining.
-        @param name: The name of the attribute to update or add.
-        @param value: The new value for the attribute.
-        """
-        self.__setitem__(name, value)
-        return self
-
     def __eq__(self, other: "AttributeFunction") -> bool:
         """Check equality between two AttributeFunction instances based on their items.
         @param other: The other AttributeFunction instance to compare with.
         @return: True if both instances have the same items, False otherwise.
+        """
+        pass
+
+    def update(self, other: "AttributeFunction") -> "AttributeFunction":
+        """Update the current AttributeFunction with another one.
+        @param other: The other AttributeFunction to update from.
+        @return: The updated AttributeFunction.
         """
         pass
 

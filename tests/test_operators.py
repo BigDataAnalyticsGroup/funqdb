@@ -6,8 +6,9 @@ from fql.operators import (
     Operator,
     map_instance,
     transform_values,
-    filter_entries,
+    filter_items,
     subdatabase,
+    join,
 )
 from tests.lib import _create_testdata
 
@@ -90,11 +91,11 @@ def filter_predicate(item: Item) -> bool:
     return user.department.name == "Dev"
 
 
-def test_filter_values():
+def test_filter_items():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = filter_entries[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
         filter_predicate=filter_predicate,
         output_factory=lambda _: RF(),
     )
@@ -107,7 +108,7 @@ def test_filter_values():
     assert filtered_user_names == {"Horst", "Tom"}
 
 
-def test_filter_values_complement():
+def test_filter_items_complement():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
@@ -116,7 +117,7 @@ def test_filter_values_complement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filter_RF: Operator[RF, RF] = filter_entries[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
         filter_predicate=filter_predicate_complement,
         output_factory=lambda _: RF(),
     )
@@ -131,7 +132,7 @@ def test_filter_values_complement():
 
 def test_DB_filter_keys():
     # get subdatabase:
-    db_filtered: DBF = filter_entries(
+    db_filtered: DBF = filter_items(
         lambda i: i.key in ["users", "departments"], lambda _: DBF()
     )(_create_testdata(frozen=True))
 
@@ -150,7 +151,7 @@ def test_subdatabase_two_RFs():
 
     # get subdatabase as input for the subdatabase operator, i.e. select a dbf having only the two relations we want
     # to work with:
-    db_filtered: DBF = filter_entries(
+    db_filtered: DBF = filter_items(
         lambda i: i.key in ["users", "customers"], lambda _: DBF()
     )(_create_testdata(frozen=True))
 
@@ -201,7 +202,7 @@ def test_subdatabase_two_RFs_with_join_index():
         "customers",
         create_join_index=True,
     )(
-        filter_entries(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+        filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
             _create_testdata(frozen=True)
         )
     )
@@ -236,3 +237,23 @@ def test_subdatabase_two_RFs_with_join_index():
         user_name = reduced_DBF.users[left_key].name
         customer_name = reduced_DBF.customers[right_key].name
         assert user_name != customer_name
+
+
+def test_flattening_join_two_RFs():
+    joined: RF = join[DBF, RF](
+        lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        lambda _: RF(),
+        "users",
+        "customers",
+    )(
+        filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+            _create_testdata(frozen=True)
+        )
+    )
+    assert type(joined) == RF
+    assert len(joined) == 3  # three matching pairs in the join result
+    print()
+    for res in joined:
+        # print(res.key)
+        # res.value.print(flat=True)
+        print(res.value)
