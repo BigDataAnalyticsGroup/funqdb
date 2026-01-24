@@ -2,7 +2,7 @@ import logging
 from typing import Callable, Any, Iterable
 
 from fql.APIs import PureFunction, AttributeFunction
-from fql.functions import RF, DBF
+from fql.functions import RF, DBF, TF
 from fql.util import Item
 
 logger = logging.Logger(__name__)
@@ -80,7 +80,7 @@ class transform_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return output_function
 
 
-class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class filter_entries[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that filters the values found in the input instance. In contrast to standard filter operations
@@ -93,7 +93,7 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the filter_values operator.
+        """Initialize the filter_entries operator.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be kept, False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
@@ -129,17 +129,17 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return output_function
 
 
-class filter_values_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
-    filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+class filter_entries_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    filter_entries[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """Computes the complement of the filter_values operator."""
+    """Computes the complement of the filter_entries operator."""
 
     def __init__(
         self,
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the filter_values_complement operator.
+        """Initialize the filter_entries_complement operator.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be filtered out,
         False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
@@ -149,7 +149,7 @@ class filter_values_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction
     def __call__(
         self, input_function: INPUT_AttributeFunction
     ) -> OUTPUT_AttributeFunction:
-        """Call the filter_values operator with the negated predicate."""
+        """Call the filter_entries operator with the negated predicate."""
         super.__call__(lambda x: not self.filter_predicate)
 
 
@@ -172,12 +172,14 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         output_RF_factory: Callable[..., RF] = None,
         left: str | None = None,
         right: str | None = None,
+        create_join_index: bool = False,
     ):
         self.join_predicate = join_predicate
         self.output_DBF_factory = output_DBF_factory
         self.output_RF_factory = output_RF_factory
         self.left = left
         self.right = right
+        self.create_join_index = create_join_index
 
     def __call__(
         self, input_function: INPUT_AttributeFunction
@@ -195,7 +197,13 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         left_qualifying_items = set()
         right_qualifying_items = set()
 
+        join_index: RF | None = None
+        if self.create_join_index:
+            join_index = self.output_RF_factory(None)
+            join_index.unfreeze()
+
         # TODO: optimize nested loop join later
+        no_results: int = 0
         for item_left in left_RF:
             for item_right in right_RF:
                 if self.join_predicate(item_left, item_right):
@@ -203,23 +211,33 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                     # collect them in sets to avoid duplicates
                     left_qualifying_items.add(item_left.key)
                     right_qualifying_items.add(item_right.key)
+                    if self.create_join_index:
+                        join_index[no_results] = TF(
+                            {"left_key": item_left.key, "right_key": item_right.key}
+                        )
+                    no_results += 1
+        if self.create_join_index:
+            join_index.freeze()
 
         # create a reduced output database:
         output_DBF = self.output_DBF_factory(None)
         output_DBF.unfreeze()
 
-        # add reduced relations, delegated to filter_values operator:
+        # add reduced relations, delegated to filter_entries operator:
         # left relation:
-        output_DBF[self.left] = filter_values[RF, RF](
+        output_DBF[self.left] = filter_entries[RF, RF](
             lambda i: i.key in left_qualifying_items,
             lambda _: self.output_RF_factory(None),
         )(left_RF)
 
         # right relation:
-        output_DBF[self.right] = filter_values[RF, RF](
+        output_DBF[self.right] = filter_entries[RF, RF](
             lambda i: i.key in right_qualifying_items,
             lambda _: self.output_RF_factory(None),
         )(right_RF)
+
+        if self.create_join_index:
+            output_DBF["join_index"] = join_index
 
         output_DBF.freeze()
         return output_DBF

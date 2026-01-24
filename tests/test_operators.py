@@ -6,7 +6,7 @@ from fql.operators import (
     Operator,
     map_instance,
     transform_values,
-    filter_values,
+    filter_entries,
     subdatabase,
 )
 from tests.lib import _create_testdata
@@ -94,7 +94,7 @@ def test_filter_values():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_entries[RF, RF](
         filter_predicate=filter_predicate,
         output_factory=lambda _: RF(),
     )
@@ -116,7 +116,7 @@ def test_filter_values_complement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_entries[RF, RF](
         filter_predicate=filter_predicate_complement,
         output_factory=lambda _: RF(),
     )
@@ -131,7 +131,7 @@ def test_filter_values_complement():
 
 def test_DB_filter_keys():
     # get subdatabase:
-    db_filtered: DBF = filter_values(
+    db_filtered: DBF = filter_entries(
         lambda i: i.key in ["users", "departments"], lambda _: DBF()
     )(_create_testdata(frozen=True))
 
@@ -150,7 +150,7 @@ def test_subdatabase_two_RFs():
 
     # get subdatabase as input for the subdatabase operator, i.e. select a dbf having only the two relations we want
     # to work with:
-    db_filtered: DBF = filter_values(
+    db_filtered: DBF = filter_entries(
         lambda i: i.key in ["users", "customers"], lambda _: DBF()
     )(_create_testdata(frozen=True))
 
@@ -189,3 +189,50 @@ def test_subdatabase_two_RFs():
         customer.value.name for customer in reduced_DBF.customers
     }
     assert customers_names == {"Tom", "John"}
+
+
+def test_subdatabase_two_RFs_with_join_index():
+
+    reduced_DBF: DBF = subdatabase[DBF, DBF](
+        lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        lambda _: DBF(),
+        lambda _: RF(),
+        "users",
+        "customers",
+        create_join_index=True,
+    )(
+        filter_entries(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+            _create_testdata(frozen=True)
+        )
+    )
+    join_index: RF = reduced_DBF.join_index
+    assert join_index is not None
+    assert type(join_index) == RF
+    assert len(join_index) == 3  # three matching pairs in the join index
+
+    # check join index content:
+    # no false positives, all returned pairs must match on user.name == customer.name:
+    users_keys = {item.key for item in reduced_DBF.users}
+    customers_keys = {item.key for item in reduced_DBF.customers}
+
+    # create the cross product of all user keys and customer keys:
+    cross_product_keys = {
+        (u_key, c_key) for u_key in users_keys for c_key in customers_keys
+    }
+
+    # loop over join index and validate each pair, removing it from the cross product set:
+    for item in join_index:
+        left_key = item.value.left_key
+        right_key = item.value.right_key
+        user_name = reduced_DBF.users[left_key].name
+        customer_name = reduced_DBF.customers[right_key].name
+        assert user_name == customer_name
+        # remove this validated pair from the cross product set:
+        cross_product_keys.remove((left_key, right_key))
+
+    # post condition: pairs in the cross product set should all be false positives now, i.e.,
+    # cross_product_keys contains the complement of the join index
+    for left_key, right_key in cross_product_keys:
+        user_name = reduced_DBF.users[left_key].name
+        customer_name = reduced_DBF.customers[right_key].name
+        assert user_name != customer_name
