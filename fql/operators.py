@@ -1,7 +1,8 @@
 import logging
 from typing import Callable, Any, Iterable
 
-from fql.APIs import PureFunction
+from fql.APIs import PureFunction, AttributeFunction
+from fql.functions import RF, DBF
 from fql.util import Item
 
 logger = logging.Logger(__name__)
@@ -15,7 +16,7 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     pass
 
 
-class MapInstance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class map_instance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that maps an input instance to an output instance."""
@@ -32,7 +33,7 @@ class MapInstance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return self.mapping_function(input_function)
 
 
-class TransformValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class transform_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that transforms the input instance by mapping its values.
@@ -43,7 +44,7 @@ class TransformValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         transformation_function: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the TransformValues operator.
+        """Initialize the transform_values operator.
         @param transformation_function: A function that takes an Item and returns a transformed Item or None
         @param output_factory: If set, this factory function will be used to create the output instance.
         """
@@ -59,7 +60,7 @@ class TransformValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         output_function = input_function
         if self.output_factory is not None:
-            output_function = self.output_factory()
+            output_function = self.output_factory(None)
             output_function.unfreeze()
         else:
             logger.warning(
@@ -79,7 +80,7 @@ class TransformValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return output_function
 
 
-class FilterValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that filters the values found in the input instance. In contrast to standard filter operations
@@ -92,7 +93,7 @@ class FilterValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the FilterValues operator.
+        """Initialize the filter_values operator.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be kept, False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
@@ -108,7 +109,7 @@ class FilterValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         output_function = input_function
         if self.output_factory is not None:
-            output_function = self.output_factory()
+            output_function = self.output_factory(None)
             output_function.unfreeze()
         else:
             logger.warning(
@@ -128,17 +129,17 @@ class FilterValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return output_function
 
 
-class FilterValuesComplement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
-    FilterValues[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+class filter_values_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """Computes the complement of the FilterValues operator."""
+    """Computes the complement of the filter_values operator."""
 
     def __init__(
         self,
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the FilterValuesComplement operator.
+        """Initialize the filter_values_complement operator.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be filtered out,
         False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
@@ -148,22 +149,77 @@ class FilterValuesComplement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     def __call__(
         self, input_function: INPUT_AttributeFunction
     ) -> OUTPUT_AttributeFunction:
-        """Call the FilterValues operator with the negated predicate."""
+        """Call the filter_values operator with the negated predicate."""
         super.__call__(lambda x: not self.filter_predicate)
 
 
-class Join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
+    """Compute the subdatabase defined by the join predicate.
+    Currently limited to nested loop joins. However, this implementation ALL join predicate as it treats these as black
+    boxes (same effect as for traditional join operators). IN order to be more efficient, we have to whitebox the
+    join predicate and implement specialized join algorithms for typical predicates (e.g., equi-joins
+    exploiting hash-joins or sort-merge-joins).
+
+    Currently limited to a DB with two inputs only to simulate a standard SQL join operator
+    """
+
     def __init__(
         self,
         join_predicate: Callable[..., Any],
-        output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
+        output_DBF_factory: Callable[..., DBF] = None,
+        output_RF_factory: Callable[..., RF] = None,
+        left: str | None = None,
+        right: str | None = None,
     ):
         self.join_predicate = join_predicate
-        self.output_factory = output_factory
+        self.output_DBF_factory = output_DBF_factory
+        self.output_RF_factory = output_RF_factory
+        self.left = left
+        self.right = right
 
     def __call__(
         self, input_function: INPUT_AttributeFunction
     ) -> OUTPUT_AttributeFunction:
-        pass
+        # brute force nested loop to start with,
+        # TODO: optimize later to use standard DB subdatabase algorithms
+        # TODO: implement typical join operators exploiting special predicates
+        assert (
+            len(input_function) == 2
+        ), "Currently only two relations supported in subdatabase."
+
+        left_RF: RF = input_function[self.left]
+        right_RF: RF = input_function[self.right]
+
+        left_qualifying_items = set()
+        right_qualifying_items = set()
+
+        # TODO: optimize nested loop join later
+        for item_left in left_RF:
+            for item_right in right_RF:
+                if self.join_predicate(item_left, item_right):
+                    # consider both elements as qualifying
+                    # collect them in sets to avoid duplicates
+                    left_qualifying_items.add(item_left.key)
+                    right_qualifying_items.add(item_right.key)
+
+        # create a reduced output database:
+        output_DBF = self.output_DBF_factory(None)
+        output_DBF.unfreeze()
+
+        # add reduced relations, delegated to filter_values operator:
+        # left relation:
+        output_DBF[self.left] = filter_values[RF, RF](
+            lambda i: i.key in left_qualifying_items,
+            lambda _: self.output_RF_factory(None),
+        )(left_RF)
+
+        # right relation:
+        output_DBF[self.right] = filter_values[RF, RF](
+            lambda i: i.key in right_qualifying_items,
+            lambda _: self.output_RF_factory(None),
+        )(right_RF)
+
+        output_DBF.freeze()
+        return output_DBF

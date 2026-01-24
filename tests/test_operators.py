@@ -2,16 +2,22 @@ import pytest
 
 from fql.functions import TF, RF, DBF
 from fql.util import Item, ReadOnlyError
-from fql.operators import Operator, MapInstance, TransformValues, FilterValues
+from fql.operators import (
+    Operator,
+    map_instance,
+    transform_values,
+    filter_values,
+    subdatabase,
+)
 from tests.lib import _create_testdata
 
 
-def test_MapInstance():
+def test_map_instance():
     """map input RF to output RF using identity mapping function."""
     db: DBF = _create_testdata()
     users: RF = db.users
-    map_instance: Operator[RF, RF] = MapInstance[RF, RF](mapping_function=lambda el: el)
-    users_mapped: RF = map_instance(users)
+    map_RF: Operator[RF, RF] = map_instance[RF, RF](mapping_function=lambda el: el)
+    users_mapped: RF = map_RF(users)
     assert type(users_mapped) == RF
     assert users == users_mapped
 
@@ -38,20 +44,21 @@ def test_TransformValues():
     users: RF = db.users
 
     # transform the values in the users relation (note: this will modify the original RF in the db)
-    transformed_values: Operator[RF, RF] = TransformValues[RF, RF](
-        transformation_function=transformation_function_modifying
+    transform_RF: Operator[RF, RF] = transform_values[RF, RF](
+        transformation_function=transformation_function_modifying,
+        output_factory=lambda _: RF(),
     )
 
     # must fail as the input RF is frozen and the transformation_function tries to modify it:
     with pytest.raises(ReadOnlyError):
-        users_transformed: RF = transformed_values(users)
+        users_transformed: RF = transform_RF(users)
 
     # redefine the transformation_function to not modify the input RF in place, but return a modified copy instead:
-    transformed_values = TransformValues[RF, RF](
-        transformation_function=transformation_function_non_modifying
+    transform_RF = transform_values[RF, RF](
+        transformation_function=transformation_function_non_modifying,
     )
     with pytest.raises(ReadOnlyError):
-        users_transformed: RF = transformed_values(users)
+        users_transformed: RF = transform_RF(users)
 
 
 def test_TransformValues_new_output_instance():
@@ -60,11 +67,11 @@ def test_TransformValues_new_output_instance():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    transformed_values: Operator[RF, RF] = TransformValues[RF, RF](
+    tramsform_RF: Operator[RF, RF] = transform_values[RF, RF](
         transformation_function=transformation_function_non_modifying,
-        output_factory=lambda: RF(),
+        output_factory=lambda _: RF(),
     )
-    users_transformed: RF = transformed_values(users)
+    users_transformed: RF = tramsform_RF(users)
     assert type(users_transformed) == RF
 
     users_names = {user.value.name for user in users}
@@ -83,15 +90,15 @@ def filter_predicate(item: Item) -> bool:
     return user.department.name == "Dev"
 
 
-def test_FilterValues():
+def test_filter_values():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filtered_values: Operator[RF, RF] = FilterValues[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
         filter_predicate=filter_predicate,
-        output_factory=lambda: RF(),
+        output_factory=lambda _: RF(),
     )
-    users_filtered: RF = filtered_values(users)
+    users_filtered: RF = filter_RF(users)
     assert type(users_filtered) == RF
     assert len(users_filtered) == 2
     for item in users_filtered:
@@ -100,7 +107,7 @@ def test_FilterValues():
     assert filtered_user_names == {"Horst", "Tom"}
 
 
-def test_FilterValuesComplement():
+def test_filter_values_complement():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
@@ -109,11 +116,11 @@ def test_FilterValuesComplement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filtered_values: Operator[RF, RF] = FilterValues[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
         filter_predicate=filter_predicate_complement,
-        output_factory=lambda: RF(),
+        output_factory=lambda _: RF(),
     )
-    users_filtered: RF = filtered_values(users)
+    users_filtered: RF = filter_RF(users)
     assert type(users_filtered) == RF
     assert len(users_filtered) == 1
     for item in users_filtered:
@@ -122,12 +129,63 @@ def test_FilterValuesComplement():
     assert filtered_user_names == {"John"}
 
 
-def test_Join():
-    db: DBF = _create_testdata(frozen=True)
-    users: RF = db.users
+def test_DB_filter_keys():
+    # get subdatabase:
+    db_filtered: DBF = filter_values(
+        lambda i: i.key in ["users", "departments"], lambda _: DBF()
+    )(_create_testdata(frozen=True))
 
-    # note the idea to join along fk-relationships does not make much sense here as we do not have relational
+    assert type(db_filtered) == DBF
+    assert len(db_filtered) == 2  # users and departments relations only
+
+    assert type(db_filtered.users) == RF
+    assert type(db_filtered.departments) == RF
+
+
+def test_subdatabase_two_RFs():
+    # note the idea to subdatabase along fk-relationships does not make much sense here as we do not have relational
     # data islands as in the relational model. In FDM, everything is connected via references. So, no need to
     # reconstruct those references: we can simply look them up.
-    # So, what may make sense is to join users based on some attribute values, e.g., department name.
-    pass
+    # So, what may make sense is to subdatabase users based on some attribute values, e.g., department name.
+
+    # get subdatabase as input for the subdatabase operator, i.e. select a dbf having only the two relations we want
+    # to work with:
+    db_filtered: DBF = filter_values(
+        lambda i: i.key in ["users", "customers"], lambda _: DBF()
+    )(_create_testdata(frozen=True))
+
+    # join predicate to match users and customers by name:
+    # def join_predicate(item_left: Item, item_right: Item) -> bool:
+    #    return item_left.value.name == item_right.value.name
+
+    # longer typed version:
+    # reduced_DB: Operator[DBF, DBF] = subdatabase[DBF, DBF](
+    #    join_predicate=join_predicate,
+    #    output_DBF_factory=lambda _: DBF(),
+    #    output_RF_factory=lambda _: RF(),
+    #    left="users",
+    #    right="customers",
+    # )(db_filtered)
+
+    # same thing again, but the short way of writing without type hints:
+    # reduced_DBF: DBF = subdatabase[DBF, DBF](
+    #    join_predicate, lambda _: DBF(), lambda _: RF(), "users", "customers"
+    # )(db_filtered)
+
+    # same thing again, but with lambda join predicate:
+    reduced_DBF: DBF = subdatabase[DBF, DBF](
+        lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        lambda _: DBF(),
+        lambda _: RF(),
+        "users",
+        "customers",
+    )(db_filtered)
+
+    assert len(reduced_DBF.users) == 2  # Horst and John only
+    users_names: set[str] = {user.value.name for user in reduced_DBF.users}
+    assert users_names == {"Tom", "John"}
+    assert len(reduced_DBF.customers) == 3  # Tom (2x) and John only
+    customers_names: set[str] = {
+        customer.value.name for customer in reduced_DBF.customers
+    }
+    assert customers_names == {"Tom", "John"}
