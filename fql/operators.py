@@ -158,7 +158,7 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 ):
     """Compute the subdatabase defined by the join predicate.
     Currently limited to nested loop joins. However, this implementation ALL join predicate as it treats these as black
-    boxes (same effect as for traditional join operators). IN order to be more efficient, we have to whitebox the
+    boxes (same effect as for traditional join operators). In order to be more efficient, we have to whitebox the
     join predicate and implement specialized join algorithms for typical predicates (e.g., equi-joins
     exploiting hash-joins or sort-merge-joins).
 
