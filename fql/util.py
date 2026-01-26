@@ -7,6 +7,12 @@ class ReadOnlyError(Exception):
     pass
 
 
+class ConstraintViolationError(Exception):
+    """Exception raised when a constraint is violated."""
+
+    pass
+
+
 @dataclass(frozen=True)
 class Item[Key, Value]:
     """A simple key-value pair (aka item) representation."""

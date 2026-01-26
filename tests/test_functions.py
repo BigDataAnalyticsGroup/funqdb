@@ -1,9 +1,8 @@
 import pytest
 
-from fql.APIs import ConstrainedAttributeFunction
 from fql.functions import DictionaryAttributeFunction, TF, RF, DBF
-from fql.predicates.misc import all_keys_in_value
-from fql.util import Item
+from fql.predicates.misc import TF_keys_in_list, attribute_name_equivalence
+from fql.util import Item, ConstraintViolationError
 from tests.lib import _create_testdata
 
 
@@ -110,15 +109,25 @@ def test_DictionaryTupleRelationDatabaseFunction():
 
 
 def test_constrained_functions():
-    db: DBF = _create_testdata(frozen=True)
-    users: RF = db.users
-    caf = ConstrainedAttributeFunction(
-        wrapped=users, constraints={all_keys_in_value({"name", "yob", "department"})}
-    )
-    caf[1].name = "Horst Updated"
-    assert caf[1].name == "Horst Updated"
-    caf[1].blah = 45
 
-    # TODO: where is the constrained supposed to be checked?
-    # it constrains its items: so when accessing any item in self, we should wrap the returned
-    # value in a constrained attribute function as well?
+    for constraint in {TF_keys_in_list, attribute_name_equivalence}:
+        db: DBF = _create_testdata(frozen=False)
+        users: RF = db.users
+        users.add_constraint(constraint({"name", "yob", "department"}))
+        assert 0 not in users
+
+        # newly added user only with valid attribute:
+        users[0] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
+
+        with pytest.raises(ConstraintViolationError):
+            users[0] = TF(
+                {"namde": "Alice", "yob": 1990, "department": db.departments.d1}
+            )
+        with pytest.raises(ConstraintViolationError):
+            users[0] = TF({"namde": "Alice", "yob": 1990, "gd": db.departments.d1})
+
+        # but: TODO, currently we cannot check partial updates:
+        users[1].dsf = 42
+
+        # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
+        # TODO

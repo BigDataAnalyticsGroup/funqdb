@@ -1,11 +1,12 @@
 # good article:
 # https://realpython.com/python-magic-methods/
+import inspect
 import logging
 
 logger = logging.Logger(__name__)
 
 from fql.APIs import AttributeFunction
-from fql.util import ReadOnlyError, Item
+from fql.util import ReadOnlyError, Item, ConstraintViolationError
 
 
 class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
@@ -14,7 +15,20 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     def __init__(self, data=None, frozen=False):
         self.__dict__["data"] = data or {}
         self.__dict__["frozen"] = frozen
+        self.__dict__["constraints"] = set()
         super().__init__()
+
+    def add_constraint(self, constraint):
+        """Add a constraint to the AttributeFunction.
+        @param constraint: A callable that takes a value and returns True if the value satisfies the constraint, False otherwise.
+        """
+        self.__dict__["constraints"].add(constraint)
+
+    def remove_constraint(self, constraint):
+        """Remove a constraint from the AttributeFunction.
+        @param constraint: The constraint to remove.
+        """
+        self.__dict__["constraints"].remove(constraint)
 
     def freeze(self):
         """Make the AttributeFunction read-only."""
@@ -45,10 +59,20 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         @param key: The key of the item being assigned.
         @param value: The value to assign to the item.
         """
+        # check if frozen:
         if self.__dict__["frozen"]:
             raise ReadOnlyError(
                 f"Write attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )
+        # check constraints:
+        for constraint in self.__dict__["constraints"]:
+            if not constraint(Item(key, value)):
+                raise ConstraintViolationError(
+                    f"Value '{value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n"
+                    f"for key '{key}' and value '{value}'."
+                )
+
+        # maybe here we need to register an event at value to notify self about changes of value?
         self.__dict__["data"][key] = value
 
     def __delitem__(self, key):

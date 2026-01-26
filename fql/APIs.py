@@ -148,26 +148,3 @@ class AttributeFunctionWrapper[INPUT_AttributeFunction, OUTPUT_AttributeFunction
 
     def unfreeze(self):
         self._wrapped.unfreeze()
-
-
-class ConstrainedAttributeFunction[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
-    AttributeFunctionWrapper[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
-):
-    """A class for AttributeFunctions with constraints."""
-
-    def __init__(self, wrapped, constraints: set[Callable[[Any], bool]]):
-        super().__init__(wrapped)
-        self.__dict__["_constraints"] = constraints
-
-    def __setitem__(self, key: Any, value: OUTPUT_AttributeFunction):
-        """Delegate item assignment to the wrapped AttributeFunction.
-        @param key: The key of the item being assigned.
-        @param value: The value to assign to the item.
-        """
-        for constraint in self._constraints:
-            if not constraint(value):
-                raise ValueError(
-                    f"Value '{value}' does not satisfy constraint '{constraint}'."
-                )
-
-        self._wrapped.__setitem__(key, value)
