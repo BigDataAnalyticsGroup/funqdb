@@ -20,7 +20,7 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        join_predicate: Callable[..., Any],
+        join_predicate: Callable[..., bool],
         left: str | None = None,
         right: str | None = None,
     ):
@@ -63,4 +63,28 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         result_RF.freeze()
 
+        return result_RF
+
+
+class equi_join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+):
+    """Special case of the generic predicate-based join. Compute the subdatabase defined by the equi-join predicate.
+    Currently limited to a DB with two inputs only to simulate a standard SQL join operator
+    """
+
+    def __init__(
+        self,
+        left_identifier: str | None = None,
+        right_identifier: str | None = None,
+    ):
+        self.left_identifier = left_identifier
+        self.right_identifier = right_identifier
+
+    def __call__(
+        self, input_function: INPUT_AttributeFunction
+    ) -> OUTPUT_AttributeFunction:
+        result_RF: RF = RF(frozen=False)
+
+        result_RF.unfreeze()
         return result_RF

@@ -1,4 +1,5 @@
 from fql.functions import TF, RF, DBF
+from fql.operators.filters import filter_items
 
 
 def _create_testdata(frozen: bool = False) -> DBF:
@@ -38,3 +39,15 @@ def _create_testdata(frozen: bool = False) -> DBF:
     )
 
     return db
+
+
+def _users_customers_DBF(frozen: bool = True) -> DBF:
+    return filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+        _create_testdata(frozen=frozen)
+    )
+
+
+def _subset_DBF(whitelist: set[str], frozen: bool = True) -> DBF:
+    return filter_items(lambda i: i.key in whitelist, lambda _: DBF())(
+        _create_testdata(frozen=frozen)
+    )

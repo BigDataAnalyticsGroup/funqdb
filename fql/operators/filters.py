@@ -4,6 +4,11 @@ from fql.operators.APIs import Operator
 from fql.util import Item
 
 
+import logging
+
+logger = logging.Logger(__name__)
+
+
 class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):

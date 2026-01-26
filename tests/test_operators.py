@@ -2,7 +2,7 @@ import pytest
 
 from fql.functions import TF, RF, DBF
 from fql.operators.filters import filter_items
-from fql.operators.joins import join
+from fql.operators.joins import join, equi_join
 from fql.operators.subdatabases import subdatabase
 from fql.operators.transforms import (
     map_instance,
@@ -14,7 +14,7 @@ from fql.operators.transforms import (
 from fql.util import Item, ReadOnlyError
 from fql.operators.APIs import Operator
 
-from tests.lib import _create_testdata
+from tests.lib import _create_testdata, _users_customers_DBF, _subset_DBF
 
 
 def test_map_instance():
@@ -136,9 +136,7 @@ def test_filter_items_complement():
 
 def test_DB_filter_keys():
     # get subdatabase:
-    db_filtered: DBF = filter_items(
-        lambda i: i.key in ["users", "departments"], lambda _: DBF()
-    )(_create_testdata(frozen=True))
+    db_filtered: DBF = _subset_DBF({"users", "departments"}, frozen=True)
 
     assert type(db_filtered) == DBF
     assert len(db_filtered) == 2  # users and departments relations only
@@ -155,9 +153,7 @@ def test_subdatabase_two_RFs():
 
     # get subdatabase as input for the subdatabase operator, i.e. select a dbf having only the two relations we want
     # to work with:
-    db_filtered: DBF = filter_items(
-        lambda i: i.key in ["users", "customers"], lambda _: DBF()
-    )(_create_testdata(frozen=True))
+    db_filtered: DBF = _users_customers_DBF(frozen=True)
 
     # join predicate to match users and customers by name:
     # def join_predicate(item_left: Item, item_right: Item) -> bool:
@@ -199,11 +195,7 @@ def test_subdatabase_two_RFs_with_join_index():
         "users",
         "customers",
         create_join_index=True,
-    )(
-        filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
-            _create_testdata(frozen=True)
-        )
-    )
+    )(_users_customers_DBF())
     join_index: RF = reduced_DBF.join_index
     assert join_index is not None
     assert type(join_index) == RF
@@ -242,13 +234,23 @@ def test_flattening_join_two_RFs():
         lambda item_left, item_right: item_left.value.name == item_right.value.name,
         "users",
         "customers",
-    )(
-        filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
-            _create_testdata(frozen=True)
-        )
-    )
+    )(_users_customers_DBF())
     assert type(joined) == RF
     assert len(joined) == 3  # three matching pairs in the join result
+    # print()
+    # for res in joined:
+    # print(res.key)
+    # res.value.print(flat=True)
+    #    print(res.value)
+
+
+def test_flattening_equi_join_two_RFs():
+    joined: RF = equi_join[DBF, RF](
+        "users.value.name",
+        "customers.value.name",
+    )(_users_customers_DBF())
+    # assert type(joined) == RF
+    # assert len(joined) == 3  # three matching pairs in the join result
     # print()
     # for res in joined:
     # print(res.key)
