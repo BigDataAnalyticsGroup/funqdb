@@ -28,8 +28,9 @@ def _create_testdata(frozen: bool = False) -> DBF:
     c2: TF = TF({"name": "Tom", "company": "example inc"}, frozen)
     c3: TF = TF({"name": "John", "company": "whatever gmbh"}, frozen)
     c4: TF = TF({"name": "Peter", "company": "Peter, Paul, and Mary"}, frozen)
+    c5: TF = TF({"name": "Frank", "company": "Masterhorst"}, frozen)
     # customers relation:
-    customers: RF = RF({1: c1, 2: c2, 3: c3, 4: c4}, frozen)
+    customers: RF = RF({1: c1, 2: c2, 3: c3, 4: c4, 5: c5}, frozen)
 
     # database of relations:
     db: DBF = DBF(

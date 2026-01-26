@@ -5,10 +5,12 @@ from fql.util import Item, ReadOnlyError
 from fql.operators import (
     Operator,
     map_instance,
-    transform_values,
+    transform_items,
     filter_items,
     subdatabase,
     join,
+    partition,
+    group_by_aggregate,
 )
 from tests.lib import _create_testdata
 
@@ -45,7 +47,7 @@ def test_TransformValues():
     users: RF = db.users
 
     # transform the values in the users relation (note: this will modify the original RF in the db)
-    transform_RF: Operator[RF, RF] = transform_values[RF, RF](
+    transform_RF: Operator[RF, RF] = transform_items[RF, RF](
         transformation_function=transformation_function_modifying,
         output_factory=lambda _: RF(),
     )
@@ -55,7 +57,7 @@ def test_TransformValues():
         users_transformed: RF = transform_RF(users)
 
     # redefine the transformation_function to not modify the input RF in place, but return a modified copy instead:
-    transform_RF = transform_values[RF, RF](
+    transform_RF = transform_items[RF, RF](
         transformation_function=transformation_function_non_modifying,
     )
     with pytest.raises(ReadOnlyError):
@@ -68,7 +70,7 @@ def test_TransformValues_new_output_instance():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    tramsform_RF: Operator[RF, RF] = transform_values[RF, RF](
+    tramsform_RF: Operator[RF, RF] = transform_items[RF, RF](
         transformation_function=transformation_function_non_modifying,
         output_factory=lambda _: RF(),
     )
@@ -162,22 +164,18 @@ def test_subdatabase_two_RFs():
     # longer typed version:
     # reduced_DB: Operator[DBF, DBF] = subdatabase[DBF, DBF](
     #    join_predicate=join_predicate,
-    #    output_DBF_factory=lambda _: DBF(),
-    #    output_RF_factory=lambda _: RF(),
     #    left="users",
     #    right="customers",
     # )(db_filtered)
 
     # same thing again, but the short way of writing without type hints:
     # reduced_DBF: DBF = subdatabase[DBF, DBF](
-    #    join_predicate, lambda _: DBF(), lambda _: RF(), "users", "customers"
+    #    join_predicate, "users", "customers"
     # )(db_filtered)
 
     # same thing again, but with lambda join predicate:
     reduced_DBF: DBF = subdatabase[DBF, DBF](
         lambda item_left, item_right: item_left.value.name == item_right.value.name,
-        lambda _: DBF(),
-        lambda _: RF(),
         "users",
         "customers",
     )(db_filtered)
@@ -196,8 +194,6 @@ def test_subdatabase_two_RFs_with_join_index():
 
     reduced_DBF: DBF = subdatabase[DBF, DBF](
         lambda item_left, item_right: item_left.value.name == item_right.value.name,
-        lambda _: DBF(),
-        lambda _: RF(),
         "users",
         "customers",
         create_join_index=True,
@@ -242,7 +238,6 @@ def test_subdatabase_two_RFs_with_join_index():
 def test_flattening_join_two_RFs():
     joined: RF = join[DBF, RF](
         lambda item_left, item_right: item_left.value.name == item_right.value.name,
-        lambda _: RF(),
         "users",
         "customers",
     )(
@@ -252,8 +247,81 @@ def test_flattening_join_two_RFs():
     )
     assert type(joined) == RF
     assert len(joined) == 3  # three matching pairs in the join result
-    print()
-    for res in joined:
-        # print(res.key)
-        # res.value.print(flat=True)
-        print(res.value)
+    # print()
+    # for res in joined:
+    # print(res.key)
+    # res.value.print(flat=True)
+    #    print(res.value)
+
+
+def test_partitioning():
+    db: DBF = _create_testdata(frozen=True)
+    customers: RF = db.customers
+
+    # partition the users relation into two RFs: those name Tom and those not named Tom:
+    partitions = partition(lambda i: "Tom" if i.value.name == "Tom" else "not Tom")(
+        customers
+    )
+    assert len(partitions) == 2
+    assert type(partitions) == DBF
+
+    tom_partition: RF = partitions["Tom"]
+    assert type(tom_partition) == RF
+    assert len(tom_partition) == 2
+    for item in tom_partition:
+        assert item.value.name == "Tom"
+
+    not_tom_partition: RF = partitions["not Tom"]
+    assert type(not_tom_partition) == RF
+    assert len(not_tom_partition) == 3
+    for item in not_tom_partition:
+        assert item.value.name != "Tom"
+
+
+def test_group_by_aggregate_stepwise():
+    db: DBF = _create_testdata(frozen=True)
+    customers: RF = db.customers
+
+    # partition the users relation into two RFs: those name Tom and those not named Tom:
+    partitions = partition(lambda i: "Tom" if i.value.name == "Tom" else "not Tom")(
+        customers
+    )
+
+    # take the DBF of RF with partitions and return one RF with one aggregated TFs per partition:
+    aggregates = transform_items[DBF, RF](
+        transformation_function=lambda item: Item(
+            key=item.key, value=TF({"count": len(item.value)})
+        ),
+        output_factory=lambda _: RF(),
+    )(partitions)
+
+    assert len(aggregates) == 2
+    assert type(aggregates) == RF
+
+    tom_aggregate: TF = aggregates["Tom"]
+    assert type(tom_aggregate) == TF
+    assert tom_aggregate.count == 2
+
+    not_tom_aggregate: TF = aggregates["not Tom"]
+    assert type(not_tom_aggregate) == TF
+    assert not_tom_aggregate.count == 3
+
+
+def test_group_by_aggregate_single_operator():
+    aggregates: RF = group_by_aggregate(
+        grouping_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
+        aggregation_function=lambda item: Item(
+            key=item.key, value=TF({"count": len(item.value)})
+        ),
+    )(_create_testdata(frozen=True).customers)
+
+    assert len(aggregates) == 2
+    assert type(aggregates) == RF
+
+    tom_aggregate: TF = aggregates["Tom"]
+    assert type(tom_aggregate) == TF
+    assert tom_aggregate.count == 2
+
+    not_tom_aggregate: TF = aggregates["not Tom"]
+    assert type(not_tom_aggregate) == TF
+    assert not_tom_aggregate.count == 3

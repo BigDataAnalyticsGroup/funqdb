@@ -1,19 +1,18 @@
 import logging
+from abc import ABC
 from typing import Callable, Any, Iterable
 
-from fql.APIs import PureFunction, AttributeFunction
+from fql.APIs import PureFunction
 from fql.functions import RF, DBF, TF
 from fql.util import Item
 
-logger = logging.Logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
-    PureFunction[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+    PureFunction[INPUT_AttributeFunction, OUTPUT_AttributeFunction], ABC
 ):
     """Signature for an operator that transforms inputs to outputs."""
-
-    pass
 
 
 class map_instance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -33,7 +32,7 @@ class map_instance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return self.mapping_function(input_function)
 
 
-class transform_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that transforms the input instance by mapping its values.
@@ -44,7 +43,7 @@ class transform_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         transformation_function: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the transform_values operator.
+        """Initialize the transform_items operator.
         @param transformation_function: A function that takes an Item and returns a transformed Item or None
         @param output_factory: If set, this factory function will be used to create the output instance.
         """
@@ -168,16 +167,12 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     def __init__(
         self,
         join_predicate: Callable[..., Any],
-        output_DBF_factory: Callable[..., DBF] = None,
-        output_RF_factory: Callable[..., RF] = None,
         left: str | None = None,
         right: str | None = None,
         create_join_index: bool = False,
         keep_values_in_join_index: bool = False,
     ):
         self.join_predicate = join_predicate
-        self.output_DBF_factory = output_DBF_factory
-        self.output_RF_factory = output_RF_factory
         self.left = left
         self.right = right
         self.create_join_index = create_join_index
@@ -202,8 +197,7 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         join_index: RF | None = None
         # optional join index creation:
         if self.create_join_index:
-            join_index = self.output_RF_factory(None)
-            join_index.unfreeze()
+            join_index = RF(frozen=False)
 
         # TODO: optimize nested loop join later
         no_results: int = 0
@@ -232,20 +226,17 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             join_index.freeze()
 
         # create a reduced output database:
-        output_DBF = self.output_DBF_factory(None)
-        output_DBF.unfreeze()
+        output_DBF = DBF(frozen=False)
 
         # add reduced relations, delegated to filter_items operator:
         # left relation:
         output_DBF[self.left] = filter_items[RF, RF](
-            lambda i: i.key in left_qualifying_items,
-            lambda _: self.output_RF_factory(None),
+            lambda i: i.key in left_qualifying_items, lambda _: RF(frozen=False)
         )(left_RF)
 
         # right relation:
         output_DBF[self.right] = filter_items[RF, RF](
-            lambda i: i.key in right_qualifying_items,
-            lambda _: self.output_RF_factory(None),
+            lambda i: i.key in right_qualifying_items, lambda _: RF(frozen=False)
         )(right_RF)
 
         # join index:
@@ -272,12 +263,10 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     def __init__(
         self,
         join_predicate: Callable[..., Any],
-        output_RF_factory: Callable[..., RF] = None,
         left: str | None = None,
         right: str | None = None,
     ):
         self.join_predicate = join_predicate
-        self.output_RF_factory = output_RF_factory
         self.left = left
         self.right = right
 
@@ -289,8 +278,6 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         # TODO: implement typical join operators exploiting special predicates
         reduced_DBF: DBF = subdatabase[DBF, DBF](
             lambda item_left, item_right: item_left.value.name == item_right.value.name,
-            lambda _: DBF(),
-            lambda _: RF(),
             self.left,
             self.right,
             create_join_index=True,
@@ -298,7 +285,7 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         )(input_function)
 
         join_index: RF = reduced_DBF.join_index
-        result_RF: RF = self.output_RF_factory(None)
+        result_RF: RF = RF(frozen=False)
 
         # flatten the joined relations into a single output relation:
         # whatever sense that makes is another question as the join index already contains the info
@@ -306,12 +293,62 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         item: Item
         no_results: int = 0
         for item in join_index:
-            result_TF = TF()
-            result_TF.unfreeze()
+            # get a new writable tf:
+            result_TF = TF(frozen=False)
+            # add entries from left and right value:
             result_TF.update(item.value.left_value)
             result_TF.update(item.value.right_value)
+            # freeze tf and add to rf:
             result_TF.freeze()
             result_RF[no_results] = result_TF
             no_results += 1
 
+        result_RF.freeze()
+
         return result_RF
+
+
+class partition(Operator[RF, DBF]):
+    """Partition an input RF into a DBF with its partitions as RFs."""
+
+    # TODO: do we even need any factories here as the output types are fixed anyhow?
+
+    def __init__(
+        self,
+        partitioning_function: Callable[[Item], Any],
+    ):
+        self.partitioning_function = partitioning_function
+
+    def __call__(self, input_function: RF) -> DBF:
+        output_function: DBF = DBF(frozen=False)
+        item: Item
+        for item in input_function:
+            partition_key = self.partitioning_function(item)
+            if partition_key not in output_function:
+                output_function[partition_key] = RF(frozen=False)
+            output_function[partition_key][item.key] = item.value
+
+        # freeze all RFs in the output DBF
+        for item in output_function:
+            item.value.freeze()
+
+        output_function.freeze()
+        return output_function
+
+
+class group_by_aggregate(Operator[RF, RF]):
+    """Group an input RF by a grouping function and aggregate the groups using an aggregation function."""
+
+    def __init__(
+        self,
+        grouping_function: Callable[[Item], Any],
+        aggregation_function: Callable[[RF], Any],
+    ):
+        self.grouping_function = grouping_function
+        self.aggregation_function = aggregation_function
+
+    def __call__(self, input_function: RF) -> RF:
+        return transform_items[DBF, RF](
+            transformation_function=self.aggregation_function,
+            output_factory=lambda _: RF(),
+        )(partition(partitioning_function=self.grouping_function)(input_function))

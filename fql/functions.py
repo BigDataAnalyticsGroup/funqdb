@@ -1,6 +1,8 @@
 # good article:
 # https://realpython.com/python-magic-methods/
-import json
+import logging
+
+logger = logging.Logger(__name__)
 
 from fql.APIs import AttributeFunction
 from fql.util import ReadOnlyError, Item
@@ -90,6 +92,10 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         @param AttributeFunction: The AttributeFunction to update with.
         """
         for item in AttributeFunction:
+            if item.key in self:
+                logger.warning(
+                    f"key '{item.key}' already exists and will be overwritten."
+                )
             self.__setitem__(item.key, item.value)
 
     def print(self, flat=False, recursion_depth: int = 0):
