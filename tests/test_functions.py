@@ -1,6 +1,8 @@
 import pytest
 
+from fql.APIs import ConstrainedAttributeFunction
 from fql.functions import DictionaryAttributeFunction, TF, RF, DBF
+from fql.predicates.misc import all_keys_in_value
 from fql.util import Item
 from tests.lib import _create_testdata
 
@@ -105,3 +107,18 @@ def test_DictionaryTupleRelationDatabaseFunction():
     )
     assert len(advisory_users_filter) == 2
     assert {i.value.name for i in advisory_users_filter} == {"Horst", "Tom"}
+
+
+def test_constrained_functions():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    caf = ConstrainedAttributeFunction(
+        wrapped=users, constraints={all_keys_in_value({"name", "yob", "department"})}
+    )
+    caf[1].name = "Horst Updated"
+    assert caf[1].name == "Horst Updated"
+    caf[1].blah = 45
+
+    # TODO: where is the constrained supposed to be checked?
+    # it constrains its items: so when accessing any item in self, we should wrap the returned
+    # value in a constrained attribute function as well?

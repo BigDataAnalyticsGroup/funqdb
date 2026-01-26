@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any, Callable
 
 
 class PureFunction[INPUT, OUTPUT](ABC):
@@ -73,3 +74,100 @@ class AttributeFunction[Key, Value](PureFunction):
     def unfreeze(self):
         """Make the AttributeFunction writable."""
         pass
+
+
+class AttributeFunctionWrapper[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    PureFunction[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+):
+    """A base class for wrapping AttributeFunction instances."""
+
+    def __init__(self, wrapped: AttributeFunction):
+        super().__init__()
+        self.__dict__["_wrapped"] = wrapped
+
+    def __call__(self, *args, **kwargs) -> OUTPUT_AttributeFunction:
+        """Make the object callable.
+        @param arg: The argument for the call.
+        @return: The result of the call.
+        """
+        return self._wrapped(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> OUTPUT_AttributeFunction:
+        """Delegate attribute access to the wrapped AttributeFunction.
+        @param name: Name of the attribute being accessed.
+        @return: The value of the requested attribute from the wrapped AttributeFunction.
+        """
+        return self._wrapped.__getattr__(name)
+
+    def __setattr__(self, name: str, value: OUTPUT_AttributeFunction):
+        """Delegate attribute assignment to the wrapped AttributeFunction.
+        @param name: Name of the attribute being assigned.
+        @param value: The value to assign to the attribute.
+        """
+        self._wrapped.__setattr__(name, value)
+
+    def __delattr__(self, name):
+        """Delegate attribute deletion to the wrapped AttributeFunction.
+        @param name: Name of the attribute being deleted.
+        """
+        self._wrapped.__delattr__(name)
+
+    def __getitem__(self, key: Any) -> OUTPUT_AttributeFunction:
+        """Delegate item access to the wrapped AttributeFunction.
+        @param key: The key of the item being accessed.
+        @return: The value of the requested item from the wrapped AttributeFunction.
+        """
+        return self._wrapped.__getitem__(key)
+
+    def __setitem__(self, key: Any, value: OUTPUT_AttributeFunction):
+        """Delegate item assignment to the wrapped AttributeFunction.
+        @param key: The key of the item being assigned.
+        @param value: The value to assign to the item.
+        """
+        self._wrapped.__setitem__(key, value)
+
+    def __delitem__(self, key):
+        """Delegate item deletion to the wrapped AttributeFunction.
+        @param key: The key of the item being deleted.
+        """
+        self._wrapped.__delitem__(key)
+
+    def __eq__(self, other: AttributeFunction) -> bool:
+        """Check equality between two wrapped AttributeFunction instances based on their items.
+        @param other: The other AttributeFunction instance to compare with.
+        @return: True if both wrapped instances have the same items, False otherwise.
+        """
+        return self._wrapped.__eq__(other)
+
+    @property
+    def frozen(self) -> bool:
+        return self._wrapped.frozen
+
+    def freeze(self):
+        self._wrapped.freeze()
+
+    def unfreeze(self):
+        self._wrapped.unfreeze()
+
+
+class ConstrainedAttributeFunction[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    AttributeFunctionWrapper[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+):
+    """A class for AttributeFunctions with constraints."""
+
+    def __init__(self, wrapped, constraints: set[Callable[[Any], bool]]):
+        super().__init__(wrapped)
+        self.__dict__["_constraints"] = constraints
+
+    def __setitem__(self, key: Any, value: OUTPUT_AttributeFunction):
+        """Delegate item assignment to the wrapped AttributeFunction.
+        @param key: The key of the item being assigned.
+        @param value: The value to assign to the item.
+        """
+        for constraint in self._constraints:
+            if not constraint(value):
+                raise ValueError(
+                    f"Value '{value}' does not satisfy constraint '{constraint}'."
+                )
+
+        self._wrapped.__setitem__(key, value)
