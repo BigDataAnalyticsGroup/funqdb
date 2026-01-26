@@ -1,3 +1,5 @@
 .idea/
 fql/__pycache__/
 tests/__pycache__/
+fql/operators/__pycache__/
+
