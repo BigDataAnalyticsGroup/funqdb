@@ -1,17 +1,19 @@
 import pytest
 
 from fql.functions import TF, RF, DBF
-from fql.util import Item, ReadOnlyError
-from fql.operators import (
-    Operator,
+from fql.operators.filters import filter_items
+from fql.operators.joins import join
+from fql.operators.subdatabases import subdatabase
+from fql.operators.transforms import (
     map_instance,
     transform_items,
-    filter_items,
-    subdatabase,
-    join,
     partition,
     group_by_aggregate,
 )
+
+from fql.util import Item, ReadOnlyError
+from fql.operators.APIs import Operator
+
 from tests.lib import _create_testdata
 
 
