@@ -86,5 +86,7 @@ class equi_join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     ) -> OUTPUT_AttributeFunction:
         result_RF: RF = RF(frozen=False)
 
+        # TODO
+
         result_RF.unfreeze()
         return result_RF
