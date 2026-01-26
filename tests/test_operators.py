@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pytest
 
 from fql.functions import TF, RF, DBF
@@ -246,8 +248,10 @@ def test_flattening_join_two_RFs():
 
 def test_flattening_equi_join_two_RFs():
     joined: RF = equi_join[DBF, RF](
-        "users.value.name",
-        "customers.value.name",
+        "name",
+        "name",
+        "users",
+        "customers",
     )(_users_customers_DBF())
     # assert type(joined) == RF
     # assert len(joined) == 3  # three matching pairs in the join result

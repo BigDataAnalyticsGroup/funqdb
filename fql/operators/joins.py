@@ -4,6 +4,9 @@ from fql.functions import DBF, RF, TF
 from fql.operators.APIs import Operator
 from fql.operators.subdatabases import subdatabase
 from fql.util import Item
+import logging
+
+logger = logging.Logger(__name__)
 
 
 class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -77,16 +80,25 @@ class equi_join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self,
         left_identifier: str | None = None,
         right_identifier: str | None = None,
+        left: str | None = None,
+        right: str | None = None,
     ):
         self.left_identifier = left_identifier
         self.right_identifier = right_identifier
+        self.left = left
+        self.right = right
 
     def __call__(
         self, input_function: INPUT_AttributeFunction
     ) -> OUTPUT_AttributeFunction:
         result_RF: RF = RF(frozen=False)
 
-        # TODO
+        hash_map = {}
+
+        for item in input_function[self.left]:
+            key = item.value[self.left_identifier]
+            hash_map.setdefault(key, []).append(item.value)
+        # TODO: probe phase and TP construction
 
         result_RF.unfreeze()
         return result_RF
