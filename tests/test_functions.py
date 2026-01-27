@@ -2,8 +2,8 @@ import pytest
 
 from fql.functions import DictionaryAttributeFunction, TF, RF, DBF
 from fql.predicates.constraints import (
-    attribute_name_equivalence,
     attribute_name_equivalence_item,
+    max_count,
 )
 from fql.util import Item, ConstraintViolationError
 from tests.lib import _create_testdata
@@ -111,10 +111,8 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert {i.value.name for i in advisory_users_filter} == {"Horst", "Tom"}
 
 
-def test_constrained_functions_wo_observers():
+def test_attribute_functions_item_ans_self_constraints_wo_observers():
 
-    # for constraint in {keys_in_list, attribute_name_equivalence}:
-    # constraint = attribute_name_equivalence
     db: DBF = _create_testdata(frozen=False, observe_values=False)
     users: RF = db.users
     users.add_items_constraint(
@@ -128,14 +126,25 @@ def test_constrained_functions_wo_observers():
     with pytest.raises(ConstraintViolationError):
         users[0] = TF({"namde": "Alice", "yob": 1990, "department": db.departments.d1})
     with pytest.raises(ConstraintViolationError):
-        users[0] = TF({"name": "Alice", "yob": 1990, "gd": db.departments.d1})
+        users[1] = TF({"name": "Alice", "yob": 1990, "gd": db.departments.d1})
 
-    # but: TODO, currently we cannot check partial updates:
-    # users[1].dsf = 42
+    del users[0]
+    assert len(users) == 3
 
-    # users[4] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
+    users[1].dsf = 42
+    users.add_self_constraint(max_count(3))
+    users[3].dsf = 42
 
-    # print(users[4])
+    with pytest.raises(ConstraintViolationError):
+        users[4] = TF({"name": "Timmy", "yob": 1990, "department": db.departments.d1})
+
+    # item was inserted and then rolled back due to constraint violation, users must still have 3 items only:
+    assert len(users) == 3
+    assert {1, 2, 3} == set(users.keys())
+
+
+def test_subscriptions():
+    pass
 
     # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
     # TODO

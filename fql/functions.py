@@ -49,12 +49,12 @@ class DictionaryAttributeFunction[Key, Value](
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
     def __init__(self, data=None, frozen=False, observe_values: bool = False):
-        self.__dict__["data"] = data or {}
+        self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
         self.__dict__["self_constraints"] = set()
         self.__dict__["items_constraints"] = set()
         self.__dict__["observe_values"] = observe_values
-        self.__dict__["observers"] = []
+        self.__dict__["observers"] = list()
 
         if observe_values:
             # register self as observer at all Observable values:
@@ -170,11 +170,25 @@ class DictionaryAttributeFunction[Key, Value](
 
         # check constraints on the item and on self:
         item: Item = Item(key, value)
-        self._check_items_constraints(item)
-        self._check_self_constraints()
+
+        # unroll logic:
+        key_existed_before: bool = key in self.__dict__["data"]
+        _old_value: Value = self.__dict__["data"][key] if key_existed_before else None
 
         # maybe here we need to register an event at value to notify self about changes of value?
         self.__dict__["data"][key] = value
+
+        try:
+            self._check_items_constraints(item)
+            self._check_self_constraints()
+        except ConstraintViolationError as e:
+            # rollback change:
+            if key_existed_before:
+                self.__dict__["data"][key] = _old_value
+            else:
+                del self.__dict__["data"][key]
+            raise e
+
         self.notify_observers(item)
 
     def __delitem__(self, key):
@@ -202,6 +216,18 @@ class DictionaryAttributeFunction[Key, Value](
             return Item(item[0], item[1])
 
         return map(mapper, self.__dict__["data"].items())
+
+    def keys(self) -> iter:
+        """Get the keys of the AttributeFunction.
+        @return: An iterable of the keys.
+        """
+        return iter(self.__dict__["data"].keys())
+
+    def values(self):
+        """Get the values of the AttributeFunction.
+        @return: An iterable of the values.
+        """
+        return iter(self.__dict__["data"].values())
 
     def __eq__(self, other: "DictionaryAttributeFunction") -> bool:
         """Check equality between two DictionaryAttributeFunction instances based on their items.

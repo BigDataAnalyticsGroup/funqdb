@@ -62,6 +62,12 @@ class AttributeFunction[Key, Value](PureFunction):
         """
         pass
 
+    def __len__(self) -> int:
+        """Return the number of items in the AttributeFunction.
+        @return: The number of items.
+        """
+        pass
+
     @property
     @abstractmethod
     def frozen(self) -> bool:

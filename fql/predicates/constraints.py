@@ -48,3 +48,13 @@ class attribute_name_equivalence_item(ItemFunctionConstraint):
 
     def __call__(self, item: Item) -> bool:
         return self.wrapped(item.value)
+
+
+class max_count(ItemFunctionConstraint):
+    """Predicate that checks if the number of attributes in a given item is below a maximum."""
+
+    def __init__(self, max_count: int):
+        self.max_count = max_count
+
+    def __call__(self, af: AttributeFunction) -> bool:
+        return len(af) <= self.max_count
