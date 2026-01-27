@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from fql.predicates.misc import in_subset
+from fql.predicates.constraints import in_subset
 from fql.util import Item
 
 

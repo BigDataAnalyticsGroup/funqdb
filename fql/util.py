@@ -15,7 +15,7 @@ class ConstraintViolationError(Exception):
 
 @dataclass(frozen=True)
 class Item[Key, Value]:
-    """A simple key-value pair (aka item) representation."""
+    """A simple key-value pair (aka item) representation of an entry in an DictionaryAttributeFunction."""
 
     key: Key
     value: Value

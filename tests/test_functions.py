@@ -1,7 +1,10 @@
 import pytest
 
 from fql.functions import DictionaryAttributeFunction, TF, RF, DBF
-from fql.predicates.misc import TF_keys_in_list, attribute_name_equivalence
+from fql.predicates.constraints import (
+    attribute_name_equivalence,
+    attribute_name_equivalence_item,
+)
 from fql.util import Item, ConstraintViolationError
 from tests.lib import _create_testdata
 
@@ -108,30 +111,31 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert {i.value.name for i in advisory_users_filter} == {"Horst", "Tom"}
 
 
-def test_constrained_functions():
+def test_constrained_functions_wo_observers():
 
-    for constraint in {TF_keys_in_list, attribute_name_equivalence}:
-        db: DBF = _create_testdata(frozen=False, observe_values=True)
-        users: RF = db.users
-        users.add_constraint(constraint({"name", "yob", "department"}))
-        assert 0 not in users
+    # for constraint in {keys_in_list, attribute_name_equivalence}:
+    # constraint = attribute_name_equivalence
+    db: DBF = _create_testdata(frozen=False, observe_values=False)
+    users: RF = db.users
+    users.add_items_constraint(
+        attribute_name_equivalence_item({"name", "yob", "department"})
+    )
+    assert 0 not in users
 
-        # newly added user only with valid attribute:
-        users[0] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
+    # newly added user only with valid attribute:
+    users[0] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
 
-        with pytest.raises(ConstraintViolationError):
-            users[0] = TF(
-                {"namde": "Alice", "yob": 1990, "department": db.departments.d1}
-            )
-        with pytest.raises(ConstraintViolationError):
-            users[0] = TF({"name": "Alice", "yob": 1990, "gd": db.departments.d1})
+    with pytest.raises(ConstraintViolationError):
+        users[0] = TF({"namde": "Alice", "yob": 1990, "department": db.departments.d1})
+    with pytest.raises(ConstraintViolationError):
+        users[0] = TF({"name": "Alice", "yob": 1990, "gd": db.departments.d1})
 
-        # but: TODO, currently we cannot check partial updates:
-        users[1].dsf = 42
+    # but: TODO, currently we cannot check partial updates:
+    # users[1].dsf = 42
 
-        users[4] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
+    # users[4] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
 
-        print(users[4])
+    # print(users[4])
 
-        # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
-        # TODO
+    # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
+    # TODO

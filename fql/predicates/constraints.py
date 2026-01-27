@@ -1,0 +1,50 @@
+from abc import abstractmethod, ABC
+
+from fql.APIs import AttributeFunction
+from fql.util import Item
+
+
+class in_subset:
+    def __init__(self, whitelist: set[str]):
+        self.whitelist = whitelist
+
+    def __call__(self, *args, **kwargs) -> bool:
+        return args[0] in self.whitelist
+
+
+class AttributeFunctionConstraint(ABC):
+    """Marks an item constraint."""
+
+    @abstractmethod
+    def __call__(self, attribute_function: AttributeFunction) -> bool:
+        """Evaluates whether the given attribute_function fulfills the constraint."""
+        pass
+
+
+class ItemFunctionConstraint(ABC):
+    """Marks an item constraint."""
+
+    @abstractmethod
+    def __call__(self, item: Item) -> bool:
+        """Evaluates whether the given item fulfills the constraint."""
+        pass
+
+
+class attribute_name_equivalence(AttributeFunctionConstraint):
+    """Predicate that checks if the keys in a given attribute_function match a given set."""
+
+    def __init__(self, attribute_names: set[str]):
+        self.attribute_names = attribute_names
+
+    def __call__(self, attribute_function: AttributeFunction) -> bool:
+        return self.attribute_names == {item.key for item in attribute_function}
+
+
+class attribute_name_equivalence_item(ItemFunctionConstraint):
+    """Predicate that checks if the keys in a given item match a given set."""
+
+    def __init__(self, attribute_names: set[str]):
+        self.wrapped = attribute_name_equivalence(attribute_names=attribute_names)
+
+    def __call__(self, item: Item) -> bool:
+        return self.wrapped(item.value)

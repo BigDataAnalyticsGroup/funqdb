@@ -2,6 +2,7 @@
 # https://realpython.com/python-magic-methods/
 import inspect
 import logging
+from abc import ABC, abstractmethod
 
 logger = logging.Logger(__name__)
 
@@ -9,9 +10,10 @@ from fql.APIs import AttributeFunction
 from fql.util import ReadOnlyError, Item, ConstraintViolationError
 
 
-class Observer:
+class Observer(ABC):
     """An observer that can be notified of changes."""
 
+    @abstractmethod
     def notify(self, item: Item):
         """Notify the observer of a change.
         @param item: The item that has changed.
@@ -19,7 +21,7 @@ class Observer:
         pass
 
 
-class Observable:
+class Observable(ABC):
     """An observable that can be observed by observers."""
 
     def add_observer(self, observer: Observer):
@@ -49,7 +51,8 @@ class DictionaryAttributeFunction[Key, Value](
     def __init__(self, data=None, frozen=False, observe_values: bool = False):
         self.__dict__["data"] = data or {}
         self.__dict__["frozen"] = frozen
-        self.__dict__["constraints"] = set()
+        self.__dict__["self_constraints"] = set()
+        self.__dict__["items_constraints"] = set()
         self.__dict__["observe_values"] = observe_values
         self.__dict__["observers"] = []
 
@@ -61,17 +64,29 @@ class DictionaryAttributeFunction[Key, Value](
 
         super().__init__()
 
-    def add_constraint(self, constraint):
-        """Add a constraint to the AttributeFunction.
+    def add_self_constraint(self, constraint):
+        """Add a self-constraint to this AttributeFunction.
         @param constraint: A callable that takes a value and returns True if the value satisfies the constraint, False otherwise.
         """
-        self.__dict__["constraints"].add(constraint)
+        self.__dict__["self_constraints"].add(constraint)
 
-    def remove_constraint(self, constraint):
-        """Remove a constraint from the AttributeFunction.
+    def remove_self_constraint(self, constraint):
+        """Remove a self-constraint from the AttributeFunction.
         @param constraint: The constraint to remove.
         """
-        self.__dict__["constraints"].remove(constraint)
+        self.__dict__["self_constraints"].remove(constraint)
+
+    def add_items_constraint(self, constraint):
+        """Add an item-constraint to this AttributeFunction, i.e., this constraint must be fulfilled for all items.
+        @param constraint: A callable that takes an Item and returns True if the item satisfies the constraint, False otherwise.
+        """
+        self.__dict__["items_constraints"].add(constraint)
+
+    def remove_items_constraint(self, constraint):
+        """Remove an item-constraint from the AttributeFunction.
+        @param constraint: The constraint to remove.
+        """
+        self.__dict__["items_constraints"].remove(constraint)
 
     def add_observer(self, observer: Observer):
         """Add an observer to the AttributeFunction.
@@ -116,6 +131,32 @@ class DictionaryAttributeFunction[Key, Value](
         else:
             raise AttributeError
 
+    def _check_items_constraints(self, item: Item):
+        """Check all constraints on a given item.
+        @param item: The item to check.
+        """
+        for constraint in self.__dict__["items_constraints"]:
+            if not constraint(item):
+                raise ConstraintViolationError(
+                    f"Value '{item.value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n"
+                    f"for key '{item.key}' and value '{item.value}'."
+                )
+
+    def _check_self_constraints(self):
+        """Check all self-constraints on the current AttributeFunction."""
+        for constraint in self.__dict__["self_constraints"]:
+            if not constraint(self):
+                raise ConstraintViolationError(
+                    f"AttributeFunction'{self}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'."
+                )
+
+    def notify(self, item: Item):
+        """Notify the AttributeFunction of a change in an observed value.
+        @param item: The item that has changed.
+        """
+        # when a value changes, we need to notify our observers about the change:
+        self._check_items_constraints(item)
+
     def __setitem__(self, key: Key, value: Value):
         """Customize item assignment. This must be used for non-str-type keys.
         @param key: The key of the item being assigned.
@@ -126,14 +167,11 @@ class DictionaryAttributeFunction[Key, Value](
             raise ReadOnlyError(
                 f"Write attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )
-        # check constraints:
+
+        # check constraints on the item and on self:
         item: Item = Item(key, value)
-        for constraint in self.__dict__["constraints"]:
-            if not constraint(item):
-                raise ConstraintViolationError(
-                    f"Value '{value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n"
-                    f"for key '{key}' and value '{value}'."
-                )
+        self._check_items_constraints(item)
+        self._check_self_constraints()
 
         # maybe here we need to register an event at value to notify self about changes of value?
         self.__dict__["data"][key] = value
@@ -207,7 +245,7 @@ class DictionaryAttributeFunction[Key, Value](
         for key, value in self.__dict__["data"].items():
             if isinstance(value, AttributeFunction):
                 if flat:
-                    ret += prefix + f"{key}: {value.__repr__()}\n"
+                    ret += prefix + f"{key}: {value.__repr__() if value else "NONE"}\n"
                 else:
                     ret += prefix + f"{key}:\n"
                     ret += value._my_str_(
@@ -223,7 +261,7 @@ class DictionaryAttributeFunction[Key, Value](
 
     def __repr__(self):
         """String representation of the current AttributeFunction used fo dev purposes (including the debugger)."""
-        return str(self)
+        return self.__class__
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
