@@ -111,7 +111,7 @@ def test_DictionaryTupleRelationDatabaseFunction():
 def test_constrained_functions():
 
     for constraint in {TF_keys_in_list, attribute_name_equivalence}:
-        db: DBF = _create_testdata(frozen=False)
+        db: DBF = _create_testdata(frozen=False, observe_values=True)
         users: RF = db.users
         users.add_constraint(constraint({"name", "yob", "department"}))
         assert 0 not in users
@@ -124,10 +124,14 @@ def test_constrained_functions():
                 {"namde": "Alice", "yob": 1990, "department": db.departments.d1}
             )
         with pytest.raises(ConstraintViolationError):
-            users[0] = TF({"namde": "Alice", "yob": 1990, "gd": db.departments.d1})
+            users[0] = TF({"name": "Alice", "yob": 1990, "gd": db.departments.d1})
 
         # but: TODO, currently we cannot check partial updates:
         users[1].dsf = 42
+
+        users[4] = TF({"name": "Alice", "yob": 1990, "department": db.departments.d1})
+
+        print(users[4])
 
         # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
         # TODO

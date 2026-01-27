@@ -9,13 +9,56 @@ from fql.APIs import AttributeFunction
 from fql.util import ReadOnlyError, Item, ConstraintViolationError
 
 
-class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
+class Observer:
+    """An observer that can be notified of changes."""
+
+    def notify(self, item: Item):
+        """Notify the observer of a change.
+        @param item: The item that has changed.
+        """
+        pass
+
+
+class Observable:
+    """An observable that can be observed by observers."""
+
+    def add_observer(self, observer: Observer):
+        """Add an observer to the observable.
+        @param observer: The observer to add.
+        """
+        pass
+
+    def remove_observer(self, observer: Observer):
+        """Remove an observer from the observable.
+        @param observer: The observer to remove.
+        """
+        pass
+
+    def notify_observers(self, item: Item):
+        """Notify all observers of a change.
+        @param item: The item that has changed.
+        """
+        pass
+
+
+class DictionaryAttributeFunction[Key, Value](
+    AttributeFunction[Key, Value], Observable, Observer
+):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
-    def __init__(self, data=None, frozen=False):
+    def __init__(self, data=None, frozen=False, observe_values: bool = False):
         self.__dict__["data"] = data or {}
         self.__dict__["frozen"] = frozen
         self.__dict__["constraints"] = set()
+        self.__dict__["observe_values"] = observe_values
+        self.__dict__["observers"] = []
+
+        if observe_values:
+            # register self as observer at all Observable values:
+            for value in self.__dict__["data"].values():
+                if isinstance(value, Observable):
+                    value.add_observer(self)
+
         super().__init__()
 
     def add_constraint(self, constraint):
@@ -29,6 +72,25 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
         @param constraint: The constraint to remove.
         """
         self.__dict__["constraints"].remove(constraint)
+
+    def add_observer(self, observer: Observer):
+        """Add an observer to the AttributeFunction.
+        @param observer: The observer to add.
+        """
+        self.__dict__["observers"].append(observer)
+
+    def notify_observers(self, item: Item):
+        """Notify all observers of a change.
+        @param item: The item that has changed.
+        """
+        for observer in self.__dict__["observers"]:
+            observer.notify(item)
+
+    def remove_observer(self, observer):
+        """Remove an observer from the AttributeFunction.
+        @param observer: The observer to remove.
+        """
+        self.__dict__["observers"].remove(observer)
 
     def freeze(self):
         """Make the AttributeFunction read-only."""
@@ -65,8 +127,9 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
                 f"Write attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )
         # check constraints:
+        item: Item = Item(key, value)
         for constraint in self.__dict__["constraints"]:
-            if not constraint(Item(key, value)):
+            if not constraint(item):
                 raise ConstraintViolationError(
                     f"Value '{value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n"
                     f"for key '{key}' and value '{value}'."
@@ -74,6 +137,7 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
 
         # maybe here we need to register an event at value to notify self about changes of value?
         self.__dict__["data"][key] = value
+        self.notify_observers(item)
 
     def __delitem__(self, key):
         """Customize item deletion. This must be used for non-str-type keys."""
@@ -83,7 +147,9 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
             )
 
         if key in self.__dict__["data"]:
+            item: Item = Item(key, self.__dict__["data"][key])
             del self.__dict__["data"][key]
+            self.notify_observers(item)
         else:
             raise AttributeError
 
@@ -154,6 +220,10 @@ class DictionaryAttributeFunction[Key, Value](AttributeFunction[Key, Value]):
     def __str__(self):
         """String representation of the current AttributeFunction."""
         return self._my_str_(flat=True)
+
+    def __repr__(self):
+        """String representation of the current AttributeFunction used fo dev purposes (including the debugger)."""
+        return str(self)
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):

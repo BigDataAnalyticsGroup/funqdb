@@ -2,40 +2,51 @@ from fql.functions import TF, RF, DBF
 from fql.operators.filters import filter_items
 
 
-def _create_testdata(frozen: bool = False) -> DBF:
+def _create_testdata(frozen: bool = False, observe_values: bool = False) -> DBF:
     """Creates test data for unit tests.
     @param frozen: Whether the created data structures should be frozen (read-only).
     @return: A database function (DBF) containing departments and users relations.
     """
 
-    # departments relation:
+    # departments tuples and relation:
     departments: RF = RF(
         {
             "d1": TF({"name": "Dev", "budget": "11M"}, frozen),
             "d2": TF({"name": "Consulting", "budget": "22M"}, frozen),
         },
-        frozen,
+        frozen=frozen,
+        observe_values=observe_values,
     )
 
-    # users tuples:
-    t1: TF = TF({"name": "Horst", "yob": 1972, "department": departments.d1}, frozen)
-    t2: TF = TF({"name": "Tom", "yob": 1983, "department": departments.d1}, frozen)
-    t3: TF = TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen)
-    # users relation:
-    users: RF = RF({1: t1, 2: t2, 3: t3}, frozen)
+    # users tuples and relation:
+    users: RF = RF(
+        {
+            1: TF({"name": "Horst", "yob": 1972, "department": departments.d1}, frozen),
+            2: TF({"name": "Tom", "yob": 1983, "department": departments.d1}, frozen),
+            3: TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen),
+        },
+        frozen=frozen,
+        observe_values=observe_values,
+    )
 
-    # customers tuples:
-    c1: TF = TF({"name": "Tom", "company": "sample company"}, frozen)
-    c2: TF = TF({"name": "Tom", "company": "example inc"}, frozen)
-    c3: TF = TF({"name": "John", "company": "whatever gmbh"}, frozen)
-    c4: TF = TF({"name": "Peter", "company": "Peter, Paul, and Mary"}, frozen)
-    c5: TF = TF({"name": "Frank", "company": "Masterhorst"}, frozen)
-    # customers relation:
-    customers: RF = RF({1: c1, 2: c2, 3: c3, 4: c4, 5: c5}, frozen)
+    # customers tuples and relation:
+    customers: RF = RF(
+        {
+            1: TF({"name": "Tom", "company": "sample company"}, frozen),
+            2: TF({"name": "Tom", "company": "example inc"}, frozen),
+            3: TF({"name": "John", "company": "whatever gmbh"}, frozen),
+            4: TF({"name": "Peter", "company": "Peter, Paul, and Mary"}, frozen),
+            5: TF({"name": "Frank", "company": "Masterhorst"}, frozen),
+        },
+        frozen=frozen,
+        observe_values=observe_values,
+    )
 
     # database of relations:
     db: DBF = DBF(
-        {"departments": departments, "users": users, "customers": customers}, frozen
+        {"departments": departments, "users": users, "customers": customers},
+        frozen,
+        observe_values=observe_values,
     )
 
     return db
