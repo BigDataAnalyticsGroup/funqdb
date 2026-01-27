@@ -125,15 +125,29 @@ def test_attribute_functions_item_ans_self_constraints_wo_observers():
 
     with pytest.raises(ConstraintViolationError):
         users[0] = TF({"namde": "Alice", "yob": 1990, "department": db.departments.d1})
+
+    # check successful rollback on violation:
+    assert users[0].name == "Alice"
+    assert users[0].yob == 1990
+    assert users[0].department == db.departments.d1
+
     with pytest.raises(ConstraintViolationError):
         users[1] = TF({"name": "Alice", "yob": 1990, "gd": db.departments.d1})
 
+    # check successful rollback on violation:
+    assert users[1].name == "Horst"
+    assert users[1].yob == 1972
+    assert users[1].department == db.departments.d1
+
+    assert len(users) == 4
     del users[0]
     assert len(users) == 3
 
+    # the following direct TP access still works though:
     users[1].dsf = 42
+
+    # check self-constraint:
     users.add_self_constraint(max_count(3))
-    users[3].dsf = 42
 
     with pytest.raises(ConstraintViolationError):
         users[4] = TF({"name": "Timmy", "yob": 1990, "department": db.departments.d1})
@@ -143,8 +157,28 @@ def test_attribute_functions_item_ans_self_constraints_wo_observers():
     assert {1, 2, 3} == set(users.keys())
 
 
-def test_subscriptions():
-    pass
-
+def test_function_observers():
     # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
     # TODO
+    db: DBF = _create_testdata(frozen=False, observe_values=True)
+    users: RF = db.users
+    departments: RF = db.departments
+    customers: RF = db.customers
+    users.add_items_constraint(
+        attribute_name_equivalence_item({"name", "yob", "department"})
+    )
+
+    # test that all TPs have the relation as observer:
+    for i in range(1, len(users) + 1):
+        assert users[i].__dict__["observers"] == [users]
+
+    for i in range(1, len(customers) + 1):
+        assert customers[i].__dict__["observers"] == [customers]
+
+    for i in range(1, len(departments) + 1):
+        assert departments[f"d{i}"].__dict__["observers"] == [departments]
+
+    # test that all RFs have the DBF as observer:
+    assert users.__dict__["observers"] == [db]
+    assert customers.__dict__["observers"] == [db]
+    assert departments.__dict__["observers"] == [db]

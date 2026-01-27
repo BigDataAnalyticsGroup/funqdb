@@ -175,7 +175,6 @@ class DictionaryAttributeFunction[Key, Value](
         key_existed_before: bool = key in self.__dict__["data"]
         _old_value: Value = self.__dict__["data"][key] if key_existed_before else None
 
-        # maybe here we need to register an event at value to notify self about changes of value?
         self.__dict__["data"][key] = value
 
         try:
@@ -189,6 +188,7 @@ class DictionaryAttributeFunction[Key, Value](
                 del self.__dict__["data"][key]
             raise e
 
+        # notify observers about the change:
         self.notify_observers(item)
 
     def __delitem__(self, key):
@@ -199,9 +199,20 @@ class DictionaryAttributeFunction[Key, Value](
             )
 
         if key in self.__dict__["data"]:
-            item: Item = Item(key, self.__dict__["data"][key])
-            del self.__dict__["data"][key]
-            self.notify_observers(item)
+            # unroll logic:
+            # keep ref to old value:
+            _old_value: Value = self.__dict__["data"][key]
+
+            try:
+                del self.__dict__["data"][key]
+                self._check_self_constraints()
+            except ConstraintViolationError as e:
+                # rollback change:
+                self.__dict__["data"][key] = _old_value
+                raise e
+            # notify observers about the change:
+            self.notify_observers(Item(key, self.__dict__["data"][key]))
+
         else:
             raise AttributeError
 
