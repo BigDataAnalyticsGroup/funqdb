@@ -7,14 +7,14 @@ from abc import ABC, abstractmethod
 logger = logging.Logger(__name__)
 
 from fql.APIs import AttributeFunction
-from fql.util import ReadOnlyError, Item, ConstraintViolationError
+from fql.util import ReadOnlyError, Item, ConstraintViolationError, KeyDeletedSentinel
 
 
 class Observer(ABC):
     """An observer that can be notified of changes."""
 
     @abstractmethod
-    def notify(self, item: Item):
+    def receive_notification(self, observable: "Observable", item: Item):
         """Notify the observer of a change.
         @param item: The item that has changed.
         """
@@ -48,15 +48,15 @@ class DictionaryAttributeFunction[Key, Value](
 ):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
-    def __init__(self, data=None, frozen=False, observe_values: bool = False):
+    def __init__(self, data=None, frozen=False, observe_items: bool = False):
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
         self.__dict__["self_constraints"] = set()
         self.__dict__["items_constraints"] = set()
-        self.__dict__["observe_values"] = observe_values
+        self.__dict__["observe_items"] = observe_items
         self.__dict__["observers"] = list()
 
-        if observe_values:
+        if observe_items:
             # register self as observer at all Observable values:
             for value in self.__dict__["data"].values():
                 if isinstance(value, Observable):
@@ -99,7 +99,7 @@ class DictionaryAttributeFunction[Key, Value](
         @param item: The item that has changed.
         """
         for observer in self.__dict__["observers"]:
-            observer.notify(item)
+            observer.receive_notification(self, item)
 
     def remove_observer(self, observer):
         """Remove an observer from the AttributeFunction.
@@ -150,12 +150,18 @@ class DictionaryAttributeFunction[Key, Value](
                     f"AttributeFunction'{self}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'."
                 )
 
-    def notify(self, item: Item):
+    def receive_notification(self, observable: "Observable", item: Item):
         """Notify the AttributeFunction of a change in an observed value.
         @param item: The item that has changed.
         """
         # when a value changes, we need to notify our observers about the change:
-        self._check_items_constraints(item)
+        # TODO: wrong: should call with the item that changed, not with the observable (the value in this case):
+        # so we have to find all items pointing to that TP, which can mbe multiple ones!
+        # brute force search:
+        # TODO: maybe we should keep an inverted index for that?
+        for item in self:
+            if item.value == observable:
+                self._check_items_constraints(item)
 
     def __setitem__(self, key: Key, value: Value):
         """Customize item assignment. This must be used for non-str-type keys.
@@ -211,7 +217,7 @@ class DictionaryAttributeFunction[Key, Value](
                 self.__dict__["data"][key] = _old_value
                 raise e
             # notify observers about the change:
-            self.notify_observers(Item(key, self.__dict__["data"][key]))
+            self.notify_observers(Item(key, KeyDeletedSentinel))
 
         else:
             raise AttributeError

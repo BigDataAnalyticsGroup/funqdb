@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class PureFunction[INPUT, OUTPUT](ABC):
+class PureFunction[INPUT, OUTPUT]():
     """An abstract mapping_function."""
 
     @abstractmethod

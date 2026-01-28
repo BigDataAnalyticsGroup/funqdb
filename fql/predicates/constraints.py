@@ -1,6 +1,7 @@
 from abc import abstractmethod, ABC
 
 from fql.APIs import AttributeFunction
+from fql.functions import DictionaryAttributeFunction
 from fql.util import Item
 
 
@@ -13,7 +14,7 @@ class in_subset:
 
 
 class AttributeFunctionConstraint(ABC):
-    """Marks an item constraint."""
+    """Marks an attribute function constraint."""
 
     @abstractmethod
     def __call__(self, attribute_function: AttributeFunction) -> bool:
@@ -21,7 +22,7 @@ class AttributeFunctionConstraint(ABC):
         pass
 
 
-class ItemFunctionConstraint(ABC):
+class ItemConstraint(ABC):
     """Marks an item constraint."""
 
     @abstractmethod
@@ -37,21 +38,24 @@ class attribute_name_equivalence(AttributeFunctionConstraint):
         self.attribute_names = attribute_names
 
     def __call__(self, attribute_function: AttributeFunction) -> bool:
+        print(attribute_function.__class__.__name__)
+        assert isinstance(attribute_function, AttributeFunction)
         return self.attribute_names == {item.key for item in attribute_function}
 
 
-class attribute_name_equivalence_item(ItemFunctionConstraint):
+class attribute_name_equivalence_item(ItemConstraint):
     """Predicate that checks if the keys in a given item match a given set."""
 
     def __init__(self, attribute_names: set[str]):
         self.wrapped = attribute_name_equivalence(attribute_names=attribute_names)
 
     def __call__(self, item: Item) -> bool:
+        assert type(item) is Item
         return self.wrapped(item.value)
 
 
-class max_count(ItemFunctionConstraint):
-    """Predicate that checks if the number of attributes in a given item is below a maximum."""
+class max_count(ItemConstraint):
+    """Predicate that checks if the number of entries in a given item is below a maximum."""
 
     def __init__(self, max_count: int):
         self.max_count = max_count

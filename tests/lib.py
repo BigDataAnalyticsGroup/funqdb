@@ -2,9 +2,10 @@ from fql.functions import TF, RF, DBF
 from fql.operators.filters import filter_items
 
 
-def _create_testdata(frozen: bool = False, observe_values: bool = False) -> DBF:
+def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
     """Creates test data for unit tests.
     @param frozen: Whether the created data structures should be frozen (read-only).
+    @param observe_items: Whether the created data structures should observe item changes.
     @return: A database function (DBF) containing departments and users relations.
     """
 
@@ -15,7 +16,7 @@ def _create_testdata(frozen: bool = False, observe_values: bool = False) -> DBF:
             "d2": TF({"name": "Consulting", "budget": "22M"}, frozen),
         },
         frozen=frozen,
-        observe_values=observe_values,
+        observe_items=observe_items,
     )
 
     # users tuples and relation:
@@ -26,7 +27,7 @@ def _create_testdata(frozen: bool = False, observe_values: bool = False) -> DBF:
             3: TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen),
         },
         frozen=frozen,
-        observe_values=observe_values,
+        observe_items=observe_items,
     )
 
     # customers tuples and relation:
@@ -39,14 +40,14 @@ def _create_testdata(frozen: bool = False, observe_values: bool = False) -> DBF:
             5: TF({"name": "Frank", "company": "Masterhorst"}, frozen),
         },
         frozen=frozen,
-        observe_values=observe_values,
+        observe_items=observe_items,
     )
 
     # database of relations:
     db: DBF = DBF(
         {"departments": departments, "users": users, "customers": customers},
         frozen,
-        observe_values=observe_values,
+        observe_items=observe_items,
     )
 
     return db

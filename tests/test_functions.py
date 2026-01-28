@@ -113,7 +113,7 @@ def test_DictionaryTupleRelationDatabaseFunction():
 
 def test_attribute_functions_item_ans_self_constraints_wo_observers():
 
-    db: DBF = _create_testdata(frozen=False, observe_values=False)
+    db: DBF = _create_testdata(frozen=False, observe_items=False)
     users: RF = db.users
     users.add_items_constraint(
         attribute_name_equivalence_item({"name", "yob", "department"})
@@ -160,7 +160,7 @@ def test_attribute_functions_item_ans_self_constraints_wo_observers():
 def test_function_observers():
     # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
     # TODO
-    db: DBF = _create_testdata(frozen=False, observe_values=True)
+    db: DBF = _create_testdata(frozen=False, observe_items=True)
     users: RF = db.users
     departments: RF = db.departments
     customers: RF = db.customers
@@ -182,3 +182,23 @@ def test_function_observers():
     assert users.__dict__["observers"] == [db]
     assert customers.__dict__["observers"] == [db]
     assert departments.__dict__["observers"] == [db]
+
+    # now change an attribute in a tuple and see that the observers are notified:
+    users[1].department.name = "NewDeptName"
+
+    assert users[1].department.name == "NewDeptName"
+    assert departments.d1.name == "NewDeptName"
+
+    # test that constraint violations are also caught with observers enabled:
+    # as before, this one is caught in the RF:
+    # with pytest.raises(ConstraintViolationError):
+    #    users[0] = TF({"namde": "Alice", "yob": 1990, "department": db.departments.d1})
+
+    # but this one is not, as the TP is created first, then the constraint is checked through the observer mechanism:
+    with pytest.raises(ConstraintViolationError):
+        tf: TF = users[1]
+        tf.dsf = "Alice"  # type: ignore
+
+    # no rollback happened, as the change was triggered through the observer mechanism, LOL
+    # what should be the expected behavior here?
+    assert users[1].dsf == "Alice"

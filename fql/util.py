@@ -13,6 +13,12 @@ class ConstraintViolationError(Exception):
     pass
 
 
+class KeyDeletedSentinel:
+    """A sentinel value indicating that a key has been deleted."""
+
+    pass
+
+
 @dataclass(frozen=True)
 class Item[Key, Value]:
     """A simple key-value pair (aka item) representation of an entry in an DictionaryAttributeFunction."""
