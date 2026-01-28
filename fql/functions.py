@@ -7,7 +7,13 @@ from abc import ABC, abstractmethod
 logger = logging.Logger(__name__)
 
 from fql.APIs import AttributeFunction
-from fql.util import ReadOnlyError, Item, ConstraintViolationError, KeyDeletedSentinel
+from fql.util import (
+    ReadOnlyError,
+    Item,
+    ConstraintViolationError,
+    KeyDeletedSentinel,
+    ConstraintViolationErrorFromOutside,
+)
 
 
 class Observer(ABC):
@@ -131,26 +137,37 @@ class DictionaryAttributeFunction[Key, Value](
         else:
             raise AttributeError
 
-    def _check_items_constraints(self, item: Item):
+    def _check_items_constraints(
+        self, item: Item, triggered_by_notification: bool = False
+    ):
         """Check all constraints on a given item.
         @param item: The item to check.
+        @param triggered_by_notification: Whether the check was triggered by a notification from an observed value.
         """
         for constraint in self.__dict__["items_constraints"]:
             if not constraint(item):
-                raise ConstraintViolationError(
-                    f"Value '{item.value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n"
+                message: str = (
+                    f"Value '{item.value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n "
                     f"for key '{item.key}' and value '{item.value}'."
                 )
+                if triggered_by_notification:
+                    raise ConstraintViolationErrorFromOutside(message)
+                raise ConstraintViolationError(message)
 
-    def _check_self_constraints(self):
+    def _check_self_constraints(self, triggered_by_notification: bool = False):
         """Check all self-constraints on the current AttributeFunction."""
         for constraint in self.__dict__["self_constraints"]:
             if not constraint(self):
-                raise ConstraintViolationError(
+                message: str = (
                     f"AttributeFunction'{self}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'."
                 )
+                if triggered_by_notification:
+                    raise ConstraintViolationErrorFromOutside(message)
+                raise ConstraintViolationError(message)
 
-    def receive_notification(self, observable: "Observable", item: Item):
+    def receive_notification(
+        self, observable: "Observable", item_from_observable: Item
+    ):
         """Notify the AttributeFunction of a change in an observed value.
         @param item: The item that has changed.
         """
@@ -161,7 +178,10 @@ class DictionaryAttributeFunction[Key, Value](
         # TODO: maybe we should keep an inverted index for that?
         for item in self:
             if item.value == observable:
-                self._check_items_constraints(item)
+                self._check_items_constraints(item, triggered_by_notification=True)
+        # TODO: do we need to notify recursivley here?
+        # self.notify_observers(item)
+        self._check_self_constraints(triggered_by_notification=True)
 
     def __setitem__(self, key: Key, value: Value):
         """Customize item assignment. This must be used for non-str-type keys.

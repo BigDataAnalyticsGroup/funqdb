@@ -13,6 +13,18 @@ class ConstraintViolationError(Exception):
     pass
 
 
+class ConstraintViolationErrorFromOutside(Exception):
+    """Exception raised when a constraint is violated from outside the object."""
+
+    def __init__(self, specific_message: str):
+        message: str = (
+            "This change and the constraint check and violation was triggered by notification from an"
+            "observed value, i.e., the change did not originate from a direct assignment to this "
+            "AttributeFunction"
+        )
+        super().__init__(specific_message + "\n" + message)
+
+
 class KeyDeletedSentinel:
     """A sentinel value indicating that a key has been deleted."""
 
