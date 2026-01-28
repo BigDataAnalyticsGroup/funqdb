@@ -38,7 +38,6 @@ class attribute_name_equivalence(AttributeFunctionConstraint):
         self.attribute_names = attribute_names
 
     def __call__(self, attribute_function: AttributeFunction) -> bool:
-        print(attribute_function.__class__.__name__)
         assert isinstance(attribute_function, AttributeFunction)
         return self.attribute_names == {item.key for item in attribute_function}
 

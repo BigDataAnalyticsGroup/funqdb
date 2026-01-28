@@ -10,7 +10,14 @@ class ReadOnlyError(Exception):
 class ConstraintViolationError(Exception):
     """Exception raised when a constraint is violated."""
 
-    pass
+    def __init__(self, specific_message: str):
+        message: str = (
+            "BACKGROUND:\nThis change and the constraint check and violation was triggered while trying to assign a new value to a\n"
+            "key. This assignment violated a constraint defined on this AttributeFunction.\n"
+            "\nAs a result, the change has been rolled back automatically to restore a consistent state w.r.t. the\n"
+            "constraints. You do NOT need to manually revert the change.\n"
+        )
+        super().__init__(specific_message + "\n" + message)
 
 
 class ConstraintViolationErrorFromOutside(Exception):
@@ -18,9 +25,11 @@ class ConstraintViolationErrorFromOutside(Exception):
 
     def __init__(self, specific_message: str):
         message: str = (
-            "This change and the constraint check and violation was triggered by notification from an"
-            "observed value, i.e., the change did not originate from a direct assignment to this "
-            "AttributeFunction"
+            "BACKGROUND:\nThis change and the constraint check and violation was triggered by notification from an\n"
+            "observed value, i.e., the change did not originate from a direct assignment to this\n"
+            "AttributeFunction.\nAs a result, NO rollback of the change was performed automatically as that\n"
+            "would be unsafe in this context. You need to manually revert the change to restore a\n"
+            "consistent state w.r.t. the constraints.\n"
         )
         super().__init__(specific_message + "\n" + message)
 

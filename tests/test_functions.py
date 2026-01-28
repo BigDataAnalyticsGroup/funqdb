@@ -111,7 +111,7 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert {i.value.name for i in advisory_users_filter} == {"Horst", "Tom"}
 
 
-def test_attribute_functions_item_ans_self_constraints_wo_observers():
+def test_attribute_functions_item_and_self_constraints_wo_observers():
 
     db: DBF = _create_testdata(frozen=False, observe_items=False)
     users: RF = db.users
