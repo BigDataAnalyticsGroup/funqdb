@@ -1,0 +1,7 @@
+- [ ] get rid of `__call__` in operators and integrate into init
+- [ ] relationship functions
+- [ ] n:m relationships
+- [ ] add support for composite primary keys
+- [ ] operator: output a plan
+- [ ] improve documentation and add more examples
+- [ ] implement more unit tests for edge cases
