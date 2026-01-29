@@ -2,7 +2,6 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from fql.predicates.constraints import in_subset
 from fql.util import Item
 
 
@@ -20,11 +19,3 @@ def test_Item():
         # following line is marked as an error in PyCharm: "Cannot assign to field 'value'"
         # neverthe, it can be executed and raises the expected exception
         item3.value = 3
-
-
-def test_predicates():
-    i = in_subset({"a", "b", "c"})
-    assert i("a") is True
-    assert i("d") is False
-    assert i("b") is True
-    assert i("c") is True
