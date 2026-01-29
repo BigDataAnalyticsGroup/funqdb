@@ -1,4 +1,4 @@
-- [ ] get rid of `__call__` in operators and integrate into init
+- [ ] get rid of `__call__` in operators and integrate into `__init__`
 - [ ] relationship functions
 - [ ] n:m relationships
 - [ ] add support for composite primary keys
