@@ -1,6 +1,6 @@
 import pytest
 
-from fql.functions import DictionaryAttributeFunction, TF, RF, DBF
+from fdm.functions import DictionaryAttributeFunction, TF, RF, DBF
 from fql.predicates.constraints import (
     attribute_name_equivalence_item,
     max_count,
@@ -190,14 +190,14 @@ def test_function_observers():
 
     # test that constraint violations are also caught with observers enabled:
     # as before, this one is caught in the RF:
-    # with pytest.raises(ConstraintViolationError):
-    #    users[0] = TF({"namde": "Alice", "yob": 1990, "department": db.departments.d1})
+    with pytest.raises(ConstraintViolationError):
+        users[0] = TF({"namde": "Alice", "yob": 1990, "department": db.departments.d1})
 
     # but this one is not, as the TP is created first, then the constraint is checked through the observer mechanism:
     with pytest.raises(ConstraintViolationErrorFromOutside):
         tf: TF = users[1]
-        tf.dsf = "Alice"  # type: ignore
-    # tf.dsf = "Alice"
-    # no rollback happened, as the change was triggered through the observer mechanism, LOL
-    # what should be the expected behavior here?
+        tf.dsf = "Alice"
+
+    # no rollback happened, as the change was triggered through the observer mechanism
+    # also see the message in ConstraintViolationErrorFromOutside
     assert users[1].dsf == "Alice"

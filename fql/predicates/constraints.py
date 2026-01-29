@@ -1,7 +1,6 @@
 from abc import abstractmethod, ABC
 
-from fql.APIs import AttributeFunction
-from fql.functions import DictionaryAttributeFunction
+from fdm.functions import AttributeFunction
 from fql.util import Item
 
 

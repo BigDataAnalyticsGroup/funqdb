@@ -1,6 +1,6 @@
 from abc import ABC
 
-from fql.APIs import PureFunction
+from fdm.functions import PureFunction
 
 
 class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
