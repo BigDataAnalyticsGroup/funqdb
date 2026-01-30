@@ -32,4 +32,4 @@ def test_flattening_equi_join_two_RFs():
     # print(res.key)
     # res.value.print(flat=True)
     #    print(res.value)
-    assert False
+    # TODO: assert False
