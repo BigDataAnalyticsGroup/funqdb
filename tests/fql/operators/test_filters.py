@@ -5,20 +5,33 @@ from fql.util import Item
 from tests.lib import _create_testdata, _subset_DBF
 
 
-def filter_predicate(item: Item) -> bool:
-    user: TF = item.value
-    return user.department.name == "Dev"
-
-
 def test_filter_items():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
     filter_RF: Operator[RF, RF] = filter_items[RF, RF](
-        filter_predicate=filter_predicate,
+        filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
     users_filtered: RF = filter_RF(users)
+    assert type(users_filtered) == RF
+    assert len(users_filtered) == 2
+    for item in users_filtered:
+        assert item.value.department.name == "Dev"
+    filtered_user_names = {user.value.name for user in users_filtered}
+    assert filtered_user_names == {"Horst", "Tom"}
+
+
+def test_filter_items_reused_and_chained():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+        filter_predicate=lambda item: item.value.department.name == "Dev",
+        output_factory=lambda _: RF(),
+    )
+    users_filtered: RF = filter_RF(filter_RF(users))  # apply filter instance twice
+
     assert type(users_filtered) == RF
     assert len(users_filtered) == 2
     for item in users_filtered:

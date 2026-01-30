@@ -1,3 +1,4 @@
+import inspect
 from typing import Callable, Any, Iterable
 
 from fql.operators.APIs import Operator
@@ -31,8 +32,15 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self.output_factory = output_factory
 
     def __call__(
-        self, input_function: INPUT_AttributeFunction
+        self, input_function: INPUT_AttributeFunction = None, explain: bool = False
     ) -> OUTPUT_AttributeFunction:
+
+        print(inspect.signature(input_function))
+
+        if explain:
+            return f"filter_items operator with predicate {self.filter_predicate} applied to {input_function}"
+
+        assert input_function is not None
         # get the mapped items:
         mapped_items: Iterable[Item] = filter(self.filter_predicate, input_function)
 
