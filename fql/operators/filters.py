@@ -43,7 +43,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         else:
             logger.warning(
                 "No output function factory provided; modifying input function in place. This is not recommended as it"
-                " may have sideeffect on the input."
+                " may have side effects on the input."
             )
 
         # (1.) we need to materialize the items first to avoid modifying while iterating
