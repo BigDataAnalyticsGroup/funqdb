@@ -1,6 +1,6 @@
 from fdm.functions import TF, DBF, RF
 from fql.operators.APIs import Operator
-from fql.operators.filters import filter_items
+from fql.operators.filters import filter_items_scan, filter_items
 from fql.util import Item
 from tests.lib import _create_testdata, _subset_DBF
 
@@ -9,7 +9,7 @@ def test_filter_items():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_items_scan[RF, RF](
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
@@ -23,6 +23,25 @@ def test_filter_items():
 
 
 def test_filter_items_reused_and_chained():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    filter_RF: Operator[RF, RF] = filter_items_scan[RF, RF](
+        filter_predicate=lambda item: item.value.department.name == "Dev",
+        output_factory=lambda _: RF(),
+    )
+    users_filtered: RF = filter_RF(filter_RF(users))  # apply filter instance twice
+    filter_RF(filter_RF(users)).explain()
+
+    assert type(users_filtered) == RF
+    assert len(users_filtered) == 2
+    for item in users_filtered:
+        assert item.value.department.name == "Dev"
+    filtered_user_names = {user.value.name for user in users_filtered}
+    assert filtered_user_names == {"Horst", "Tom"}
+
+
+def test_filter_explain():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
@@ -49,7 +68,7 @@ def test_filter_items_complement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_items_scan[RF, RF](
         filter_predicate=filter_predicate_complement,
         output_factory=lambda _: RF(),
     )

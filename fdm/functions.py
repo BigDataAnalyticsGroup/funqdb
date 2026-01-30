@@ -30,7 +30,17 @@ class PureFunction[INPUT, OUTPUT]():
         pass
 
 
-class AttributeFunction[Key, Value](PureFunction):
+class Explainable:
+    """An abstract base class for explainable objects."""
+
+    def explain(self) -> str:
+        """Provide an explanation of the object.
+        @return: A string explanation of the object.
+        """
+        return "The explanation is 42."
+
+
+class AttributeFunction[Key, Value](PureFunction, Explainable):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
     def __init__(self):

@@ -1,5 +1,5 @@
 from fdm.functions import TF, RF, DBF
-from fql.operators.filters import filter_items
+from fql.operators.filters import filter_items_scan
 
 
 def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
@@ -54,12 +54,12 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
 
 
 def _users_customers_DBF(frozen: bool = True) -> DBF:
-    return filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
-        _create_testdata(frozen=frozen)
-    )
+    return filter_items_scan(
+        lambda i: i.key in ["users", "customers"], lambda _: DBF()
+    )(_create_testdata(frozen=frozen))
 
 
 def _subset_DBF(whitelist: set[str], frozen: bool = True) -> DBF:
-    return filter_items(lambda i: i.key in whitelist, lambda _: DBF())(
+    return filter_items_scan(lambda i: i.key in whitelist, lambda _: DBF())(
         _create_testdata(frozen=frozen)
     )
