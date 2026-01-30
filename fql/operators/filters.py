@@ -29,11 +29,25 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self.output_factory = output_factory
 
     def __call__(
-        self, input_function: INPUT_AttributeFunction
-    ) -> OUTPUT_AttributeFunction:
-        return filter_items_scan(self.filter_predicate, self.output_factory)(
-            input_function
-        )
+        self, input_function: INPUT_AttributeFunction, create_lineage=False
+    ) -> OUTPUT_AttributeFunction | str:
+
+        if not create_lineage:
+            # standard python filter operation returning list of values
+            assert input_function is not None
+            return filter_items_scan(self.filter_predicate, self.output_factory)(
+                input_function
+            )
+        else:  # execute on db:
+            # create lineage without executing anything
+            output_function: OUTPUT_AttributeFunction = self.output_factory(None)
+            output_function.__dict__[
+                "lineage"
+            ] += input_function.get_lineage()  # inherit lineage
+            output_function.add_lineage(
+                f"FILTER_ITEMS({inspect.getsource(self.filter_predicate).strip()})"
+            )
+            return output_function
 
 
 class filter_items_scan[INPUT_AttributeFunction, OUTPUT_AttributeFunction](

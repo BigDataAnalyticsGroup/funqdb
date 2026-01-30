@@ -107,19 +107,40 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Make the AttributeFunction writable."""
         pass
 
+    @abstractmethod
+    def get_lineage(self) -> list[str]:
+        """Get the lineage of this AttributeFunction.
+        @return: A list representing the lineage.
+        """
+        ...
+
+    def add_lineage(self, entry: str):
+        """Add an entry to the lineage of this AttributeFunction.
+        @param entry: The lineage entry to add.
+        """
+        ...
+
 
 class DictionaryAttributeFunction[Key, Value](
     AttributeFunction[Key, Value], Observable, Observer
 ):
     """An AttributeFunction that uses a dictionary to store its attributes."""
 
-    def __init__(self, data=None, frozen=False, observe_items: bool = False):
+    def __init__(
+        self,
+        data=None,
+        frozen=False,
+        observe_items: bool = False,
+        lineage: list[str] = None,
+    ):
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
         self.__dict__["self_constraints"] = set()
         self.__dict__["items_constraints"] = set()
         self.__dict__["observe_items"] = observe_items
         self.__dict__["observers"] = list()
+        # how this attribute function was derived:
+        self.__dict__["lineage"] = [] if lineage is None else lineage
 
         if observe_items:
             # register self as observer at all Observable values:
@@ -384,6 +405,16 @@ class DictionaryAttributeFunction[Key, Value](
     def __repr__(self):
         """String representation of the current AttributeFunction used fo dev purposes (including the debugger)."""
         return self.__class__
+
+    def get_lineage(self) -> list[str]:
+        """Get the lineage of this AttributeFunction.
+        @return: A list representing the lineage.
+        """
+        return self.__dict__["lineage"]
+
+    def add_lineage(self, entry: str):
+        """Add an entry to the lineage of this AttributeFunction."""
+        self.__dict__["lineage"].append(entry)
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):

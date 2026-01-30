@@ -15,6 +15,7 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
             "d1": TF({"name": "Dev", "budget": "11M"}, frozen),
             "d2": TF({"name": "Consulting", "budget": "22M"}, frozen),
         },
+        lineage=["RF(departments)"],
         frozen=frozen,
         observe_items=observe_items,
     )
@@ -26,6 +27,7 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
             2: TF({"name": "Tom", "yob": 1983, "department": departments.d1}, frozen),
             3: TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen),
         },
+        lineage=["RF(users)"],
         frozen=frozen,
         observe_items=observe_items,
     )
@@ -39,14 +41,20 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
             4: TF({"name": "Peter", "company": "Peter, Paul, and Mary"}, frozen),
             5: TF({"name": "Frank", "company": "Masterhorst"}, frozen),
         },
+        lineage=["RF(customers)"],
         frozen=frozen,
         observe_items=observe_items,
     )
 
     # database of relations:
     db: DBF = DBF(
-        {"departments": departments, "users": users, "customers": customers},
-        frozen,
+        {
+            "departments": departments,
+            "users": users,
+            "customers": customers,
+        },
+        lineage=["DBF()"],
+        frozen=frozen,
         observe_items=observe_items,
     )
 
