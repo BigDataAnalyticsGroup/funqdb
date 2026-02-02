@@ -1,6 +1,7 @@
 # good article:
 # https://realpython.com/python-magic-methods/
 import logging
+import uuid
 from abc import abstractmethod, ABC
 
 from fdm.util import Explainable
@@ -49,6 +50,14 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Make the object callable through []-syntax."""
         ...
 
+    @abstractmethod
+    def __setitem__(self, key: Key, value: Value):
+        """Customize item assignment. This must be used for non-str-type keys.
+        @param key: The key of the item being assigned.
+        @param value: The value to assign to the item.
+        """
+        ...
+
     def __call__(self, *args, **kwargs) -> "AttributeFunction":
         """Make the object callable through () syntax.
         @return: The result of the call.
@@ -81,6 +90,14 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
     @property
     @abstractmethod
     def frozen(self) -> bool: ...
+
+    @property
+    @abstractmethod
+    def uuid(self) -> uuid.UUID:
+        """Get the UUID of this AttributeFunction.
+        @return: The UUID.
+        """
+        ...
 
     @abstractmethod
     def freeze(self):

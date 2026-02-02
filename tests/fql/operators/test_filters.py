@@ -3,6 +3,7 @@ import tempfile
 import pytest
 
 from fdm.python import TF, RF, DBF
+from fdm.sqlitedict import TF_SQLLite
 from fql.operators.APIs import Operator
 from fql.operators.filters import filter_items_scan, filter_items
 from fql.util import Item
@@ -140,5 +141,42 @@ def test_SQLLiteDictAttributeFunction(tmp_path):
     from fdm.sqlitedict import SQLLiteDictAttributeFunction
 
     attr_func = SQLLiteDictAttributeFunction[str, dict](
-        sqlite_file_name="bla.sqlite", frozen=True
+        sqlite_file_name="bla.sqlite", frozen=False
     )
+    attr_func["key1"] = {"name": "item1"}
+    assert attr_func["key1"]["name"] == "item1"
+
+    attr_func2 = SQLLiteDictAttributeFunction[str, dict](
+        sqlite_file_name="bla.sqlite", frozen=False
+    )
+    assert attr_func2["key1"]["name"] == "item1"
+
+    with pytest.raises(AttributeError):
+        assert attr_func2.z == 0
+
+    # TODO: more tests
+
+
+def test_TF_SQLLite():
+    from fdm.sqlitedict import SQLLiteDictAttributeFunction
+
+    tf_attr_func = SQLLiteDictAttributeFunction[str, TF_SQLLite](
+        sqlite_file_name="tf_sqlite.sqlite", frozen=False, tablename="users"
+    )
+    tf1 = TF_SQLLite(
+        sqlite_file_name="tf_sqlite.sqlite", frozen=False, tablename="tuples"
+    )
+    tf1["name"] = "Test User"
+    tf1["department"] = "Dev"
+    # tf_attr_func["user1"] = tf1
+    # TODO: write custom serializer for TF_SQLLite
+    # https://pypi.org/project/sqlitedict/
+
+    # hmm, this does not work like this
+    # maybe take control of the pickling process?
+    # TODO: how to map the object graph correctly to the underlying key/value store?
+    # values that are AttributeFunctions themselves need to be stored separately and linked
+    # memory refs must be swizzled correctly
+    # this in turn requires AFs to have an identity which can be referenced
+    # maybe via UUIDs?
+    # https://realpython.com/ref/stdlib/uuid/
