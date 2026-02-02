@@ -57,6 +57,7 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
         frozen=frozen,
         observe_items=observe_items,
     )
+    # assert db.uuid == 13
 
     return db
 

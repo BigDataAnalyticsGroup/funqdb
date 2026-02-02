@@ -34,8 +34,6 @@ class DictionaryAttributeFunction[Key, Value](
         # how this attribute function was derived:
         self.__dict__["lineage"] = [] if lineage is None else lineage
 
-        self.__dict__["_uuid"] = uuid.uuid4()
-
         if observe_items:
             # register self as observer at all Observable values:
             for value in self.__dict__["data"].values():
@@ -100,13 +98,6 @@ class DictionaryAttributeFunction[Key, Value](
         @return: True if the AttributeFunction is read-only, False otherwise.
         """
         return self.__dict__["frozen"]
-
-    @property
-    def uuid(self) -> uuid.UUID:
-        """Get the UUID of this AttributeFunction.
-        @return: The UUID.
-        """
-        return self.__dict__["_uuid"]
 
     def __getitem__(self, key: Key) -> Value:
         """Customize item access. This must be used for non-str-type keys.

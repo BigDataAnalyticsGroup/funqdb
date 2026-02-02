@@ -28,6 +28,8 @@ def test_DictionaryAttributeFunction():
     assert daf.x == 0
     assert daf.y == 0
 
+    assert daf.uuid == 0
+
     # check assigning to an existing attribute:
     daf.x = 42
     assert daf.x == 42

@@ -24,8 +24,12 @@ class PureFunction[INPUT, OUTPUT](ABC):
 class AttributeFunction[Key, Value](PureFunction, Explainable):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
+    global_uuid: int = 0
+
     def __init__(self):
         super().__init__()
+        self.__dict__["_uuid"] = AttributeFunction.global_uuid
+        AttributeFunction.global_uuid += 1
 
     def __getattr__(self, name: str) -> Value:
         """Make the object callable through .-syntax.
@@ -92,12 +96,11 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
     def frozen(self) -> bool: ...
 
     @property
-    @abstractmethod
-    def uuid(self) -> uuid.UUID:
+    def uuid(self) -> int:
         """Get the UUID of this AttributeFunction.
         @return: The UUID.
         """
-        ...
+        return self.__dict__["_uuid"]
 
     @abstractmethod
     def freeze(self):

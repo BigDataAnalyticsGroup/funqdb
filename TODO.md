@@ -2,6 +2,20 @@
 - 
 - [ ] provide an AF backed by a DB/store, SqliteDict looks like a good start, see `test_sqlitedict`
 yet as it is used as a key/blob-store, we then cannot push down query processing. 
+
+some thoughts on this:
+- [x] each af should have a globally unique identifier (uuid or simpler, must only be unique within the instance)?
+- we need an object store that can organize mappings from that id to the pickled object/blob where all
+references to other AF were swizzeled to their unique id
+- user should not see this stuff, this is internal
+- user creates AFS: TF: RF: DBF, whatever, puts them together in operators, builds pipelines, etc.
+- the store saves that to disk/db
+- when loading back, the store reconstructs the AFs from the blobs, re-linking the references, however link traversal
+should be done on demand, i.e. once an AF is needed from an Item, only then it is unpickled and its references are 
+re-linked
+- need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
+- from the store
+
 This could be fixed by forking it and adding query capabilities, maybe in a BSc Thesis?
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs

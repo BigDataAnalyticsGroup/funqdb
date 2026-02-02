@@ -17,13 +17,6 @@ class SQLLiteDictAttributeFunction[Key, Value](
     def frozen(self) -> bool:
         return self.__dict__["frozen"]
 
-    @property
-    def uuid(self) -> uuid.UUID:
-        """Get the UUID of this AttributeFunction.
-        @return: The UUID.
-        """
-        return self.__dict__["_uuid"]
-
     def freeze(self):
         """Make the AttributeFunction read-only."""
         self.__dict__["frozen"] = True

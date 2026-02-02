@@ -45,14 +45,22 @@ class Item[Key, Value]:
     """A simple key-value pair (aka item) representation of an entry in an DictionaryAttributeFunction."""
 
     key: Key
-    value: Value
+    __value: Value  # make value "private" to enforce access via property
+
+    @property
+    def value(self):
+        return self.__value
+
+    def __init__(self, key: Key, value: Value):
+        object.__setattr__(self, "key", key)
+        object.__setattr__(self, "_Item__value", value)
 
     def __eq__(self, other: "Item") -> bool:
         """Check equality between two DictionaryAttributeFunction instances based on their items.
         @param other: The other DictionaryAttributeFunction instance to compare with.
         @return: True if both instances have the same items, False otherwise.
         """
-        return self.key == other.key and self.value == other.value
+        return self.key == other.key and self.__value == other.__value
 
     def __hash__(self) -> int:
         """Compute the hash of the Item based on its key and value.
