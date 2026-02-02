@@ -44,6 +44,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Customize attribute deletion. Redirects to __delitem__ for actual deletion."""
         self.__delitem__(name)
 
+    @abstractmethod
     def __getitem__(self, key: Key) -> Value:
         """Make the object callable through []-syntax."""
         ...
@@ -54,6 +55,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """
         return self.__getitem__(*args, **kwargs)
 
+    @abstractmethod
     def __eq__(self, other: "AttributeFunction") -> bool:
         """Check equality between two AttributeFunction instances based on their items.
         @param other: The other AttributeFunction instance to compare with.
@@ -61,6 +63,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """
         ...
 
+    @abstractmethod
     def update(self, other: "AttributeFunction") -> "AttributeFunction":
         """Update the current AttributeFunction with another one.
         @param other: The other AttributeFunction to update from.
@@ -68,6 +71,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """
         ...
 
+    @abstractmethod
     def __len__(self) -> int:
         """Return the number of items in the AttributeFunction.
         @return: The number of items.
@@ -78,10 +82,12 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
     @abstractmethod
     def frozen(self) -> bool: ...
 
+    @abstractmethod
     def freeze(self):
         """Make the AttributeFunction read-only."""
         ...
 
+    @abstractmethod
     def unfreeze(self):
         """Make the AttributeFunction writable."""
         ...

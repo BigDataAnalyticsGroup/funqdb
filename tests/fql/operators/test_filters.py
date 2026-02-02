@@ -134,3 +134,11 @@ def test_sqlitedict(tmp_path):
     users.close()
 
     temp_dir.rmdir()
+
+
+def test_SQLLiteDictAttributeFunction(tmp_path):
+    from fdm.sqlitedict import SQLLiteDictAttributeFunction
+
+    attr_func = SQLLiteDictAttributeFunction[str, dict](
+        sqlite_file_name="bla.sqlite", frozen=True
+    )
