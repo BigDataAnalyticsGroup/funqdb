@@ -60,7 +60,7 @@ class Item[Key, Value]:
         @param other: The other DictionaryAttributeFunction instance to compare with.
         @return: True if both instances have the same items, False otherwise.
         """
-        return self.key == other.key and self.__value == other.__value
+        return self.key == other.key and self.value == other.value
 
     def __hash__(self) -> int:
         """Compute the hash of the Item based on its key and value.
