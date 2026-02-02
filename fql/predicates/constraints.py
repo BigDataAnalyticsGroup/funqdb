@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 
-from fdm.functions import AttributeFunction
+from fdm.API import AttributeFunction
 from fql.util import Item
 
 
@@ -18,7 +18,7 @@ class AttributeFunctionConstraint(ABC):
     @abstractmethod
     def __call__(self, attribute_function: AttributeFunction) -> bool:
         """Evaluates whether the given attribute_function fulfills the constraint."""
-        pass
+        ...
 
 
 class ItemConstraint(ABC):
@@ -27,7 +27,7 @@ class ItemConstraint(ABC):
     @abstractmethod
     def __call__(self, item: Item) -> bool:
         """Evaluates whether the given item fulfills the constraint."""
-        pass
+        ...
 
 
 class attribute_name_equivalence(AttributeFunctionConstraint):

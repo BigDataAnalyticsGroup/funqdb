@@ -1,4 +1,8 @@
-from fdm.functions import TF, DBF, RF
+import tempfile
+
+import pytest
+
+from fdm.python import TF, RF, DBF
 from fql.operators.APIs import Operator
 from fql.operators.filters import filter_items_scan, filter_items
 from fql.util import Item
@@ -94,3 +98,39 @@ def test_DB_filter_keys():
 
     assert type(db_filtered.users) == RF
     assert type(db_filtered.departments) == RF
+
+
+def test_sqlitedict(tmp_path):
+    # see https://github.com/piskvorky/sqlitedict
+    from sqlitedict import SqliteDict
+
+    # TODO: fix tmp file creation and deletion
+
+    # Use tmp_path to create a temporary directory
+    temp_dir = tmp_path / "my_temp_dir"
+    temp_dir.mkdir()
+
+    # Create a file inside the temporary directory
+    temp_file = temp_dir / "keyvaluestore.sqlite"
+
+    customers = SqliteDict(temp_file.name, tablename="customers", autocommit=False)
+    customers["1"] = {"name": "first item", "bla": 42}
+    customers["2"] = {"name": "second item"}
+    customers.commit()
+    customers["4"] = {"name": "yet another item"}
+    customers.close()
+
+    customers = SqliteDict(temp_file.name, tablename="customers", autocommit=True)
+    print("There are %d items in the database" % len(customers))
+    assert len(customers) == 2
+    for key in customers:
+        print(key, ":", customers[key])
+        assert type(customers[key]) == dict
+    customers.close()
+
+    users = SqliteDict(temp_file.name, tablename="users", autocommit=True)
+    print("There are %d items in the users database" % len(users))
+    assert len(users) == 0
+    users.close()
+
+    temp_dir.rmdir()

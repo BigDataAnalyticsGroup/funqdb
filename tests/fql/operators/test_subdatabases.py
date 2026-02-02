@@ -1,4 +1,4 @@
-from fdm.functions import DBF, RF
+from fdm.python import RF, DBF
 from fql.operators.subdatabases import subdatabase
 from tests.lib import _users_customers_DBF
 

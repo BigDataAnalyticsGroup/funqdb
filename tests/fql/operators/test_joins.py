@@ -1,4 +1,4 @@
-from fdm.functions import RF, DBF
+from fdm.python import RF, DBF
 from fql.operators.joins import join, equi_join
 from tests.lib import _users_customers_DBF
 

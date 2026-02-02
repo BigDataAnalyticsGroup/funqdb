@@ -11,7 +11,7 @@ class Observer(ABC):
         """Notify the observer of a change.
         @param item: The item that has changed.
         """
-        pass
+        ...
 
 
 class Observable(ABC):
@@ -21,16 +21,26 @@ class Observable(ABC):
         """Add an observer to the observable.
         @param observer: The observer to add.
         """
-        pass
+        ...
 
     def remove_observer(self, observer: Observer):
         """Remove an observer from the observable.
         @param observer: The observer to remove.
         """
-        pass
+        ...
 
     def notify_observers(self, item: Item):
         """Notify all observers of a change.
         @param item: The item that has changed.
         """
-        pass
+        ...
+
+
+class Explainable:
+    """An abstract base class for explainable objects."""
+
+    def explain(self) -> str:
+        """Provide an explanation of the object.
+        @return: A string explanation of the object.
+        """
+        return "The explanation is 42."

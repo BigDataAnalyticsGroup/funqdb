@@ -1,6 +1,6 @@
 import pytest
 
-from fdm.functions import DBF, RF, TF
+from fdm.python import TF, RF, DBF
 from fql.operators.APIs import Operator
 from fql.operators.transforms import (
     map_instance,

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 class ReadOnlyError(Exception):
     """Exception raised when attempting to modify a read-only object."""
 
-    pass
+    ...
 
 
 class ConstraintViolationError(Exception):
@@ -37,7 +37,7 @@ class ConstraintViolationErrorFromOutside(Exception):
 class KeyDeletedSentinel:
     """A sentinel value indicating that a key has been deleted."""
 
-    pass
+    ...
 
 
 @dataclass(frozen=True)

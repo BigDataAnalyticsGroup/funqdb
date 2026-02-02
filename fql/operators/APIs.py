@@ -1,6 +1,7 @@
 from abc import ABC
 
-from fdm.functions import PureFunction, Explainable
+from fdm.API import PureFunction
+from fdm.util import Explainable
 
 
 class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -8,4 +9,4 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 ):
     """Signature for an operator that transforms inputs to outputs."""
 
-    pass
+    ...

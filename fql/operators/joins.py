@@ -1,6 +1,6 @@
 from typing import Callable
 
-from fdm.functions import DBF, RF, TF
+from fdm.python import TF, RF, DBF
 from fql.operators.APIs import Operator
 from fql.operators.subdatabases import subdatabase
 from fql.util import Item
