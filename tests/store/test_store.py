@@ -160,15 +160,20 @@ def test_Value():
 def test_store_get_put():
 
     store: Store = Store()
-    tf1 = {"name": "Alice", "yob": 1990}
+    tf1 = TF({"name": "Alice", "yob": 1990})
     store.put(tf1)
-    uuid: int = 42
+    uuid: str = str(tf1.uuid)
 
     store.close()
 
     store_read: Store = Store()
+    for key, value in store_read.sqlite_dict.items():
+        print(key, value)
+
+    assert len(store_read) == 1
     tf1_read: AttributeFunction = store_read.get(uuid)
 
     assert tf1_read["name"] == "Alice"
+    assert tf1_read["yob"] == 1990
 
     store_read.close()
