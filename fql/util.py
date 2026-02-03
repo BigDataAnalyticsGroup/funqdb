@@ -40,20 +40,23 @@ class KeyDeletedSentinel:
     ...
 
 
-@dataclass(frozen=True)
 class Item[Key, Value]:
     """A simple key-value pair (aka item) representation of an entry in an DictionaryAttributeFunction."""
 
-    key: Key
-    __value: Value  # make value "private" to enforce access via property
+    def __init__(self, key: Key, value: Value):
+        """Initialize an Item with a key and a value.
+        @param key: The key of the item.
+        @param value: The value of the item.
+        """
+        self.key: Key = key
+        self._value: Value = value
 
     @property
-    def value(self):
-        return self.__value
-
-    def __init__(self, key: Key, value: Value):
-        object.__setattr__(self, "key", key)
-        object.__setattr__(self, "_Item__value", value)
+    def value(self) -> Value:
+        """Get the value of the Item.
+        @return: The value of the Item.
+        """
+        return self._value
 
     def __eq__(self, other: "Item") -> bool:
         """Check equality between two DictionaryAttributeFunction instances based on their items.
@@ -68,3 +71,15 @@ class Item[Key, Value]:
         """
         # TODO: what about the value?
         return hash(self.key)
+
+    def __getstate__(self):
+        """Compute the state of the Item based on its key for pickling."""
+
+        from fdm.API import AttributeFunction
+
+        # if value is an AF, store its UUID instead:
+        _value_to_pickle: Value | int = (
+            self.value.uuid if isinstance(self.value, AttributeFunction) else self.value
+        )
+
+        return {"key": self.key, "_value": _value_to_pickle}

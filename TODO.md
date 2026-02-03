@@ -6,7 +6,7 @@ yet as it is used as a key/blob-store, we then cannot push down query processing
 some thoughts on this:
 - [x] each af should have a globally unique identifier (uuid or simpler, must only be unique within the instance)?
 - we need an object store that can organize mappings from that id to the pickled object/blob where all
-references to other AF were swizzeled to their unique id
+references to other AF were swizzled to their unique id
 - user should not see this stuff, this is internal
 - user creates AFS: TF: RF: DBF, whatever, puts them together in operators, builds pipelines, etc.
 - the store saves that to disk/db
@@ -15,11 +15,18 @@ should be done on demand, i.e. once an AF is needed from an Item, only then it i
 re-linked
 - need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
 - from the store
-
 This could be fixed by forking it and adding query capabilities, maybe in a BSc Thesis?
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 
+### POC
+- maybe start with a POC using SqliteDict as the backing store that maps from uuid to pickled blob
+- it requires to swizzle/un-swizzle references to other AFs when pickling/unpickling
+- unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
+- done with care, maybe only allow loading from trusted sources
+- https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
+
+### Other tasks
 
 - [ ] relationship functions
 - [ ] n:m relationships
