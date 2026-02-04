@@ -43,13 +43,14 @@ class KeyDeletedSentinel:
 class Item[Key, Value]:
     """A simple key-value pair (aka item) representation of an entry in an DictionaryAttributeFunction."""
 
-    def __init__(self, key: Key, value: Value):
+    def __init__(self, key: Key, value: Value, frozen=True):
         """Initialize an Item with a key and a value.
         @param key: The key of the item.
         @param value: The value of the item.
         """
         self.key: Key = key
         self._value: Value = value
+        self.frozen: bool = frozen
 
     @property
     def value(self) -> Value:
@@ -57,6 +58,15 @@ class Item[Key, Value]:
         @return: The value of the Item.
         """
         return self._value
+
+    @value.setter
+    def value(self, value: Value):
+        """Set the value of the Item.
+        @param value: The new value to set.
+        """
+        if self.frozen:
+            raise ReadOnlyError("Cannot modify value of a frozen Item instance.")
+        self._value = value
 
     def __eq__(self, other: "Item") -> bool:
         """Check equality between two DictionaryAttributeFunction instances based on their items.

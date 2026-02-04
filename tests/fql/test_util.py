@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from fql.util import Item
+from fql.util import Item, ReadOnlyError
 
 
 def test_Item():
@@ -15,7 +15,7 @@ def test_Item():
     assert hash(item1) == hash(item2)
     assert hash(item1) != hash(item3)
 
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ReadOnlyError):
         # following line is marked as an error in PyCharm: "Cannot assign to field 'value'"
         # neverthe, it can be executed and raises the expected exception
         item3.value = 3
