@@ -250,11 +250,11 @@ class DictionaryAttributeFunction[Key, Value](
         other_items: set[Item] = {item for item in other}
         return self_items == other_items
 
-    def update(self, AttributeFunction: "AttributeFunction[Key, Value]"):
+    def update(self, other: "AttributeFunction[Key, Value]"):
         """Update the current AttributeFunction with another one.
         @param AttributeFunction: The AttributeFunction to update with.
         """
-        for item in AttributeFunction:
+        for item in other:
             if item.key in self:
                 logger.warning(
                     f"key '{item.key}' already exists and will be overwritten."

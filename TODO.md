@@ -20,7 +20,11 @@ This could be fixed by forking it and adding query capabilities, maybe in a BSc 
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 
 ### POC
-- maybe start with a POC using SqliteDict as the backing store that maps from uuid to pickled blob
+- maybe start with a POC using ~~SqliteDict~~ as the backing store that maps from uuid to pickled blob
+- start even simpler: 
+1. use a dict as the backing store, i.e. in-memory object store
+2. implement serialization/pickling of AFs with swizzling/un-swizzling of references to other AFs
+3. connect SqliteDict as the backing store
 - it requires to swizzle/un-swizzle references to other AFs when pickling/unpickling
 - unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
 - done with care, maybe only allow loading from trusted sources
