@@ -5,7 +5,7 @@ import pytest
 from sqlitedict import SqliteDict
 
 from fdm.API import AttributeFunction
-from fdm.python import TF
+from fdm.attribute_functions import TF
 from fql.util import Item
 from store.store import Store
 
@@ -104,6 +104,7 @@ def test_sqlitedict(tmp_path):
     assert len(customers_reread) == 1
     assert customers_reread[outer_tuple.uuid]["name"] == "first item"
     assert customers_reread[outer_tuple.uuid]["tuple"] == outer_tuple
+
     # should return uuid but not the nested tuple itself:
     assert type(customers_reread[outer_tuple.uuid]["tuple"]["nested"]) == int
     assert customers_reread[outer_tuple.uuid]["tuple"]["nested"] == inner_tuple.uuid
@@ -154,26 +155,25 @@ def test_Value():
             return self.af
 
     v = AttributeFunctionPointer(TF({"name": "Alice"}))
-    print(v.get_uuid())
+    # print(v.get_uuid())
 
 
 def test_store_get_put():
+    file_name: str = "test_store_get_put.sqlite"
 
-    store: Store = Store()
+    store: Store = Store(file_name=file_name)
     tf1 = TF({"name": "Alice", "yob": 1990})
     store.put(tf1)
-    uuid: str = str(tf1.uuid)
-
     store.close()
 
-    # store_read: Store = Store()
-    # for key, value in store_read.sqlite_dict.items():
-    #    print(key, value)
+    store_read: Store = Store(file_name=file_name)
 
-    # assert len(store_read) == 1
-    # tf1_read: AttributeFunction = store_read.get(uuid)
+    assert len(store_read) == 1
 
-    # assert tf1_read["name"] == "Alice"
-    # assert tf1_read["yob"] == 1990
+    assert len(store_read) == 1
+    tf1_read: AttributeFunction = store_read.get(tf1.uuid)
 
-    # store_read.close()
+    assert tf1_read["name"] == "Alice"
+    assert tf1_read["yob"] == 1990
+
+    store_read.close()

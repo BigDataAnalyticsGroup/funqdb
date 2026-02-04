@@ -1,4 +1,4 @@
-from fdm.python import TF, RF, DBF
+from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
 from fql.operators.filters import filter_items_scan, filter_items
 from fql.util import Item
@@ -57,10 +57,10 @@ def test_filter_explain():
 
     ret1: RF = filter_RF(users, create_lineage=True)
     ret2: RF = filter_RF2(ret1, create_lineage=True)
-    print("ret2 lineage:")
+    # print("ret2 lineage:")
     lineage: list[str] = ret2.get_lineage()
-    for i, lin in enumerate(lineage, 1):
-        print(f"{i}.\t->", lin)
+    # for i, lin in enumerate(lineage, 1):
+    #    print(f"{i}.\t->", lin)
 
 
 def test_filter_items_complement():

@@ -1,4 +1,4 @@
-from fdm.python import TF, RF, DBF
+from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.filters import filter_items_scan
 
 

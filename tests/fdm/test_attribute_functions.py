@@ -1,6 +1,6 @@
 import pytest
 
-from fdm.python import DictionaryAttributeFunction, TF, RF, DBF
+from fdm.attribute_functions import DictionaryAttributeFunction, TF, RF, DBF
 from fql.predicates.constraints import (
     attribute_name_equivalence_item,
     max_count,
