@@ -73,7 +73,7 @@ class Item[Key, Value]:
         return hash(self.key)
 
     def __getstate__(self):
-        """Compute the state of the Item based on its key for pickling."""
+        """Define the state of this to be serialized (pickled) to disk, network, etc."""
 
         from fdm.API import AttributeFunction
 
@@ -81,5 +81,6 @@ class Item[Key, Value]:
         _value_to_pickle: Value | int = (
             self.value.uuid if isinstance(self.value, AttributeFunction) else self.value
         )
+        # _value_to_pickle: Value | int = self.value
 
         return {"key": self.key, "_value": _value_to_pickle}

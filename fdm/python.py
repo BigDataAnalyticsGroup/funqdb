@@ -1,6 +1,5 @@
 import inspect
-import uuid
-from typing import Generator
+from typing import Generator, Any
 
 from fdm.API import AttributeFunction, logger
 from fdm.util import Observable, Observer
@@ -11,6 +10,7 @@ from fql.util import (
     ReadOnlyError,
     KeyDeletedSentinel,
 )
+from store.store import Store
 
 
 class DictionaryAttributeFunction[Key, Value](
@@ -24,6 +24,7 @@ class DictionaryAttributeFunction[Key, Value](
         frozen=False,
         observe_items: bool = False,
         lineage: list[str] = None,
+        store: Store = None,
     ):
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
@@ -33,6 +34,7 @@ class DictionaryAttributeFunction[Key, Value](
         self.__dict__["observers"] = list()
         # how this attribute function was derived:
         self.__dict__["lineage"] = [] if lineage is None else lineage
+        self.__dict__["store"] = store
 
         if observe_items:
             # register self as observer at all Observable values:
@@ -307,6 +309,18 @@ class DictionaryAttributeFunction[Key, Value](
     def add_lineage(self, entry: str):
         """Add an entry to the lineage of this AttributeFunction."""
         self.__dict__["lineage"].append(entry)
+
+    def __setstate__(self, state):
+        """This method defines how to restore the object when unpickling.
+        TODO: Custom unpickling logic to restore observers."""
+        self.__dict__.update(state)
+
+    def __getstate__(self):
+        """This method defines what data gets saved when the object is pickled."""
+        state = self.__dict__.copy()
+        # observers are not pickled
+        state["observers"] = [f.uuid for f in self.__dict__["observers"]]
+        return state
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):

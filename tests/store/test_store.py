@@ -49,28 +49,61 @@ def test_sqlitedict(tmp_path):
 
 
 def test_pickle_Item():
+
+    file_name: str = "item.pkl"
+    AttributeFunction.global_uuid = 42
+
     # scalar value:
     item: Item = Item(1, "Alice")
-    with open("item.pkl", "wb") as f:
+    with open(file_name, "wb") as f:
         pickle.dump(item, f)
 
-    with open("item.pkl", "rb") as f:
+    with open(file_name, "rb") as f:
         item_loaded: Item = pickle.load(f)
 
     assert item.key == item_loaded.key
     assert item.value == item_loaded.value
 
-    # AF value
+    # same with attribute function as a value:
     item: Item = Item(1, TF({"name": "Alice", "yob": 1990}))
-    with open("item.pkl", "wb") as f:
+    with open(file_name, "wb") as f:
         pickle.dump(item, f)
 
-    with open("item.pkl", "rb") as f:
+    with open(file_name, "rb") as f:
         item_loaded: Item = pickle.load(f)
 
     assert item.key == item_loaded.key
     assert item.value != item_loaded.value
     assert item_loaded.value == item.value.uuid
+
+
+def test_pickle_TF():
+    file_name: str = "item.pkl"
+    AttributeFunction.global_uuid = 4242
+
+    # pickle a TF directly:
+    tf: TF = TF({"name": "Alice", "yob": 1990})
+    with open(file_name, "wb") as f:
+        pickle.dump(tf, f)
+
+    with open(file_name, "rb") as f:
+        tf_loaded: TF = pickle.load(f)
+
+    assert tf == tf_loaded
+    assert tf.uuid == tf_loaded.uuid
+
+    # observers:
+    observer: TF = TF({"name": "big brother", "role": "observer"})
+    tf.add_observer(observer)
+
+    # now with observers:
+    with open(file_name, "wb") as f:
+        pickle.dump(tf, f)
+
+    with open(file_name, "rb") as f:
+        tf_loaded: TF = pickle.load(f)
+
+    assert tf == tf_loaded
 
 
 def test_SQLLite_custom_serializer():

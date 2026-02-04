@@ -10,10 +10,10 @@ class Store:
 
     def __init__(
         self,
-        file_name: str = "afstore.sqlite",
+        file_name: str = "function_store.sqlite",
         attribute_function_space: str = "attribute_functions",
     ):
-        self.attribute_function_buffer: dict[str, AttributeFunction] = {}
+        self.attribute_function_buffer: dict[int, AttributeFunction] = {}
         self.file_name: str = file_name
 
         # DESIGN_CHOICE: should we have
@@ -29,21 +29,21 @@ class Store:
         )
 
         # register to be called at exit:
-        # atexit.register(self.close)
+        atexit.register(self.close)
 
     def close(self):
         """Close the underlying SQLite dict."""
         self.sqlite_dict.close()
 
-    def get(self, af_id_str: str) -> AttributeFunction:
+    def get(self, fid: int) -> AttributeFunction:
         """Retrieve an AttributeFunction by its ID.
-        @param af_id_str: The ID of the AttributeFunction to retrieve.
+        @param fid: The ID of the AttributeFunction to retrieve.
         @return: The AttributeFunction associated with the given ID.
         """
-        if af_id_str not in self.attribute_function_buffer:
-            self.load(af_id_str)  # store uses str keys
+        if fid not in self.attribute_function_buffer:
+            self.load(fid)  # store uses str keys
 
-        return self.attribute_function_buffer[af_id_str]
+        return self.attribute_function_buffer[fid]
 
     def put(self, af: AttributeFunction):
         """Store an AttributeFunction in the persistent store.
@@ -52,17 +52,17 @@ class Store:
 
         self.sqlite_dict[af.uuid] = af
         self.sqlite_dict.commit()
-        self.attribute_function_buffer[str(af.uuid)] = af
+        self.attribute_function_buffer[af.uuid] = af
 
-    def load(self, af_id_str: str) -> None:
-        """Load an af_id_str from the persistent store into the buffer.
+    def load(self, fid: int) -> None:
+        """Load an fid from the persistent store into the buffer.
         @param item_id: The ID of the item to load.
         """
 
         try:
-            self.attribute_function_buffer[af_id_str] = self.sqlite_dict[af_id_str]
+            self.attribute_function_buffer[fid] = self.sqlite_dict[fid]
         except KeyError as e:
-            raise KeyError(f"ID '{af_id_str}' not found in the store.") from e
+            raise KeyError(f"ID '{fid}' not found in the store.") from e
 
     def __len__(self) -> int:
         """Return the number of items in the store.
