@@ -108,6 +108,7 @@ def test_pickle_TF():
 
 def test_SQLLite_custom_serializer():
     # TODO: write custom serializer for TF_SQLLite
+    # probably not needed if we use pickle as serializer and change get and setstate accordingly
     # https://pypi.org/project/sqlitedict/
     import json
 

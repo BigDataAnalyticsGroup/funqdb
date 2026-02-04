@@ -310,17 +310,19 @@ class DictionaryAttributeFunction[Key, Value](
         """Add an entry to the lineage of this AttributeFunction."""
         self.__dict__["lineage"].append(entry)
 
+    def __getstate__(self):
+        """This method defines what data gets saved when the object is pickled."""
+        state = self.__dict__.copy()
+
+        # observers are not pickled, we store their UUIDs instead:
+        state["observers"] = [f.uuid for f in self.__dict__["observers"]]
+
+        return state
+
     def __setstate__(self, state):
         """This method defines how to restore the object when unpickling.
         TODO: Custom unpickling logic to restore observers."""
         self.__dict__.update(state)
-
-    def __getstate__(self):
-        """This method defines what data gets saved when the object is pickled."""
-        state = self.__dict__.copy()
-        # observers are not pickled
-        state["observers"] = [f.uuid for f in self.__dict__["observers"]]
-        return state
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
