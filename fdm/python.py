@@ -312,7 +312,12 @@ class DictionaryAttributeFunction[Key, Value](
 
     def __getstate__(self):
         """This method defines what data gets saved when the object is pickled."""
+        # TODO: handle values of type AttributeFunction, i.e. store their UUIDs instead
+
         state = self.__dict__.copy()
+        for key, value in self.__dict__["data"].items():
+            if isinstance(value, AttributeFunction):
+                state["data"][key] = value.uuid
 
         # observers are not pickled, we store their UUIDs instead:
         state["observers"] = [f.uuid for f in self.__dict__["observers"]]

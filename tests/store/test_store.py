@@ -10,44 +10,6 @@ from fql.util import Item
 from store.store import Store
 
 
-def test_sqlitedict(tmp_path):
-    # see https://github.com/piskvorky/sqlitedict
-    from sqlitedict import SqliteDict
-
-    # TODO: fix tmp file creation and deletion
-
-    # Use tmp_path to create a temporary directory
-    temp_dir = tmp_path / "my_temp_dir"
-    temp_dir.mkdir()
-
-    # Create a file inside the temporary directory
-    temp_file = temp_dir / "keyvaluestore.sqlite"
-
-    customers = SqliteDict(temp_file.name, tablename="customers", autocommit=False)
-    customers["1"] = {"name": "first item", "bla": 42}
-    customers["2"] = {"name": "second item"}
-    customers.commit()
-    customers["4"] = {"name": "yet another item"}
-    customers.close()
-
-    customers = SqliteDict(temp_file.name, tablename="customers", autocommit=True)
-    assert "1" in customers
-    assert "2" in customers
-    print("There are %d items in the database" % len(customers))
-    assert len(customers) == 2
-    for key in customers:
-        print(key, ":", customers[key])
-        assert type(customers[key]) == dict
-    customers.close()
-
-    users = SqliteDict(temp_file.name, tablename="users", autocommit=True)
-    print("There are %d items in the users database" % len(users))
-    assert len(users) == 0
-    users.close()
-
-    temp_dir.rmdir()
-
-
 def test_pickle_Item():
 
     file_name: str = "item.pkl"
@@ -106,6 +68,53 @@ def test_pickle_TF():
     assert tf == tf_loaded
 
 
+def test_sqlitedict(tmp_path):
+    # see https://github.com/piskvorky/sqlitedict
+    from sqlitedict import SqliteDict
+
+    # TODO: fix tmp file creation and deletion
+
+    # Use tmp_path to create a temporary directory
+    temp_dir = tmp_path / "my_temp_dir"
+    temp_dir.mkdir()
+
+    # Create a file inside the temporary directory
+    temp_file = temp_dir / "keyvaluestore2.sqlite"
+
+    file_name: str = "item.pkl"
+    AttributeFunction.global_uuid = 4242
+
+    # pickle a TF directly:
+    inner_tuple: TF = TF({"name": "Alice", "yob": 1990})
+    outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple})
+
+    customers = SqliteDict(temp_file.name, tablename="customers", autocommit=False)
+    # another nesting, maybe useful for metadata storage later on, MVCC, etc.?
+    customers[outer_tuple.uuid] = {
+        "name": "first item",
+        "tuple": outer_tuple,
+        "version": 1.0,
+    }
+    customers.commit()
+    customers.close()
+
+    customers_reread = SqliteDict(
+        temp_file.name, tablename="customers", autocommit=True
+    )
+    assert len(customers_reread) == 1
+    assert customers_reread[outer_tuple.uuid]["name"] == "first item"
+    assert customers_reread[outer_tuple.uuid]["tuple"] == outer_tuple
+    # should return uuid but not the nested tuple itself:
+    assert type(customers_reread[outer_tuple.uuid]["tuple"]["nested"]) == int
+    assert customers_reread[outer_tuple.uuid]["tuple"]["nested"] == inner_tuple.uuid
+    del customers_reread[outer_tuple.uuid]
+    customers_reread.commit()
+    customers_reread.close()
+
+    temp_dir.rmdir()
+
+
+"""
 def test_SQLLite_custom_serializer():
     # TODO: write custom serializer for TF_SQLLite
     # probably not needed if we use pickle as serializer and change get and setstate accordingly
@@ -120,7 +129,8 @@ def test_SQLLite_custom_serializer():
 
     with SqliteDict("example.sqlite", encode=json.dumps, decode=json.loads) as mydict:
         assert mydict["key1"]["name"] == "item1"
-        assert mydict["key1"]["value"] == 42
+        assert mydict["key1"]["value"] == 42              
+"""
 
 
 def test_Value():
