@@ -1,18 +1,16 @@
 import pickle
 import uuid
 
-import pytest
-from sqlitedict import SqliteDict
-
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import TF
 from fql.util import Item
 from store.store import Store
 
 
-def test_pickle_Item():
+def test_pickle_Item(tmp_path):
 
-    file_name: str = "item.pkl"
+    file_name: str = str(tmp_path / "item.pkl")
+
     AttributeFunction.global_uuid = 42
 
     # scalar value:
@@ -39,8 +37,9 @@ def test_pickle_Item():
     assert item_loaded.value == item.value.uuid
 
 
-def test_pickle_TF():
-    file_name: str = "item.pkl"
+def test_pickle_TF(tmp_path):
+    file_name: str = str(tmp_path / "test_store_get_put.sqlite")
+
     AttributeFunction.global_uuid = 4242
 
     # pickle a TF directly:
@@ -72,23 +71,15 @@ def test_sqlitedict(tmp_path):
     # see https://github.com/piskvorky/sqlitedict
     from sqlitedict import SqliteDict
 
-    # TODO: fix tmp file creation and deletion
+    file_name: str = str(tmp_path / "test_store_get_put.sqlite")
 
-    # Use tmp_path to create a temporary directory
-    temp_dir = tmp_path / "my_temp_dir"
-    temp_dir.mkdir()
-
-    # Create a file inside the temporary directory
-    temp_file = temp_dir / "keyvaluestore2.sqlite"
-
-    file_name: str = "item.pkl"
     AttributeFunction.global_uuid = 4242
 
     # pickle a TF directly:
     inner_tuple: TF = TF({"name": "Alice", "yob": 1990})
     outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple})
 
-    customers = SqliteDict(temp_file.name, tablename="customers", autocommit=False)
+    customers = SqliteDict(file_name, tablename="customers", autocommit=False)
     # another nesting, maybe useful for metadata storage later on, MVCC, etc.?
     customers[outer_tuple.uuid] = {
         "name": "first item",
@@ -98,9 +89,7 @@ def test_sqlitedict(tmp_path):
     customers.commit()
     customers.close()
 
-    customers_reread = SqliteDict(
-        temp_file.name, tablename="customers", autocommit=True
-    )
+    customers_reread = SqliteDict(file_name, tablename="customers", autocommit=True)
     assert len(customers_reread) == 1
     assert customers_reread[outer_tuple.uuid]["name"] == "first item"
     assert customers_reread[outer_tuple.uuid]["tuple"] == outer_tuple
@@ -111,8 +100,6 @@ def test_sqlitedict(tmp_path):
     del customers_reread[outer_tuple.uuid]
     customers_reread.commit()
     customers_reread.close()
-
-    temp_dir.rmdir()
 
 
 """
@@ -158,22 +145,33 @@ def test_Value():
     # print(v.get_uuid())
 
 
-def test_store_get_put():
-    file_name: str = "test_store_get_put.sqlite"
+def test_store_get_put(tmp_path):
+
+    file_name: str = str(tmp_path / "test_store_get_put.sqlite")
+    AttributeFunction.global_uuid = 4242
 
     store: Store = Store(file_name=file_name)
-    tf1 = TF({"name": "Alice", "yob": 1990})
-    store.put(tf1)
+    inner_tuple: TF = TF({"name": "Alice", "yob": 1990})
+    outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple})
+    store.put(outer_tuple)
     store.close()
 
     store_read: Store = Store(file_name=file_name)
 
     assert len(store_read) == 1
 
-    assert len(store_read) == 1
-    tf1_read: AttributeFunction = store_read.get(tf1.uuid)
+    outer_tuple_read: AttributeFunction = store_read.get(outer_tuple.uuid)
 
-    assert tf1_read["name"] == "Alice"
-    assert tf1_read["yob"] == 1990
+    assert outer_tuple_read["name"] == "Alice"
+    # nested tuple should be stored as uuid, not the actual tuple:
+    assert outer_tuple_read["nested"] == inner_tuple.uuid
 
     store_read.close()
+
+
+def test_with_string_path(tmp_path):
+    temp_file = tmp_path / "data.json"
+    temp_file.write_text('{"a": 1}')
+
+    result = str(temp_file)  # convert Path → str
+    assert True

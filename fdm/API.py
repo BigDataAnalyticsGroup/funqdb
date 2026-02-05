@@ -29,6 +29,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
     def __init__(self):
         super().__init__()
         self.__dict__["_uuid"] = AttributeFunction.global_uuid
+
         AttributeFunction.global_uuid += 1
 
     def __getattr__(self, name: str) -> Value:
