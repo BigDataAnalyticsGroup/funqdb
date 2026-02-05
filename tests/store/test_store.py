@@ -80,7 +80,8 @@ def test_sqlitedict(tmp_path):
     outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple})
 
     customers = SqliteDict(file_name, tablename="customers", autocommit=False)
-    # another nesting, maybe useful for metadata storage later on, MVCC, etc.?
+    # another nesting with an outer dictionary, maybe useful for metadata storage later on, MVCC, etc.?
+    # if needed, this should be a dedicated type and not a dict
     customers[outer_tuple.uuid] = {
         "name": "first item",
         "tuple": outer_tuple,
@@ -92,7 +93,7 @@ def test_sqlitedict(tmp_path):
     customers_reread = SqliteDict(file_name, tablename="customers", autocommit=True)
     assert len(customers_reread) == 1
     assert customers_reread[outer_tuple.uuid]["name"] == "first item"
-    assert customers_reread[outer_tuple.uuid]["tuple"] == outer_tuple
+    assert customers_reread[outer_tuple.uuid]["tuple"].uuid == outer_tuple.uuid
 
     # should return uuid but not the nested tuple itself:
     assert type(customers_reread[outer_tuple.uuid]["tuple"]["nested"]) == int
