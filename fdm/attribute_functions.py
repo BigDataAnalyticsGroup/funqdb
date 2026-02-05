@@ -312,17 +312,21 @@ class DictionaryAttributeFunction[Key, Value](
 
     def __getstate__(self):
         """This method defines what data gets saved when the object is pickled."""
-        # TODO: handle values of type AttributeFunction, i.e. store their UUIDs instead
+        # handle values of type AttributeFunction, i.e. store their UUIDs instead
 
-        state = self.__dict__.copy()
-        for key, value in self.__dict__["data"].items():
+        state_dict = self.__dict__.copy()
+        # create a physical copy of the data dict, otherwise we would modify the original data dict when
+        # replacing AttributeFunctions with their UUIDs:
+        state_dict["data"] = state_dict["data"].copy()
+        state_dict["observers"] = state_dict["observers"].copy()
+        for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
-                state["data"][key] = value.uuid
+                state_dict["data"][key] = value.uuid
 
         # observers are not pickled, we store their UUIDs instead:
-        state["observers"] = [f.uuid for f in self.__dict__["observers"]]
+        state_dict["observers"] = [f.uuid for f in state_dict["observers"]]
 
-        return state
+        return state_dict
 
     def __setstate__(self, state):
         """This method defines how to restore the object when unpickling.

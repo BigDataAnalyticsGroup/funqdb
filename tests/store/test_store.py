@@ -153,6 +153,10 @@ def test_store_get_put(tmp_path):
     store: Store = Store(file_name=file_name)
     inner_tuple: TF = TF({"name": "Alice", "yob": 1990})
     outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple})
+    # add an observer to test that observers are not stored as actual tuples but as UUIDs:
+    # and that outer_tuple does not get modified as a side effect of pickling
+    observer: TF = TF({"name": "Alice", "nested": inner_tuple})
+    outer_tuple.add_observer(observer)
     store.put(outer_tuple)
     store.close()
 
@@ -163,7 +167,17 @@ def test_store_get_put(tmp_path):
     outer_tuple_read: AttributeFunction = store_read.get(outer_tuple.uuid)
 
     assert outer_tuple_read["name"] == "Alice"
+
     # nested tuple should be stored as uuid, not the actual tuple:
-    assert outer_tuple_read["nested"] == inner_tuple.uuid
+    assert outer_tuple_read.nested == inner_tuple.uuid
+
+    # observer should also be stored as uuid, not the actual tuple:
+    assert outer_tuple_read.observers[0] == observer.uuid
+
+    # original outer tuple still points to the actual inner tuple, not the uuid:
+    assert type(outer_tuple.nested) == TF
+
+    # original outer tuple still has observer instance, not just uuid:
+    assert type(outer_tuple.observers[0]) == TF
 
     store_read.close()

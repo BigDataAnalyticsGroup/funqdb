@@ -1,6 +1,6 @@
 ### To Do List
 - 
-- [ ] provide an AF backed by a DB/store, SqliteDict looks like a good start, see `test_sqlitedict`
+- [x] provide an AF backed by a DB/store, SqliteDict looks like a good start, see `test_sqlitedict`
 yet as it is used as a key/blob-store, we then cannot push down query processing. 
 
 some thoughts on this:
@@ -15,8 +15,7 @@ should be done on demand, i.e. once an AF is needed from an Item, only then it i
 re-linked
 - need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
 - from the store
-This could be fixed by forking it and adding query capabilities, maybe in a BSc Thesis?
-- [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections
+- [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 
 ### POC

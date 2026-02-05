@@ -24,12 +24,18 @@ class PureFunction[INPUT, OUTPUT](ABC):
 class AttributeFunction[Key, Value](PureFunction, Explainable):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
+    # global UUID counter for all AttributeFunction instances
+    # this is required for serialization and storage in the Store, as well as for references between AttributeFunctions
+    # note: this will break if we first create instances in memory and then load additional instances from the store,
+    # as the global_uuid will be reset to 0. This calls for a more robust UUID generation strategy, such as using the
+    # uuid module to generate unique identifiers.
     global_uuid: int = 0
 
     def __init__(self):
         super().__init__()
         self.__dict__["_uuid"] = AttributeFunction.global_uuid
 
+        # increase the global UUID counter for the next instance:
         AttributeFunction.global_uuid += 1
 
     def __getattr__(self, name: str) -> Value:
