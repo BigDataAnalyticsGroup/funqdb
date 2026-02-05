@@ -122,27 +122,28 @@ def test_SQLLite_custom_serializer():
 """
 
 
-def test_Value():
+def test_AttributeFunctionSentinel():
 
-    class AttributeFunctionPointer:
-        """Uses this as entry in dicts to (automatically) wrap AttributeFunctions?"""
+    class AttributeFunctionSentinel:
+        """Uses this as entry in dicts to as sentinel for lazy loading from store.
+        So when loading an AttributeFunction from the store, we can have
+        AttributeFunctionSentinel instances in place of actual AttributeFunction instances.
+        This should be checked when accessing values in AttributeFunctions.
+        At that point, the actual AttributeFunction can be fetched from the store.
+        The AttributeFunctionSentinel instance is then replaced with the actual AttributeFunction instance.
 
-        def __init__(self, af: AttributeFunction = None):
-            self.af = af
-            self.uuid = uuid.uuid4()
+        Note: the "inverse" problem also exists: when evicting an AttributeFunction from memory,
+        we need to replace actual AttributeFunction instances with AttributeFunctionSentinel instances.
+        This is not implemented yet.
 
-        def get_uuid(self) -> uuid.UUID:
-            """Returns the UUID of the AttributeFunctionPointer."""
-            return self.uuid
+        Maybe some sort of (weak) ref counting is required to know when to evict an AttributeFunction from memory.
 
-        def get_AF(self) -> AttributeFunction:
-            """Returns the actual value, fetching it from the store if necessary."""
-            if self.af is None:
-                # fetch from store with UUID
-                self.af = store.get(self.uuid)
-            return self.af
+        """
 
-    v = AttributeFunctionPointer(TF({"name": "Alice"}))
+        def __init__(self, id: int):
+            self.id = id
+
+    afs: AttributeFunctionSentinel = AttributeFunctionSentinel(42)
     # print(v.get_uuid())
 
 
