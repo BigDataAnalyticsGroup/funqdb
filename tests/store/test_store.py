@@ -9,7 +9,7 @@ from store.store import Store
 
 def test_pickle_Item(tmp_path):
 
-    file_name: str = str(tmp_path / "item.pkl")
+    file_name: str = str(tmp_path / "test_pickle_Item.pkl")
 
     AttributeFunction.global_uuid = 42
 
@@ -38,7 +38,7 @@ def test_pickle_Item(tmp_path):
 
 
 def test_pickle_TF(tmp_path):
-    file_name: str = str(tmp_path / "test_store_get_put.sqlite")
+    file_name: str = str(tmp_path / "test_pickle_TF.sqlite")
 
     AttributeFunction.global_uuid = 4242
 
@@ -71,7 +71,7 @@ def test_sqlitedict(tmp_path):
     # see https://github.com/piskvorky/sqlitedict
     from sqlitedict import SqliteDict
 
-    file_name: str = str(tmp_path / "test_store_get_put.sqlite")
+    file_name: str = str(tmp_path / "test_sqlitedict.sqlite")
 
     AttributeFunction.global_uuid = 4242
 
@@ -167,11 +167,3 @@ def test_store_get_put(tmp_path):
     assert outer_tuple_read["nested"] == inner_tuple.uuid
 
     store_read.close()
-
-
-def test_with_string_path(tmp_path):
-    temp_file = tmp_path / "data.json"
-    temp_file.write_text('{"a": 1}')
-
-    result = str(temp_file)  # convert Path → str
-    assert True
