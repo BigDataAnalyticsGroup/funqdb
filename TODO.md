@@ -1,38 +1,15 @@
 ### To Do List
-- 
 
-- [x] provide an AF backed by a DB/store, SqliteDict looks like a good start, see `test_sqlitedict`
-  yet as it is used as a key/blob-store, we then cannot push down query processing.
-
-some thoughts on this:
-
-- [x] each af should have a globally unique identifier (uuid or simpler, must only be unique within the instance)?
-- we need an object store that can organize mappings from that id to the pickled object/blob where all
-  references to other AF were swizzled to their unique id
-- user should not see this stuff, this is internal
-- user creates AFS: TF: RF: DBF, whatever, puts them together in operators, builds pipelines, etc.
-- the store saves that to disk/db
-- when loading back, the store reconstructs the AFs from the blobs, re-linking the references, however link traversal
-  should be done on demand, i.e. once an AF is needed from an Item, only then it is unpickled and its references are
-  re-linked
 - need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
 - from the store
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 
-### POC
-
-- maybe start with a POC using ~~SqliteDict~~ as the backing store that maps from uuid to pickled blob
-- start even simpler:
-
-1. use a dict as the backing store, i.e. in-memory object store
-2. implement serialization/pickling of AFs with swizzling/un-swizzling of references to other AFs
-3. connect SqliteDict as the backing store
-
-- it requires to swizzle/un-swizzle references to other AFs when pickling/unpickling
-- unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
-- done with care, maybe only allow loading from trusted sources
+- [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
+- [ ] done with care, maybe only allow loading from trusted sources
 - https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
+
+bla
 
 ### Other tasks
 
@@ -44,7 +21,7 @@ some thoughts on this:
       -> explain must traverse through the call chain including attribute functions!
     - [ ] maybe through a tainting mechanism, i.e. make the AF being passed through and let it collect information on
       the way
-      through the pipeline!
+      through the pipeline!  STARTED: search for "lineage" in the codebase
 - [ ] observer semantics for AFs not in the store, maybe queue or load, when queuing it may break semantics, e.g. for
   other AFs in main memory that should be informed but are not as part of the observer chain is not in main memory
 
@@ -61,3 +38,29 @@ some thoughts on this:
   No, actually good to keep it apart. Other option: make these classes functions instead of classes. Everything in one
   call.
 
+DONE:
+
+### POC
+
+- [x] provide an AF backed by a DB/store, SqliteDict looks like a good start, see `test_sqlitedict`
+  yet as it is used as a key/blob-store, we then cannot push down query processing.
+
+some thoughts on this:
+
+- [x] each af should have a globally unique identifier (uuid or simpler, must only be unique within the instance)?
+- [x] we need an object store that can organize mappings from that id to the pickled object/blob where all
+  references to other AF were swizzled to their unique id
+- [x] user should not see this stuff, this is internal
+- user creates AFS: TF: RF: DBF, whatever, puts them together in operators, builds pipelines, etc.
+- [x] the store saves that to disk/db
+- [x] when loading back, the store reconstructs the AFs from the blobs, re-linking the references, however link traversal
+  should be done on demand, i.e. once an AF is needed from an Item, only then it is unpickled and its references are
+  re-linked
+- [x] it requires to swizzle/un-swizzle references to other AFs when pickling/unpickling
+
+- maybe start with a POC using ~~SqliteDict~~ as the backing store that maps from uuid to pickled blob
+- start even simpler:
+
+1. [x] use a dict as the backing store, i.e. in-memory object store
+2. [x] implement serialization/pickling of AFs with swizzling/un-swizzling of references to other AFs
+3. [x] connect SqliteDict as the backing store
