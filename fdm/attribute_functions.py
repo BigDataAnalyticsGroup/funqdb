@@ -367,3 +367,27 @@ class DBF[Key](DictionaryAttributeFunction[Key, RF]):
     """A dictionary-based attribute transformation_function that behaves like a database."""
 
     ...
+
+
+class CompositeKey:
+    """A composite key"""
+
+    def __init__(self, keys: list[AttributeFunction]):
+        self.keys: list[AttributeFunction] = keys
+
+    def __hash__(self):
+        """The hash of the MKey is based on the UUIDs of the user and customer, as those are immutable and unique
+        identifiers for the respective TFs. This allows us to use MKey instances as keys in a dictionary (or RF) to
+        represent relationships between users and customers."""
+        return hash(tuple([k.uuid for k in self.keys]))
+
+    def __eq__(self, other_keys: list[AttributeFunction]):
+        """Two MKey instances are considered equal if they have the same user and customer UUIDs. This ensures that
+        the relationship is correctly identified based on the involved TFs, regardless of whether the same MKey
+        instance is used or different instances with the same user and customer are created.
+        """
+        return self.keys == other_keys
+
+    def __contains__(self, key: AttributeFunction):
+        """Check if a given AttributeFunction is part of the CompositeKey."""
+        return key in self.keys

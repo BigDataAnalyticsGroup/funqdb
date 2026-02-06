@@ -1,6 +1,16 @@
+import dataclasses
+from dataclasses import dataclass
+from typing import Type, TypeVar
+
 import pytest
 
-from fdm.attribute_functions import DictionaryAttributeFunction, TF, RF, DBF
+from fdm.attribute_functions import (
+    DictionaryAttributeFunction,
+    TF,
+    RF,
+    DBF,
+    CompositeKey,
+)
 from fql.predicates.constraints import (
     attribute_name_equivalence_item,
     max_count,
@@ -203,3 +213,23 @@ def test_function_observers():
     # no rollback happened, as the change was triggered through the observer mechanism
     # also see the message in ConstraintViolationErrorFromOutside
     assert users[1].dsf == "Alice"
+
+
+def test_relationship_function():
+    db: DBF = _create_testdata(frozen=True, observe_items=False)
+    users: RF = db.users
+    customers: RF = db.customers
+
+    # N:M-relationship between users and customers with an additional attribute "date" for each relationship:
+    meetings: RF = RF(frozen=False)
+    assert len(meetings) == 0
+    # note that as we are assigning instances, we do not require an extra check like in the relational model that
+    # the foreign key "exists"
+    meetings[CompositeKey([users[1], customers[1]])] = TF({"date": "2024-01-01"})
+    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2024-01-01"})
+    meetings[CompositeKey([users[2], customers[3]])] = TF({"date": "2024-01-01"})
+    assert len(meetings) == 3
+
+    # overwrites the previous meeting between user 2 and customer 1:
+    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2025-01-01"})
+    assert len(meetings) == 3

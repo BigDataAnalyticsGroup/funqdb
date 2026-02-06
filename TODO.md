@@ -15,7 +15,7 @@ bla
 
 - [ ] relationship functions
 - [ ] n:m relationships
-- [ ] add support for composite primary keys
+- [ ] add support for composite primary keys, low prio
 - [ ] operator: output a plan, how?
     - [ ] as everything is functions and the input to an operator is not another operator
       -> explain must traverse through the call chain including attribute functions!

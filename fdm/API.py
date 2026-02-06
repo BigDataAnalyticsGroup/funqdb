@@ -154,3 +154,9 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         @param entry: The lineage entry to add.
         """
         ...
+
+    def __hash__(self):
+        """Compute the hash of the AttributeFunction based on its UUID.
+        @return: The hash value of the AttributeFunction.
+        """
+        return hash(self.uuid)
