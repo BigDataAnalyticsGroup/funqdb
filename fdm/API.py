@@ -1,7 +1,6 @@
 # good article:
 # https://realpython.com/python-magic-methods/
 import logging
-import uuid
 from abc import abstractmethod, ABC
 
 from fdm.util import Explainable

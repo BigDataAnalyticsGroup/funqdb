@@ -15,6 +15,7 @@ def test_pickle_Item(tmp_path):
     # scalar value:
     item: Item = Item(1, "Alice")
     with open(file_name, "wb") as f:
+        # noinspection PyTypeChecker
         pickle.dump(item, f)
 
     with open(file_name, "rb") as f:
@@ -26,6 +27,7 @@ def test_pickle_Item(tmp_path):
     # same with attribute function as a value:
     item: Item = Item(1, TF({"name": "Alice", "yob": 1990}))
     with open(file_name, "wb") as f:
+        # noinspection PyTypeChecker
         pickle.dump(item, f)
 
     with open(file_name, "rb") as f:
@@ -44,6 +46,7 @@ def test_pickle_TF(tmp_path):
     # pickle a TF directly:
     tf: TF = TF({"name": "Alice", "yob": 1990})
     with open(file_name, "wb") as f:
+        # noinspection PyTypeChecker
         pickle.dump(tf, f)
 
     with open(file_name, "rb") as f:
@@ -58,6 +61,7 @@ def test_pickle_TF(tmp_path):
 
     # now with observers:
     with open(file_name, "wb") as f:
+        # noinspection PyTypeChecker
         pickle.dump(tf, f)
 
     with open(file_name, "rb") as f:

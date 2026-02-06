@@ -1,5 +1,3 @@
-from dataclasses import FrozenInstanceError
-
 import pytest
 
 from fql.util import Item, ReadOnlyError
@@ -17,5 +15,5 @@ def test_Item():
 
     with pytest.raises(ReadOnlyError):
         # following line is marked as an error in PyCharm: "Cannot assign to field 'value'"
-        # neverthe, it can be executed and raises the expected exception
+        # nevertheless, it can be executed and raises the expected exception
         item3.value = 3

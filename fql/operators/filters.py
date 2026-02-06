@@ -70,7 +70,7 @@ class filter_items_scan[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return f"filter_items_scan operator with predicate {self.filter_predicate}."
 
     def __call__(
-        self, input_function: INPUT_AttributeFunction
+        self, input_function: INPUT_AttributeFunction, create_lineage=False
     ) -> OUTPUT_AttributeFunction:
 
         assert input_function is not None
@@ -117,7 +117,7 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         super().__init__(filter_predicate, output_factory)
 
     def __call__(
-        self, input_function: INPUT_AttributeFunction
+        self, input_function: INPUT_AttributeFunction, create_lineage=False
     ) -> OUTPUT_AttributeFunction:
         """Call the filter_items_scan operator with the negated predicate."""
         super.__call__(lambda x: not self.filter_predicate)

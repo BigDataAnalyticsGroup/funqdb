@@ -55,8 +55,8 @@ class attribute_name_equivalence_item(ItemConstraint):
 class max_count(ItemConstraint):
     """Predicate that checks if the number of entries in a given item is below a maximum."""
 
-    def __init__(self, max_count: int):
-        self.max_count = max_count
+    def __init__(self, max_count_limit: int):
+        self.max_count_limit = max_count_limit
 
     def __call__(self, af: AttributeFunction) -> bool:
-        return len(af) <= self.max_count
+        return len(af) <= self.max_count_limit

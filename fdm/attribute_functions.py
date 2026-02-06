@@ -1,5 +1,5 @@
 import inspect
-from typing import Generator, Any
+from typing import Generator
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
@@ -165,7 +165,7 @@ class DictionaryAttributeFunction[Key, Value](
         for item in self:
             if item.value == observable:
                 self._check_items_constraints(item, triggered_by_notification=True)
-        # TODO: do we need to notify recursivley here?
+        # TODO: do we need to notify recursively here?
         # self.notify_observers(item)
         self._check_self_constraints(triggered_by_notification=True)
 
@@ -288,7 +288,7 @@ class DictionaryAttributeFunction[Key, Value](
             else:
                 print(prefix + f"{key}: {value}")
 
-    def _my_str_(self, flat=False, recursion_depth: int = 0):
+    def my_str(self, flat=False, recursion_depth: int = 0):
         ret: str = ""
         prefix: str = "    " * recursion_depth
         for key, value in self.__dict__["data"].items():
@@ -297,16 +297,14 @@ class DictionaryAttributeFunction[Key, Value](
                     ret += prefix + f"{key}: {value.__repr__() if value else "NONE"}\n"
                 else:
                     ret += prefix + f"{key}:\n"
-                    ret += value._my_str_(
-                        flat=flat, recursion_depth=recursion_depth + 1
-                    )
+                    ret += value.my_str(flat=flat, recursion_depth=recursion_depth + 1)
             else:
                 ret += prefix + f"{key}: {value}\n"
         return ret
 
     def __str__(self):
         """String representation of the current AttributeFunction."""
-        return self._my_str_(flat=True)
+        return self.my_str(flat=True)
 
     def __repr__(self):
         """String representation of the current AttributeFunction used fo dev purposes (including the debugger)."""
@@ -326,14 +324,14 @@ class DictionaryAttributeFunction[Key, Value](
         """This method defines what data gets saved when the object is pickled."""
         # handle values of type AttributeFunction, i.e. store their UUIDs instead
 
-        state_dict = self.__dict__.copy()
         # create a physical copy of the data dict, otherwise we would modify the original data dict when
         # replacing AttributeFunctions with their UUIDs:
+        state_dict = self.__dict__.copy()
         state_dict["data"] = state_dict["data"].copy()
         state_dict["observers"] = state_dict["observers"].copy()
-        # TODO: we also need to handle the store reference, otherwise we would try to pickle the whole store,
-        #  which is not what we want:
-        # TODO: what to do on load?
+
+        # We also need to handle the store reference, otherwise we would try to pickle the whole store,
+        #  which is not what we want, see Store class for that
         state_dict["store"] = None
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):

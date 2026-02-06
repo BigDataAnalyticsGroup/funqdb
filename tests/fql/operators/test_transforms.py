@@ -51,14 +51,14 @@ def test_TransformValues():
 
     # must fail as the input RF is frozen and the transformation_function tries to modify it:
     with pytest.raises(ReadOnlyError):
-        users_transformed: RF = transform_RF(users)
+        transform_RF(users)
 
     # redefine the transformation_function to not modify the input RF in place, but return a modified copy instead:
     transform_RF = transform_items[RF, RF](
         transformation_function=transformation_function_non_modifying,
     )
     with pytest.raises(ReadOnlyError):
-        users_transformed: RF = transform_RF(users)
+        transform_RF(users)
 
 
 def test_TransformValues_new_output_instance():
@@ -67,11 +67,11 @@ def test_TransformValues_new_output_instance():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    tramsform_RF: Operator[RF, RF] = transform_items[RF, RF](
+    transform_RF: Operator[RF, RF] = transform_items[RF, RF](
         transformation_function=transformation_function_non_modifying,
         output_factory=lambda _: RF(),
     )
-    users_transformed: RF = tramsform_RF(users)
+    users_transformed: RF = transform_RF(users)
     assert type(users_transformed) == RF
 
     users_names = {user.value.name for user in users}
