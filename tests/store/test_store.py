@@ -1,7 +1,6 @@
 import pickle
-import uuid
 
-from fdm.API import AttributeFunction
+from fdm.API import AttributeFunction, AttributeFunctionSentinel
 from fdm.attribute_functions import TF
 from fql.util import Item
 from store.store import Store
@@ -96,8 +95,11 @@ def test_sqlitedict(tmp_path):
     assert customers_reread[outer_tuple.uuid]["tuple"].uuid == outer_tuple.uuid
 
     # should return uuid but not the nested tuple itself:
-    assert type(customers_reread[outer_tuple.uuid]["tuple"]["nested"]) == int
-    assert customers_reread[outer_tuple.uuid]["tuple"]["nested"] == inner_tuple.uuid
+    assert (
+        type(customers_reread[outer_tuple.uuid]["tuple"]["nested"])
+        == AttributeFunctionSentinel
+    )
+    assert customers_reread[outer_tuple.uuid]["tuple"]["nested"].id == inner_tuple.uuid
     del customers_reread[outer_tuple.uuid]
     customers_reread.commit()
     customers_reread.close()
@@ -120,31 +122,6 @@ def test_SQLLite_custom_serializer():
         assert mydict["key1"]["name"] == "item1"
         assert mydict["key1"]["value"] == 42              
 """
-
-
-def test_AttributeFunctionSentinel():
-
-    class AttributeFunctionSentinel:
-        """Uses this as entry in dicts to as sentinel for lazy loading from store.
-        So when loading an AttributeFunction from the store, we can have
-        AttributeFunctionSentinel instances in place of actual AttributeFunction instances.
-        This should be checked when accessing values in AttributeFunctions.
-        At that point, the actual AttributeFunction can be fetched from the store.
-        The AttributeFunctionSentinel instance is then replaced with the actual AttributeFunction instance.
-
-        Note: the "inverse" problem also exists: when evicting an AttributeFunction from memory,
-        we need to replace actual AttributeFunction instances with AttributeFunctionSentinel instances.
-        This is not implemented yet.
-
-        Maybe some sort of (weak) ref counting is required to know when to evict an AttributeFunction from memory.
-
-        """
-
-        def __init__(self, id: int):
-            self.id = id
-
-    afs: AttributeFunctionSentinel = AttributeFunctionSentinel(42)
-    # print(v.get_uuid())
 
 
 def test_store_get_put(tmp_path):
@@ -170,8 +147,9 @@ def test_store_get_put(tmp_path):
 
     assert outer_tuple_read["name"] == "Alice"
 
-    # nested tuple should be stored as uuid, not the actual tuple:
-    assert outer_tuple_read.nested == inner_tuple.uuid
+    # nested tuple should be stored as AttributeFunctionSentinel, not the actual tuple:
+    assert type(outer_tuple_read.nested) == AttributeFunctionSentinel
+    assert outer_tuple_read.nested.id == inner_tuple.uuid
 
     # observer should also be stored as uuid, not the actual tuple:
     assert outer_tuple_read.observers[0] == observer.uuid

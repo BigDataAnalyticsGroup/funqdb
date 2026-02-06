@@ -1,7 +1,7 @@
 import inspect
 from typing import Generator, Any
 
-from fdm.API import AttributeFunction, logger
+from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
 from fql.util import (
     Item,
@@ -321,7 +321,9 @@ class DictionaryAttributeFunction[Key, Value](
         state_dict["observers"] = state_dict["observers"].copy()
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
-                state_dict["data"][key] = value.uuid
+                # replace the value with its UUID, we can restore the actual AttributeFunction when unpickling by
+                # looking up the UUID in the store:
+                state_dict["data"][key] = AttributeFunctionSentinel(value.uuid)
 
         # observers are not pickled, we store their UUIDs instead:
         state_dict["observers"] = [f.uuid for f in state_dict["observers"]]

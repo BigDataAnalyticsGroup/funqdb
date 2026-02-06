@@ -21,6 +21,30 @@ class PureFunction[INPUT, OUTPUT](ABC):
         ...
 
 
+class AttributeFunctionSentinel:
+    """Uses this as entry in AttributeFunctions as sentinel for lazy loading from store.
+    So when loading an AttributeFunction from the store, we can have
+    AttributeFunctionSentinel instances in place of actual AttributeFunction instances.
+    This should be checked when accessing values in AttributeFunctions.
+    At that point, the actual AttributeFunction can be fetched from the store.
+    The AttributeFunctionSentinel instance is then replaced with the actual AttributeFunction instance.
+
+    Note: the "inverse" problem also exists: when evicting an AttributeFunction from memory,
+    we need to replace actual AttributeFunction instances with AttributeFunctionSentinel instances.
+    This is not implemented yet.
+
+    Maybe some sort of (weak) ref counting is required to know when to evict an AttributeFunction from memory.
+
+    """
+
+    def __init__(self, id: int):
+        self._id = id
+
+    @property
+    def id(self):
+        return self._id
+
+
 class AttributeFunction[Key, Value](PureFunction, Explainable):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
