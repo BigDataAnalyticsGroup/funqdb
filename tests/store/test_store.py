@@ -105,33 +105,15 @@ def test_sqlitedict(tmp_path):
     customers_reread.close()
 
 
-"""
-def test_SQLLite_custom_serializer():
-    # TODO: write custom serializer for TF_SQLLite
-    # probably not needed if we use pickle as serializer and change get and setstate accordingly
-    # https://pypi.org/project/sqlitedict/
-    import json
+def test_store_get_put_no_sentinel_replacement(tmp_path):
 
-    with SqliteDict("example.sqlite", encode=json.dumps, decode=json.loads) as mydict:
-        mydict["key1"] = {"name": "item1", "value": 42}
-        assert mydict["key1"]["name"] == "item1"
-        assert mydict["key1"]["value"] == 42
-        mydict.commit()
-
-    with SqliteDict("example.sqlite", encode=json.dumps, decode=json.loads) as mydict:
-        assert mydict["key1"]["name"] == "item1"
-        assert mydict["key1"]["value"] == 42              
-"""
-
-
-def test_store_get_put(tmp_path):
-
-    file_name: str = str(tmp_path / "test_store_get_put.sqlite")
+    file_name: str = str(tmp_path / "test_store_get_put_no_sentinel_replacement.sqlite")
     AttributeFunction.global_uuid = 4242
 
     store: Store = Store(file_name=file_name)
     inner_tuple: TF = TF({"name": "Alice", "yob": 1990})
     outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple})
+
     # add an observer to test that observers are not stored as actual tuples but as UUIDs:
     # and that outer_tuple does not get modified as a side effect of pickling
     observer: TF = TF({"name": "Alice", "nested": inner_tuple})
@@ -139,7 +121,7 @@ def test_store_get_put(tmp_path):
     store.put(outer_tuple)
     store.close()
 
-    store_read: Store = Store(file_name=file_name)
+    store_read: Store = Store(file_name=file_name, add_reference_to_store_on_read=False)
 
     assert len(store_read) == 1
 
@@ -147,12 +129,60 @@ def test_store_get_put(tmp_path):
 
     assert outer_tuple_read["name"] == "Alice"
 
-    # nested tuple should be stored as AttributeFunctionSentinel, not the actual tuple:
+    # nested tuple should be stored as AttributeFunctionSentinel, not the actual TF:
     assert type(outer_tuple_read.nested) == AttributeFunctionSentinel
     assert outer_tuple_read.nested.id == inner_tuple.uuid
 
-    # observer should also be stored as uuid, not the actual tuple:
-    assert outer_tuple_read.observers[0] == observer.uuid
+    # observer should also be stored as AttributeFunctionSentinel, not the actual TF:
+    assert type(outer_tuple_read.observers[0]) == AttributeFunctionSentinel
+    assert outer_tuple_read.observers[0].id == observer.uuid
+
+    # original outer tuple still points to the actual inner tuple, not the uuid:
+    assert type(outer_tuple.nested) == TF
+
+    # original outer tuple still has observer instance, not just uuid:
+    assert type(outer_tuple.observers[0]) == TF
+
+    store_read.close()
+
+
+def test_store_get_put_with_sentinel_replacement(tmp_path):
+
+    file_name: str = str(
+        tmp_path / "test_store_get_put_with_sentinel_replacement.sqlite"
+    )
+    AttributeFunction.global_uuid = 4242
+
+    store: Store = Store(file_name=file_name)
+    inner_tuple: TF = TF({"name": "Alice", "yob": 1990}, store=store)
+    outer_tuple: TF = TF({"name": "Alice", "nested": inner_tuple}, store=store)
+
+    # add an observer to test that observers are not stored as actual tuples but as UUIDs:
+    # and that outer_tuple does not get modified as a side effect of pickling
+    observer: TF = TF({"name": "Alice", "nested": inner_tuple}, store=store)
+    outer_tuple.add_observer(observer)
+    store.put(inner_tuple)
+    store.put(outer_tuple)
+    assert len(store) == 2
+    store.close()
+
+    # open store again on the same file:
+    store_read: Store = Store(file_name=file_name)
+
+    assert len(store_read) == 2
+
+    outer_tuple_read: AttributeFunction = store_read.get(outer_tuple.uuid)
+
+    assert outer_tuple_read["name"] == "Alice"
+    assert outer_tuple_read.store == store_read
+
+    # nested tuple should be stored as TF, not the actual AttributeFunctionSentinel anymore:
+    assert type(outer_tuple_read.nested) == TF
+    assert outer_tuple_read.nested.uuid == inner_tuple.uuid
+
+    # observer should also be stored as AttributeFunctionSentinel, not the actual TF:
+    assert type(outer_tuple_read.observers[0]) == AttributeFunctionSentinel
+    assert outer_tuple_read.observers[0].id == observer.uuid
 
     # original outer tuple still points to the actual inner tuple, not the uuid:
     assert type(outer_tuple.nested) == TF

@@ -12,9 +12,11 @@ class Store:
         self,
         file_name: str = "function_store.sqlite",
         attribute_function_space: str = "attribute_functions",
+        add_reference_to_store_on_read: bool = True,
     ):
         self.attribute_function_buffer: dict[int, AttributeFunction] = {}
         self.file_name: str = file_name
+        self.add_reference_to_store_on_read = add_reference_to_store_on_read
 
         # DESIGN_CHOICE: should we have
         # one table per item_id?
@@ -60,7 +62,11 @@ class Store:
         """
 
         try:
-            self.attribute_function_buffer[fid] = self.sqlite_dict[fid]
+            af: AttributeFunction = self.sqlite_dict[fid]
+            if self.add_reference_to_store_on_read:
+                af.__dict__["store"] = self
+
+            self.attribute_function_buffer[fid] = af
         except KeyError as e:
             raise KeyError(f"ID '{fid}' not found in the store.") from e
 

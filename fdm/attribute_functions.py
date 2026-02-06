@@ -107,7 +107,19 @@ class DictionaryAttributeFunction[Key, Value](
         @return: The value of the requested item.
         """
         if key in self.__dict__["data"]:
-            return self.__dict__["data"][key]
+            value: Value | AttributeFunctionSentinel = self.__dict__["data"][key]
+
+            # if we have a reference to a store and the value is an AttributeFunctionSentinel, we load the actual
+            # AttributeFunction instance from the store:
+            if self.__dict__["store"] is not None and isinstance(
+                value, AttributeFunctionSentinel
+            ):
+                # load the AttributeFunction from the store:
+                value: AttributeFunction = self.__dict__["store"].get(value.id)
+                # update the data dict with the loaded AttributeFunction for future accesses:
+                self.__dict__["data"][key] = value
+
+            return value
         else:
             raise AttributeError
 
@@ -319,14 +331,19 @@ class DictionaryAttributeFunction[Key, Value](
         # replacing AttributeFunctions with their UUIDs:
         state_dict["data"] = state_dict["data"].copy()
         state_dict["observers"] = state_dict["observers"].copy()
+        # TODO: we also need to handle the store reference, otherwise we would try to pickle the whole store,
+        #  which is not what we want:
+        # TODO: what to do on load?
+        state_dict["store"] = None
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
-                # replace the value with its UUID, we can restore the actual AttributeFunction when unpickling by
-                # looking up the UUID in the store:
+                # replace the AttributeFunction with a AttributeFunctionSentinel:
                 state_dict["data"][key] = AttributeFunctionSentinel(value.uuid)
 
-        # observers are not pickled, we store their UUIDs instead:
-        state_dict["observers"] = [f.uuid for f in state_dict["observers"]]
+        # replace the AttributeFunction with a AttributeFunctionSentinel:
+        state_dict["observers"] = [
+            AttributeFunctionSentinel(f.uuid) for f in state_dict["observers"]
+        ]
 
         return state_dict
 
