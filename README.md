@@ -8,7 +8,7 @@ The goal of funqDB is to replace the relational model, relational algebra, ORMs,
 funqDB is built around the central ideas of the vision paper:
 <a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
 the
-25th International Conference on Extending Database Technology (**[EDBT 2026](https://edbticdt2026.github.io/)**).
+25th International Conference on Extending Database Technology [EDBT 2026](https://edbticdt2026.github.io).
 
 <blockquote>
 Abstract:
