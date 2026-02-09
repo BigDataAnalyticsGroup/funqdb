@@ -2,14 +2,14 @@
 
 ## Background
 
-funqDB is a project build around the central ideas of the vision paper:
+funqDB is a project that is being built around the central ideas of the vision paper:
 
 <a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
 the
 25th International Conference on Extending Database Technology (**[EDBT 2026](https://edbticdt2026.github.io/)**).
 
 <blockquote>
-Abstract
+Abstract:
 
 We propose the vision of a functional data model (FDM) and an associated functional query
 language (FQL). Our proposal has far-reaching consequences: we show a path to come up with
@@ -115,9 +115,9 @@ speed-up in query execution time for ResultDB_{Semi-Join}, whereas TD_{ResultDB}
 plans.
 </blockquote>
 
-## Current State
+## Current State of the Project
 
-This project is in an early alpha state (started end of January 2026) and not ready for production use. It is a proof of
+This project is in an early alpha state (we started end of January 2026) and not ready for production use. It is a proof of
 concept for the ideas in the paper. Yet our goal is to make it as complete as possible, and make it usable in production
 environments.
 
