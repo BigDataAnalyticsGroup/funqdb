@@ -28,6 +28,8 @@ We **highly** recommend reading that paper to understand the motivation and the 
 and **FQL**.
 This README is not meant to be a replacement for the paper, but rather a guide to the project and its current state,
 how to use it, and how to contribute.
+                  
+## History
 
 That paper, [Dit26], was preceded by a couple of previous version of that paper (with quite some variation in content):
 
