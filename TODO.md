@@ -4,18 +4,24 @@
 - from the store
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
-
 - [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
 - [ ] done with care, maybe only allow loading from trusted sources
 - https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
 
-bla
+### Github
+- [x] mirroring from gitlab
+- [ ] license: AGPL LGTM, asked triathlon for the official statement
+- [ ] add license header to every file
+- [ ] write decent README.md, see template in the wiki
+
 
 ### Other tasks
 
-- [ ] relationship functions
-- [ ] n:m relationships
-- [ ] add support for composite primary keys, low prio
+- [x] relationship functions
+- [ ] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
+  item X through relationship function Y
+- [x] n:m relationships
+- [x] add support for composite primary keys, low prio
 - [ ] operator: output a plan, how?
     - [ ] as everything is functions and the input to an operator is not another operator
       -> explain must traverse through the call chain including attribute functions!
@@ -53,7 +59,8 @@ some thoughts on this:
 - [x] user should not see this stuff, this is internal
 - user creates AFS: TF: RF: DBF, whatever, puts them together in operators, builds pipelines, etc.
 - [x] the store saves that to disk/db
-- [x] when loading back, the store reconstructs the AFs from the blobs, re-linking the references, however link traversal
+- [x] when loading back, the store reconstructs the AFs from the blobs, re-linking the references, however link
+  traversal
   should be done on demand, i.e. once an AF is needed from an Item, only then it is unpickled and its references are
   re-linked
 - [x] it requires to swizzle/un-swizzle references to other AFs when pickling/unpickling

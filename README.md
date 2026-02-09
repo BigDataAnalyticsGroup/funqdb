@@ -1,37 +1,101 @@
+# funqDB
 
-## funqDB
-Choose a self-explaining name for your project.
+## Background
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+funqDB is a project build around the central ideas of the vision paper:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+<a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
+the
+25th International Conference on Extending Database Technology (**[EDBT 2026](https://edbticdt2026.github.io/)**).
+
+<details>
+
+<summary>Abstract</summary>
+<div style="background-color: lightgray">
+We propose the vision of a functional data model (FDM) and an associated functional query
+language (FQL). Our proposal has far-reaching consequences: we show a path to come up with
+a modern query language (QL) that solves (almost if not) all problems of SQL (NULL-values,
+type marshalling, SQL injection, missing querying capabilities for updates, etc.). FDM and
+FQL are much more expressive than the relational model and SQL. In addition, in contrast to
+SQL, FQL integrates smoothly into existing programming languages. In our approach both QL
+and PL become the ‘same thing’, thus opening up several interesting holistic optimization
+opportunities between compilers and databases.</div>
+</details>
+
+We **highly** recommend reading that paper to understand the motivation and the ideas behind funqDB, FDM, and FQL.
+This README is not meant to be a replacement for the paper, but rather a guide to the project and its current state,
+how to use it, and how to contribute.
+
+That paper,[Dit26], was preceded by a couple of other papers, including:
+
+<a id="2">[Dit25b]</a> Jens
+Dittrich. [How to get Rid of SQL, Relational Algebra, the Relational Model, ERM, and ORMs in a Single Paper -- A Thought Experiment](http://arxiv.org/abs/2504.12953)
+arXiv:2504.12953 [cs.DB]
+*Initially, this was a thought experiment to explore the ideas that eventually led to the vision paper [Dit26]. It
+contains a lot of code examples and is a good read to understand the motivation and the ideas behind funqDB.*
+
+<a id="3">[Dit25a]</a>Jens
+Dittrich. [A Functional Data Model and Query Language is All You Need](https://arxiv.org/abs/2507.20671). arXiv:
+2507.20671 [cs.DB].
+*This paper also contains a lot of code examples.*
+
+The following papers are also related, in these works we proposed to change SQL to return a subdatabase and how to
+perform query processing and optimization accordingly:
+
+<a id="4">[ND25]</a> Joris Nix, Jens
+Dittrich. [Extending SQL to Return a Subdatabase](https://bigdata.uni-saarland.de/publications/Nix,%20Dittrich%20-%20Extending%20SQL%20to%20Return%20a%20Subdatabase.pdf).
+**SIGMOD 2025**.
+
+<a id="5">[RD25]</a> Simon Rink, Jens
+Dittrich. [Query Optimization for Database-Returning Queries](https://bigdata.uni-saarland.de/publications/p353-rink.pdf).
+**SIGMOD 2026**.
+
+## Current State
+
+This project is in an early alpha state (started end of January 2026) and not ready for production use. It is a proof of
+concept for the ideas in the paper. Yet our goal is to make it as complete as possible, and make it usable in production
+environments.
+
+### Supported features include:
+
+- [x] attribute functions (AFs) as replacements for tuples, relations, and databases, and sets of databases
+- [x] operators including simple relational algebra operators such as selection, projection, join, etc., but also
+  more complex ones such as subdatabase, group-by, etc.
+- [x] an observer mechanism for AFs, i.e. when an AF is updated, all AFs that depend on it are informed and can react to
+  the change
+- [x] support for composite primary keys
+- [x] relationship functions (RFs) as replacements for n:m-relationships, i.e. they can be used to express relationships
+  between AFs, e.g. one-to-many, many-to-many, etc.
+- [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
+  cannot push down query processing
+- [x] automatic swizzlling/unswizzling of references
+
+### TODO and ongoing work:
+
+- [ ] pipelining
+- [ ] tensors
+- [ ] other non-Python backends
+- [ ] query optimization
+- [ ] backends in other languages, e.g. Rust, C++, etc.
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+
+for the moment there is the option to clone or download a zip of the repository and install the dependencies
+through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
 
 ## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+see the [tutorial](docs/tutorial.md)
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+If you are interested in contributing to the project, have questions, or want to discuss anything related to funqDB,
+please reach out to us.
 
 ## Authors and acknowledgment
+
 Show your appreciation to those who have contributed to the project.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+This project is licenses under the AGPL-3.0 License. See the [LICENSE](LICENSE.txt) file for more details.
