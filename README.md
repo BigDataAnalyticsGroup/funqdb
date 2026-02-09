@@ -6,6 +6,7 @@
 The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the longrun.
 </blockquote>
 funqDB is built around the central ideas of the vision paper:
+
 <a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
 the
 25th International Conference on Extending Database Technology ([EDBT 2026](https://edbticdt2026.github.io)).
@@ -120,8 +121,8 @@ plans.
 
 ## Current State of the Project
 
-This project is in an early alpha state (we started end of January 2026) and not ready for production use. It is a proof of
-concept for the ideas in the paper. Yet our goal is to make it as complete as possible, and make it usable in production
+This project is in an early alpha state (we started implementing end of January 2026) and it is not (yet) ready for production use. 
+It is a proof of  concept for the ideas in the paper. Yet our goal is to make it as complete as possible, and make it usable in production
 environments.
 
 ### Supported features include:
