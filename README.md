@@ -36,11 +36,12 @@ Dittrich. [A Functional Data Model and Query Language is All You Need](https://a
 2507.20671 [cs.DB].
 *This paper also contains a lot of Python/FQL code examples.*
 
+But all of this started with this one: this was a thought experiment to explore the ideas that eventually led to the vision papers [Dit25b] and then [Dit26]. It
+contains a lot of code examples and is a good read to understand the motivation and the ideas behind funqDB.
+
 <a id="2">[Dit25a]</a> Jens
 Dittrich. [How to get Rid of SQL, Relational Algebra, the Relational Model, ERM, and ORMs in a Single Paper -- A Thought Experiment](http://arxiv.org/abs/2504.12953)
 arXiv:2504.12953 [cs.DB]
-*Initially, this was a thought experiment to explore the ideas that eventually led to the vision papers [Dit25b] and then [Dit26]. It
-contains a lot of code examples and is a good read to understand the motivation and the ideas behind funqDB.*
 
 <blockquote>
 Abstract:
@@ -105,7 +106,7 @@ subset of the original database, reduced to the relations, tuples, and attribute
 join result. DRQs offer several benefits: they reduce network traffic in client-server settings, can lower memory
 requirements for materializing results, and significantly simplify querying hierarchical data. Currently, two
 state-of-the-art algorithms exist to compute DRQs: (1.) ResultDB<sub>Semi-Join</sub> builds upon Yannakakis’ semi-join
-reduction algorithm by adding support for cyclic queries. (2.) ResultDB_{Decompose} computes the standard single-table
+reduction algorithm by adding support for cyclic queries. (2.) ResultDB<sub>Decompose</sub> computes the standard single-table
 result and projects the result to the base tables to obtain the resulting subdatabase. However, multiple issues can be
 identified with these algorithms. First, ResultDB<sub>Semi-Join</sub> employs simple heuristics to greedily solve the underlying
 enumeration problems, often leading to suboptimal query plans. Second, each algorithm performs best under different
