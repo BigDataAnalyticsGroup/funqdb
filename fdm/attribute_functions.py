@@ -391,3 +391,69 @@ class CompositeKey:
     def __contains__(self, key: AttributeFunction):
         """Check if a given AttributeFunction is part of the CompositeKey."""
         return key in self.keys
+
+
+class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
+    """A tensor is simply a dictionary function with a composite key. It may have additional methods for tensor-specific
+    operations, but for now it is just a subclass of DictionaryAttributeFunction with a different key type.
+    """
+
+    def __init__(self, dimensions: list[int]):
+        """Initialize the TensorKey with the given dimensions.
+        @param dimensions: A list of int representing the number of elements of each dimension of the tensor.
+        """
+        super().__init__()
+        assert len(dimensions) > 0, "Tensor must have at least one dimension."
+        self.dimensions = dimensions
+
+    def rank(self):
+        """Get the rank of the tensor, which is the number of dimensions."""
+        return len(self.dimensions)
+
+    def __add__(self, other):
+        """Add another tensor to this tensor. This is a simple element-wise addition, i.e., we add the values of the
+        two tensors for each key and return a new tensor with the same keys and the added values. We assume that
+        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
+        """
+        assert (
+            self.dimensions == other.dimensions
+        ), "Cannot add tensors with different dimensions."
+        result = Tensor(self.dimensions)
+        for key in self.keys():
+            result[key] = self[key] + other[key]
+        return result
+
+    def __sub__(self, other):
+        """Subtract another tensor from this tensor. This is a simple element-wise subtraction, i.e., we subtract the values of the
+        two tensors for each key and return a new tensor with the same keys and the subtracted values. We assume that
+        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
+        """
+        assert (
+            self.dimensions == other.dimensions
+        ), "Cannot add tensors with different dimensions."
+        result = Tensor(self.dimensions)
+        for key in self.keys():
+            result[key] = self[key] - other[key]
+        return result
+
+    def __mul__(self, other):
+        """Multiply this tensor with another tensor. This is a simple element-wise multiplication, i.e., we multiply the values of the
+        two tensors for each key and return a new tensor with the same keys and the multiplied values. We assume that
+        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
+        """
+        assert (
+            self.dimensions == other.dimensions
+        ), "Cannot add tensors with different dimensions."
+        result = Tensor(self.dimensions)
+        for key in self.keys():
+            result[key] = self[key] * other[key]
+        return result
+
+    def __matmul__(self, other):
+        """Perform matrix multiplication between this tensor and another tensor. This is a simple implementation of
+        matrix multiplication, where we multiply the values of the two tensors according to the rules of matrix
+        multiplication and return a new tensor with the resulting values. We assume that the two tensors have
+        compatible dimensions for matrix multiplication, but we do not check this for simplicity.
+        """
+
+        raise NotImplementedError
