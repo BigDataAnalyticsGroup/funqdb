@@ -2,8 +2,10 @@
 
 ## Background
 
-funqDB is a project that is being built around the central ideas of the vision paper:
-
+<blockquote>
+The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the longrun.
+</blockquote>
+funqDB is built around the central ideas of the vision paper:
 <a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
 the
 25th International Conference on Extending Database Technology (**[EDBT 2026](https://edbticdt2026.github.io/)**).
@@ -21,7 +23,7 @@ and PL become the ‘same thing’, thus opening up several interesting holistic
 opportunities between compilers and databases.
 </blockquote>
 
-We **highly** recommend reading that paper to understand the motivation and the ideas behind funqDB, FDM, and FQL.
+We **highly** recommend reading that paper to understand the motivation and the ideas behind funqDB: FDM, and FQL.
 This README is not meant to be a replacement for the paper, but rather a guide to the project and its current state,
 how to use it, and how to contribute.
 
