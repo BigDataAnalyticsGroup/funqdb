@@ -3,7 +3,7 @@
 ## Background
 
 <blockquote>
-The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the longrun.
+The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the long run.
 </blockquote>
 funqDB is built around the central ideas of the vision paper:
 
