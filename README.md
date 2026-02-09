@@ -23,7 +23,8 @@ and PL become the ‘same thing’, thus opening up several interesting holistic
 opportunities between compilers and databases.
 </blockquote>
 
-We **highly** recommend reading that paper to understand the motivation and the ideas behind funqDB: FDM, and FQL.
+We **highly** recommend reading that paper to understand the motivation and the ideas behind funqDB: **FDM**,
+and **FQL**.
 This README is not meant to be a replacement for the paper, but rather a guide to the project and its current state,
 how to use it, and how to contribute.
 
@@ -37,7 +38,7 @@ Dittrich. [A Functional Data Model and Query Language is All You Need](https://a
 <a id="2">[Dit25a]</a> Jens
 Dittrich. [How to get Rid of SQL, Relational Algebra, the Relational Model, ERM, and ORMs in a Single Paper -- A Thought Experiment](http://arxiv.org/abs/2504.12953)
 arXiv:2504.12953 [cs.DB]
-*Initially, this was a thought experiment to explore the ideas that eventually led to the vision paper [Dit26]. It
+*Initially, this was a thought experiment to explore the ideas that eventually led to the vision papers [Dit25b] and then [Dit26]. It
 contains a lot of code examples and is a good read to understand the motivation and the ideas behind funqDB.*
 
 <blockquote>
