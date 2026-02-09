@@ -11,7 +11,7 @@ the
 <details>
 
 <summary>Abstract</summary>
-<div style="background-color: lightgray">
+<div style="background-color: lightgray!important">
 We propose the vision of a functional data model (FDM) and an associated functional query
 language (FQL). Our proposal has far-reaching consequences: we show a path to come up with
 a modern query language (QL) that solves (almost if not) all problems of SQL (NULL-values,
