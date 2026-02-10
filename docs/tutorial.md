@@ -1,4 +1,4 @@
-# FDM andd FQL Tutorial
+# FDM and FQL Tutorial
 
 Welcome to this tutorial! In this guide, we will walk you through the basics of using our FDM and FQL. For the code
 examples, we will use Python syntax. But note, that all these concepts apply to other programming languages as well.
@@ -49,11 +49,15 @@ person associated with key "t1" in relation *persons*, we can simply use a dot s
 ```python
 name: str = db.persons.t1.name  # This will return the string "Tom"
 ```
+
 Or, if we define `persons` as a variable:
+
 ```python
 persons: RF = db.persons  # This will return the relation function representing the set of persons
 ```
+
 Then, we can write:
+
 ```python
 name: str = persons.t1.name  # This will also return the string "Tom"
 ```
@@ -82,5 +86,5 @@ valid, but the integer `1` is not, so you cannot do `persons.t1.1`, but you can 
 `persons("t1")(1)`.
 
 In general, I would recommend to stick to the dot syntax for attributes that are valid identifiers, and use the []
--syntax for all other cases. In other words, the dot syntax is more concise and easier to read, but the []-syntax is more flexible
-and can handle all cases.
+-syntax for all other cases. In other words, the dot syntax is more concise and easier to read, but the []-syntax is
+more flexible and can handle all cases.
