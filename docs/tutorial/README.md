@@ -5,8 +5,8 @@ examples, we will use Python syntax. But note, that all these concepts apply to 
 The ideas behind FDM and FQL are not bound to one particular programming language.
 
 ### Table of Contents
-1. [FDM Basics](01%20FDM20Basics)
+1. [FDM Basics](<01 FDM Basics>)
    
-2. [FDM Store](02 FDM Store)
+2. [FDM Store](<02 FDM Store>)
 ...
-5. [FQL Basics](05 FQL Basics)
+5. [FQL Basics](<05 FQL Basics>)
