@@ -34,8 +34,11 @@ handle to the relation instance).
 db: DBF = DBF({"persons": persons, "customers": ...})
 ```
 
-<div style="border: 15px;">
-<b>Repeated keys?</b> Don't worry about repeated keys when defining tuples, e.g `name`, no one forces us to store that
+***
+
+### But what about repeated keys?
+
+Don't worry about repeated keys when defining tuples, e.g `name`, no one forces us to store that
 key with every
 instance, all of this may be compressed away, we will discuss that below. All of what is being explained in this
 tutorial can be considered **declarative descriptions** of the data. Database people love declarativity, and
@@ -43,7 +46,9 @@ declarative descriptions are decoupled from the physical realization. How to map
 realizations is a major topic in database research. What this means for FDM and FQL is that the way we define our data
 in the code (here in Python) does **not** necessarily reflect how it is stored on disk in memory, or how it is processed
 in the query engine (that is the beauty of SQL, and the same applies to FDM and FQL).
-</div>
+
+
+
 ***
 
 ### Frozen (Read-only) Attribute Functions

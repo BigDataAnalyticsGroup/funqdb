@@ -49,6 +49,8 @@ In general, I would recommend to stick to the dot syntax for attributes that are
 -syntax for all other cases. In other words, the dot syntax is more concise and easier to read, but the []-syntax is
 more flexible and can handle all cases.
 
+***
+
 ### Items
 
 Every attribute function is an iterable that can directly be used in loops:
