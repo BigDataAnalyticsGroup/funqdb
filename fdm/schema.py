@@ -1,10 +1,11 @@
 from typing import Type
 
 from fdm.API import AttributeFunction
+from fdm.attribute_functions import DictionaryAttributeFunction
 from fql.predicates.constraints import AttributeFunctionConstraint
 
 
-class Schema[Key](AttributeFunction[Key, Type], AttributeFunctionConstraint):
+class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConstraint):
     """A schema is an attribute function that defines the expected keys and their types for items in a relation."""
 
     def __init__(self):
@@ -18,7 +19,7 @@ class Schema[Key](AttributeFunction[Key, Type], AttributeFunctionConstraint):
         for item in attribute_function:
             if item.key not in self:
                 return False
-            if not issubclass(item.value, self[item.key]):
+            if not issubclass(type(item.value), self[item.key]):
                 return False
         return True
 

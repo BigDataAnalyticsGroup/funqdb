@@ -1,3 +1,5 @@
+from copy import copy
+
 import pytest
 
 from fdm.attribute_functions import (
@@ -7,6 +9,7 @@ from fdm.attribute_functions import (
     DBF,
     CompositeKey,
 )
+from fdm.schema import Schema
 from fql.predicates.constraints import (
     attribute_name_schema,
     max_count,
@@ -225,3 +228,33 @@ def test_relationship_function():
     # overwrites the previous meeting between user 2 and customer 1:
     meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2025-01-01"})
     assert len(meetings) == 3
+
+
+def test_schema():
+    db: DBF = _create_testdata(frozen=False, observe_items=False)
+    users: RF = db.users
+    user = users[1]
+
+    # create a schema that requires the keys "name", "yob" and "department" with any types:
+    user_schema = Schema()
+    user_schema["name"] = str
+    user_schema["yob"] = int
+    user_schema["department"] = TF
+
+    assert user_schema(user)
+
+    user_wrong = copy(users[2])
+    user_wrong["extra_key"] = "extra_value"
+    assert user_schema(user_wrong) == False
+
+    user_wrong = copy(users[2])
+    user_wrong["name"] = "asd"
+    assert user_schema(user_wrong) == False
+    # TODO: sentinel makes the check fail
+
+    # TODO: add schema to RF and check that it is enforced on all items:
+    users.add_item_constraint(user_schema)
+
+    # now add an extra key to the schema, which should make it fail:
+    # user_schema["extra_key"] = object
+    # assert user_schema(users) == False
