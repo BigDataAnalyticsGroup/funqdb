@@ -12,7 +12,7 @@ from fdm.attribute_functions import (
     CompositeKey,
 )
 from fql.predicates.constraints import (
-    attribute_name_equivalence_item,
+    attribute_name_schema,
     max_count,
 )
 from fql.util import Item, ConstraintViolationError, ConstraintViolationErrorFromOutside
@@ -123,13 +123,11 @@ def test_DictionaryTupleRelationDatabaseFunction():
     assert {i.value.name for i in advisory_users_filter} == {"Horst", "Tom"}
 
 
-def test_attribute_functions_item_and_self_constraints_wo_observers():
+def test_attribute_functions_item_and_af_constraint_wo_observers():
 
     db: DBF = _create_testdata(frozen=False, observe_items=False)
     users: RF = db.users
-    users.add_items_constraint(
-        attribute_name_equivalence_item({"name", "yob", "department"})
-    )
+    users.add_items_constraint(attribute_name_schema({"name", "yob", "department"}))
     assert 0 not in users
 
     # newly added user only with valid attribute:
@@ -158,8 +156,8 @@ def test_attribute_functions_item_and_self_constraints_wo_observers():
     # the following direct TP access still works though:
     users[1].dsf = 42
 
-    # check self-constraint:
-    users.add_self_constraint(max_count(3))
+    # check attribute function-constraint:
+    users.add_attribute_function_constraint(max_count(3))
 
     with pytest.raises(ConstraintViolationError):
         users[4] = TF({"name": "Timmy", "yob": 1990, "department": db.departments.d1})
@@ -175,9 +173,7 @@ def test_function_observers():
     users: RF = db.users
     departments: RF = db.departments
     customers: RF = db.customers
-    users.add_items_constraint(
-        attribute_name_equivalence_item({"name", "yob", "department"})
-    )
+    users.add_items_constraint(attribute_name_schema({"name", "yob", "department"}))
 
     # test that all TPs have the relation as observer:
     for i in range(1, len(users) + 1):

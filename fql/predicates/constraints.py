@@ -41,7 +41,7 @@ class attribute_name_equivalence(AttributeFunctionConstraint):
         return self.attribute_names == {item.key for item in attribute_function}
 
 
-class attribute_name_equivalence_item(ItemConstraint):
+class attribute_name_schema(ItemConstraint):
     """Predicate that checks if the keys in a given item match a given set."""
 
     def __init__(self, attribute_names: set[str]):

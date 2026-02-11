@@ -28,7 +28,7 @@ class DictionaryAttributeFunction[Key, Value](
     ):
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
-        self.__dict__["self_constraints"] = set()
+        self.__dict__["af_constraint"] = set()
         self.__dict__["items_constraints"] = set()
         self.__dict__["observe_items"] = observe_items
         self.__dict__["observers"] = list()
@@ -44,17 +44,17 @@ class DictionaryAttributeFunction[Key, Value](
 
         super().__init__()
 
-    def add_self_constraint(self, constraint):
-        """Add a self-constraint to this AttributeFunction.
+    def add_attribute_function_constraint(self, constraint):
+        """Add an attribute function-constraint to this AttributeFunction.
         @param constraint: A callable that takes a value and returns True if the value satisfies the constraint, False otherwise.
         """
-        self.__dict__["self_constraints"].add(constraint)
+        self.__dict__["af_constraint"].add(constraint)
 
-    def remove_self_constraint(self, constraint):
-        """Remove a self-constraint from the AttributeFunction.
+    def remove_attribute_function_constraint(self, constraint):
+        """Remove an attribute function-constraint from the AttributeFunction.
         @param constraint: The constraint to remove.
         """
-        self.__dict__["self_constraints"].remove(constraint)
+        self.__dict__["af_constraint"].remove(constraint)
 
     def add_items_constraint(self, constraint):
         """Add an item-constraint to this AttributeFunction, i.e., this constraint must be fulfilled for all items.
@@ -140,9 +140,11 @@ class DictionaryAttributeFunction[Key, Value](
                     raise ConstraintViolationErrorFromOutside(message)
                 raise ConstraintViolationError(message)
 
-    def _check_self_constraints(self, triggered_by_notification: bool = False):
-        """Check all self-constraints on the current AttributeFunction."""
-        for constraint in self.__dict__["self_constraints"]:
+    def _check_attribute_function_constraints(
+        self, triggered_by_notification: bool = False
+    ):
+        """Check all attribute function constraints on the current AttributeFunction."""
+        for constraint in self.__dict__["af_constraint"]:
             if not constraint(self):
                 message: str = (
                     f"AttributeFunction'{self}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'."
@@ -167,7 +169,7 @@ class DictionaryAttributeFunction[Key, Value](
                 self._check_items_constraints(item, triggered_by_notification=True)
         # TODO: do we need to notify recursively here?
         # self.notify_observers(item)
-        self._check_self_constraints(triggered_by_notification=True)
+        self._check_attribute_function_constraints(triggered_by_notification=True)
 
     def __setitem__(self, key: Key, value: Value):
         """Customize item assignment. This must be used for non-str-type keys.
@@ -191,7 +193,7 @@ class DictionaryAttributeFunction[Key, Value](
 
         try:
             self._check_items_constraints(item)
-            self._check_self_constraints()
+            self._check_attribute_function_constraints()
         except ConstraintViolationError as e:
             # rollback change:
             if key_existed_before:
@@ -217,7 +219,7 @@ class DictionaryAttributeFunction[Key, Value](
 
             try:
                 del self.__dict__["data"][key]
-                self._check_self_constraints()
+                self._check_attribute_function_constraints()
             except ConstraintViolationError as e:
                 # rollback change:
                 self.__dict__["data"][key] = _old_value

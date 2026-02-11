@@ -38,8 +38,17 @@ handle to the relation instance).
 db: DBF = DBF({"persons": persons, "customers": ...})
 ```
 
-Don't worry about repeated keys when defining tuples, e.g ``name``, no one forces us to store that key with every
-instance, all of this may be compressed away, we will discuss that below.
+**Repeated keys?** Don't worry about repeated keys when defining tuples, e.g `name`, no one forces us to store that
+key with every
+instance, all of this may be compressed away, we will discuss that below. All of what is being explained in this
+tutorial can be considered **declarative descriptions** of the data. Database people love declarativity, and
+declarative descriptions are decoupled from the physical realization. How to map declarative descriptions to physical
+realizations is a major topic in database research. What this means for FDM and FQL is that the way we define our data
+in the code (here in Python) does **not** necessarily reflect how it is stored on disk in memory, or how it is processed
+in the query engine (that is the beauty of SQL, and the same applies to FDM and FQL).
+
+
+***
 
 ### Accessing Data
 
@@ -47,7 +56,7 @@ To access data, we can simply call the functions with the appropriate keys. For 
 person associated with key "t1" in relation *persons*, we can simply use a dot syntax:
 
 ```python
-name: str = db.persons.t1.name  # This will return the string "Tom"
+name: str = db.persons.t1.name 
 ```
 
 Or, if we define `persons` as a variable:
@@ -59,28 +68,31 @@ persons: RF = db.persons  # This will return the relation function representing 
 Then, we can write:
 
 ```python
-name: str = persons.t1.name  # This will also return the string "Tom"
+name: str = persons.t1.name 
 ```
 
-Alternatively, we may use the []-syntax:
+Alternatively, we may use the [ ]-syntax:
 
 ```python   
-name: str = persons["t1"]["name"]  # This will also return the string "Tom"
+name: str = persons["t1"]["name"] 
 ```
 
-Or the ()-syntax:
+Or the ( )-syntax:
 
 ```python
-name: str = persons("t1")("name")  # This will also return the string "Tom"
+name: str = persons("t1")("name") 
 ```
 
 Or any mix you like (not recommended):
 
 ```python
-name: str = persons("t1").name  # This will also return "Tom"
+name: str = persons("t1").name 
 ```
 
-Note, that in Python, the dot syntax is only available for attributes that are valid python identifiers, e.g. the `name`
+All of these statements are equivalent and will yield the same result, i.e. the string "Tom".
+
+Note, that in Python, the dot syntax is only available for attributes that are valid **Python identifiers**, e.g. the
+`name`
 is
 valid, but the integer `1` is not, so you cannot do `persons.t1.1`, but you can do `persons.t1[1]` or
 `persons("t1")(1)`.
@@ -88,3 +100,54 @@ valid, but the integer `1` is not, so you cannot do `persons.t1.1`, but you can 
 In general, I would recommend to stick to the dot syntax for attributes that are valid identifiers, and use the []
 -syntax for all other cases. In other words, the dot syntax is more concise and easier to read, but the []-syntax is
 more flexible and can handle all cases.
+
+### Items
+
+TODO
+
+***
+
+## Constraints
+
+Just like on your good old SQL-tables, you can also define constraints on your data.
+Constraints restrict the key/value entries mapped in an attribute function.
+There are two important subclasses of constraints:
+
+1. **Item Constraints**: these constraints restrict individual key/value-pairs (items) represented by an attribute
+   function
+2. **Attribute Function Constraints**: these constraints make a restriction about the set of all
+   key/value-pairs of an attribute function
+
+### Item Constraints
+
+Item constraints include:
+
+1. **schema constraints**, i.e., what kind of keys may be defined
+
+For instance, we may restrict the set of keys (in relational terminology: the column names), that may be defined on a
+particular attribute function:
+
+```python
+users: RF = db.users
+users.add_items_constraint(attribute_name_schema({"name", "yob", "department"}))
+```
+
+This constraint will be checked for every key being inserted into `users`.
+
+2. **type constraints**, i.e., what types may the values mapped to by a particular keys have
+
+TODO
+
+3. **domain constraints**, i.e., what kind of instances are allowed for particular values
+
+TODO
+
+### Attribute Function Constraints
+
+Attribute function constraints define a constraint on the set of items. For instance, you may restrict the number of
+items to a given max number:
+
+```python
+users.add_attribute_function_constraint(max_count(3))
+```
+This constraint will forbid the attribute function to keep more than 3 items.
