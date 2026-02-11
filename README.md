@@ -166,7 +166,7 @@ through [poetry](https://python-poetry.org/), e.g. through `poetry install` in t
 
 ## Usage
 
-see the [tutorial](docs/tutorial.md)
+see the [tutorial](docs/tutorial/00 Getting Started.md)
 
 ## Contributing
 
