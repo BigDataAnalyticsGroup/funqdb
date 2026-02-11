@@ -6,3 +6,4 @@ The ideas behind FDM and FQL are not bound to one particular programming languag
 
 ### Table of Contents
 1. [FDM Basics](01 FDM Basics)
+1. [FDM Basics](05 FQL Basics)
