@@ -1,5 +1,6 @@
-
 ## The Basics: Functions, Functions, and Functions
+
+### Attribute Functions
 
 The functional data model (FDM) replaces tuples, relations, databases, and sets of databases, and in addition concepts
 like tensors )including its 2-dimensional special case *matrices* and its 1-dimensional case *vectors*) with one single
@@ -33,7 +34,8 @@ handle to the relation instance).
 db: DBF = DBF({"persons": persons, "customers": ...})
 ```
 
-**Repeated keys?** Don't worry about repeated keys when defining tuples, e.g `name`, no one forces us to store that
+<div style="border: 15px;">
+<b>Repeated keys?</b> Don't worry about repeated keys when defining tuples, e.g `name`, no one forces us to store that
 key with every
 instance, all of this may be compressed away, we will discuss that below. All of what is being explained in this
 tutorial can be considered **declarative descriptions** of the data. Database people love declarativity, and
@@ -41,6 +43,25 @@ declarative descriptions are decoupled from the physical realization. How to map
 realizations is a major topic in database research. What this means for FDM and FQL is that the way we define our data
 in the code (here in Python) does **not** necessarily reflect how it is stored on disk in memory, or how it is processed
 in the query engine (that is the beauty of SQL, and the same applies to FDM and FQL).
-
-
+</div>
 ***
+
+### Frozen (Read-only) Attribute Functions
+
+In order to forbid data to be changed, you may freeze (make read-only) any attribute functions to disallow changes. You
+may do this through the initializer:
+
+```python
+t1: TF = TF({"name": "Tom", "company": "sample company"}, frozen=True)
+# t2, t3, ... accordingly
+
+persons: RF = RF({"t1": t1, "t2": t2, "t3": t3}, frozen=True)
+```
+
+If you try to change a frozen attribute function, a `ReadOnlyError` will be raised, e.g.:
+
+```python
+persons.t1 = t4 
+```
+
+will raise a `ReadOnlyError`.

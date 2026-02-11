@@ -2,6 +2,7 @@
 # https://realpython.com/python-magic-methods/
 import logging
 from abc import abstractmethod, ABC
+from typing import Generator
 
 from fdm.util import Explainable
 
@@ -160,3 +161,17 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         @return: The hash value of the AttributeFunction.
         """
         return hash(self.uuid)
+
+    @abstractmethod
+    def keys(self) -> Generator:
+        """Get the keys of the AttributeFunction.
+        @return: An iterable of the keys.
+        """
+        ...
+
+    @abstractmethod
+    def values(self):
+        """Get the values of the AttributeFunction.
+        @return: An iterable of the values.
+        """
+        ...

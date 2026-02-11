@@ -1,4 +1,3 @@
-
 ### Accessing Data
 
 To access data, we can simply call the functions with the appropriate keys. For example, to retrieve the name of the
@@ -52,6 +51,36 @@ more flexible and can handle all cases.
 
 ### Items
 
-TODO
+Every attribute function is an iterable that can directly be used in loops:
 
-***
+```python
+person: Item
+for person in persons:
+    print(person.key, person.value)
+```
+
+Note that in contrast to Python dictionaries, there is no need to append `.items()` after `persons`.
+
+We use our own type `Item` rather than Python's inbuilt type `ItemsView` as we needed to add some more functionality (
+e.g., for automatic reference swizzling in the store). In addition, we wanted to keep the naming convention of a
+key/value-pair.
+
+In addition, similar to Python dictionaries, you may also add `.keys()` or `.values()` to just retrieve the keys or
+values,
+respectively.
+
+```python
+person_key: Key
+for person_key in persons.keys():
+    print(person_key)
+```
+
+or:
+
+```python
+person_value: Value
+for person_value in persons.values():
+    print(person_value)
+```
+
+Here, `Key` and `Value`ar placeholders for the types of keys and values of the attribute function. 
