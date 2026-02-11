@@ -264,6 +264,7 @@ class DictionaryAttributeFunction[Key, Value](
 
         self_items: set[Item] = {item for item in self}
         other_items: set[Item] = {item for item in other}
+
         return self_items == other_items
 
     def update(self, other: "AttributeFunction[Key, Value]"):

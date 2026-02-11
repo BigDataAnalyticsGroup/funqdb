@@ -57,7 +57,6 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
         frozen=frozen,
         observe_items=observe_items,
     )
-    # assert db.uuid == 13
 
     return db
 
@@ -68,7 +67,7 @@ def _users_customers_DBF(frozen: bool = True) -> DBF:
     )(_create_testdata(frozen=frozen))
 
 
-def _subset_DBF(whitelist: set[str], frozen: bool = True) -> DBF:
+def _subset_DBF(whitelist: set[str], frozen: bool = True, observe_items=False) -> DBF:
     return filter_items_scan(lambda i: i.key in whitelist, lambda _: DBF())(
-        _create_testdata(frozen=frozen)
+        _create_testdata(frozen=frozen, observe_items=observe_items)
     )

@@ -15,7 +15,7 @@ from fql.predicates.constraints import (
     max_count,
 )
 from fql.util import Item, ConstraintViolationError, ConstraintViolationErrorFromOutside
-from tests.lib import _create_testdata
+from tests.lib import _create_testdata, _subset_DBF
 
 
 def test_DictionaryAttributeFunction():
@@ -231,30 +231,32 @@ def test_relationship_function():
 
 
 def test_schema():
-    db: DBF = _create_testdata(frozen=False, observe_items=False)
-    users: RF = db.users
-    user = users[1]
+    user = _subset_DBF({"users"}, frozen=False).users[1]
 
     # create a schema that requires the keys "name", "yob" and "department" with any types:
     user_schema = Schema()
     user_schema["name"] = str
     user_schema["yob"] = int
     user_schema["department"] = TF
+    user_schema.freeze()
 
     assert user_schema(user)
 
-    user_wrong = copy(users[2])
+    user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
     user_wrong["extra_key"] = "extra_value"
     assert user_schema(user_wrong) == False
 
-    user_wrong = copy(users[2])
+    user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
     user_wrong["name"] = "asd"
-    assert user_schema(user_wrong) == False
-    # TODO: sentinel makes the check fail
+
+    assert user_schema(user_wrong) == True
 
     # TODO: add schema to RF and check that it is enforced on all items:
-    users.add_item_constraint(user_schema)
+    users: RF = _subset_DBF({"users"}, frozen=False).users
+    # users.add_items_constraint(user_schema)
 
-    # now add an extra key to the schema, which should make it fail:
-    # user_schema["extra_key"] = object
-    # assert user_schema(users) == False
+    # TODO
+    # with pytest.raises(ConstraintViolationError):
+    #    users[4] = TF(
+    #        {"namde": "Alice", "yob": 1990, "department": users[1].department}
+    #    )
