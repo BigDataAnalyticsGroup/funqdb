@@ -191,12 +191,7 @@ def test_schema_constraint():
     user = _subset_DBF({"users"}, frozen=False).users[1]
 
     # create a schema that requires the keys "name", "yob" and "department" with any types:
-    user_schema = Schema()
-    user_schema["name"] = str
-    user_schema["yob"] = int
-    user_schema["department"] = TF
-    user_schema.freeze()
-
+    user_schema = Schema({"name": str, "yob": int, "department": TF})
     assert user_schema(user)
 
     user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
@@ -213,11 +208,11 @@ def test_schema_constraint():
 
     # RF still frozen, cannot work:
     with pytest.raises(ReadOnlyError):
-        users.add_items_constraint(user_schema)
+        users.add_values_constraint(user_schema)
     users.unfreeze()
 
     # now it works:
-    users.add_items_constraint(user_schema)
+    users.add_values_constraint(user_schema)
 
     # wrong key:
     with pytest.raises(ConstraintViolationError):

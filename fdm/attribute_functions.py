@@ -30,7 +30,7 @@ class DictionaryAttributeFunction[Key, Value](
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
         self.__dict__["af_constraint"] = set()
-        self.__dict__["items_constraints"] = set()
+        self.__dict__["values_constraints"] = set()
         self.__dict__["observe_items"] = observe_items
         self.__dict__["observers"] = list()
         # how this attribute function was derived:
@@ -72,29 +72,30 @@ class DictionaryAttributeFunction[Key, Value](
 
         self.__dict__["af_constraint"].remove(constraint)
 
-    def add_items_constraint(self, constraint: AttributeFunctionConstraint):
-        """Add an item-constraint to this AttributeFunction, i.e., this constraint must be fulfilled for all items.
-        @param constraint: A callable that takes an Item and returns True if the item satisfies the constraint, False otherwise.
+    def add_values_constraint(self, constraint: AttributeFunctionConstraint):
+        """Add a values-constraint to this AttributeFunction, i.e., this constraint must be fulfilled for all values.
+        @param constraint: A callable that takes an attribute function and returns True if the attribute function
+        satisfies the constraint, False otherwise.
         """
         # check if frozen:
         if self.__dict__["frozen"]:
             raise ReadOnlyError(
-                f"attempt to add an items constraint. This DictionaryAttributeFunction is read-only."
+                f"attempt to add a values constraint. This DictionaryAttributeFunction is read-only."
             )
 
-        self.__dict__["items_constraints"].add(constraint)
+        self.__dict__["values_constraints"].add(constraint)
 
-    def remove_items_constraint(self, constraint):
-        """Remove an item-constraint from the AttributeFunction.
+    def remove_values_constraint(self, constraint):
+        """Remove a values-constraint from the AttributeFunction.
         @param constraint: The constraint to remove.
         """
         # check if frozen:
         if self.__dict__["frozen"]:
             raise ReadOnlyError(
-                f"attempt to remove an items constraint. This DictionaryAttributeFunction is read-only."
+                f"attempt to remove a values constraint. This DictionaryAttributeFunction is read-only."
             )
 
-        self.__dict__["items_constraints"].remove(constraint)
+        self.__dict__["values_constraints"].remove(constraint)
 
     def add_observer(self, observer: Observer):
         """Add an observer to the AttributeFunction.
@@ -170,7 +171,7 @@ class DictionaryAttributeFunction[Key, Value](
         @param item: The item to check.
         @param triggered_by_notification: Whether the check was triggered by a notification from an observed value.
         """
-        for constraint in self.__dict__["items_constraints"]:
+        for constraint in self.__dict__["values_constraints"]:
             if not constraint(value):
                 message: str = (
                     f"Value '{value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n "
