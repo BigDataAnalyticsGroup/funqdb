@@ -10,13 +10,9 @@ from fdm.attribute_functions import (
     CompositeKey,
 )
 from fdm.schema import Schema
-from fql.predicates.constraints import (
-    max_count,
-)
 from fql.util import (
     Item,
     ConstraintViolationError,
-    ConstraintViolationErrorFromOutside,
     ReadOnlyError,
 )
 from tests.lib import _create_testdata, _subset_DBF
@@ -191,7 +187,7 @@ def test_relationship_function():
     assert len(meetings) == 3
 
 
-def test_schema():
+def test_schema_constraint():
     user = _subset_DBF({"users"}, frozen=False).users[1]
 
     # create a schema that requires the keys "name", "yob" and "department" with any types:
@@ -212,10 +208,10 @@ def test_schema():
 
     assert user_schema(user_wrong) == True
 
-    # TODO: add schema to RF and check that it is enforced on all items:
+    # add schema to RF and check that it is enforced on all items:
     users: RF = _subset_DBF({"users"}, frozen=True).users
 
-    # still frozen, cannot work:
+    # RF still frozen, cannot work:
     with pytest.raises(ReadOnlyError):
         users.add_items_constraint(user_schema)
     users.unfreeze()
@@ -241,3 +237,13 @@ def test_schema():
 
     # this works:
     users[4] = TF({"name": "Alice", "yob": 1990, "department": users[1].department})
+
+
+def test_key_constraint():
+    # This is implicitly and automatically given as the dictionary attribute function will not allow this!
+    # In contrast, in the relational model this has to be tested separately, in FDM this is automatically guaranteed
+    # for all attribute functions like TFs, RFs, DBFs, etc.!
+    # In addition, also for the results from FQL operators, duplicate keys cannot occur. This is again in sharp
+    # contrast to SQL where this confusion may happen.
+
+    assert True

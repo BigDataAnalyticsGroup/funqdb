@@ -21,7 +21,6 @@ A **relation function** is a function mapping from tuple identifiers (formerly k
 functions:
 
 ```python
-# A relation function representing a set of persons:
 persons: RF = RF({"t1": t1, "t2": t2, "t3": t3})
 ```
 
@@ -30,9 +29,15 @@ separation does not exist: if you do a `CREATE TABLE foo`, `foo` is at the same 
 handle to the relation instance).
 
 ```python
-# A database function representing a set of relations:
-db: DBF = DBF({"persons": persons, "customers": ...})
+app_db: DBF = DBF({"persons": persons, "customers": ...})
 ```
+
+
+A **set of databases function** is a function mapping from database names to databases:
+```python
+sdb: SDBF = SDBF({"app": app_db, "analytics_db": ...})
+```
+
 
 ***
 
@@ -47,26 +52,4 @@ realizations is a major topic in database research. What this means for FDM and 
 in the code (here in Python) does **not** necessarily reflect how it is stored on disk in memory, or how it is processed
 in the query engine (that is the beauty of SQL, and the same applies to FDM and FQL).
 
-
-
 ***
-
-### Frozen (Read-only) Attribute Functions
-
-In order to forbid data to be changed, you may freeze (make read-only) any attribute functions to disallow changes. You
-may do this through the initializer:
-
-```python
-t1: TF = TF({"name": "Tom", "company": "sample company"}, frozen=True)
-# t2, t3, ... accordingly
-
-persons: RF = RF({"t1": t1, "t2": t2, "t3": t3}, frozen=True)
-```
-
-If you try to change a frozen attribute function, a `ReadOnlyError` will be raised, e.g.:
-
-```python
-persons.t1 = t4 
-```
-
-will raise a `ReadOnlyError`.

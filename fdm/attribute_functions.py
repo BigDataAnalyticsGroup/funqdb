@@ -404,19 +404,25 @@ class DictionaryAttributeFunction[Key, Value](
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
-    """A dictionary-based attribute transformation_function that behaves like a tuple."""
+    """A dictionary-based attribute function that behaves like a tuple."""
 
     ...
 
 
 class RF[Key](DictionaryAttributeFunction[Key, TF]):
-    """A dictionary-based attribute transformation_function that behaves like a relation."""
+    """A dictionary-based attribute function that behaves like a relation."""
 
     ...
 
 
 class DBF[Key](DictionaryAttributeFunction[Key, RF]):
-    """A dictionary-based attribute transformation_function that behaves like a database."""
+    """A dictionary-based attribute function that behaves like a database."""
+
+    ...
+
+
+class SDBF[Key](DictionaryAttributeFunction[Key, DBF]):
+    """A dictionary-based attribute function that behaves like a set of databases."""
 
     ...
 
