@@ -13,20 +13,12 @@ class in_subset:
 
 
 class AttributeFunctionConstraint(ABC):
-    """Marks an attribute function constraint."""
+    """Marks an attribute function constraint, i.e. a constraint that must hold for the entire attribute function not
+    just one particular item."""
 
     @abstractmethod
     def __call__(self, attribute_function: AttributeFunction) -> bool:
         """Evaluates whether the given attribute_function fulfills the constraint."""
-        ...
-
-
-class ItemConstraint(ABC):
-    """Marks an item constraint."""
-
-    @abstractmethod
-    def __call__(self, item: Item) -> bool:
-        """Evaluates whether the given item fulfills the constraint."""
         ...
 
 
@@ -41,18 +33,7 @@ class attribute_name_equivalence(AttributeFunctionConstraint):
         return self.attribute_names == {item.key for item in attribute_function}
 
 
-class attribute_name_schema(ItemConstraint):
-    """Predicate that checks if the keys in a given item match a given set."""
-
-    def __init__(self, attribute_names: set[str]):
-        self.wrapped = attribute_name_equivalence(attribute_names=attribute_names)
-
-    def __call__(self, item: Item) -> bool:
-        assert type(item) is Item
-        return self.wrapped(item.value)
-
-
-class max_count(ItemConstraint):
+class max_count(AttributeFunctionConstraint):
     """Predicate that checks if the number of entries in a given item is below a maximum."""
 
     def __init__(self, max_count_limit: int):

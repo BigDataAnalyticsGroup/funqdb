@@ -2,7 +2,7 @@ from typing import Type
 
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import DictionaryAttributeFunction
-from fql.predicates.constraints import ItemConstraint, AttributeFunctionConstraint
+from fql.predicates.constraints import AttributeFunctionConstraint
 
 
 class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConstraint):
@@ -15,11 +15,11 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
         """Evaluates whether the given attribute_function fulfills the schema."""
         assert isinstance(attribute_function, AttributeFunction)
 
-        # check all keys in the schema are present in the attribute function and their types are compatible
+        # check if all keys in the schema are present in the attribute function and their types are compatible
         for item in attribute_function:
             if item.key not in self:
                 return False
-            if not issubclass(type(item.value), self[item.key]):
+            if not isinstance(item.value, self[item.key]):
                 return False
         return True
 

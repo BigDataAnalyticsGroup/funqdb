@@ -112,12 +112,12 @@ def test_group_by_aggregate_stepwise():
     db: DBF = _create_testdata(frozen=True)
     customers: RF = db.customers
 
-    # partition the users relation into two RFs: those name Tom and those not named Tom:
+    # partition the users RF into a DBF with one RF per partition: one with name Tom and one not named Tom:
     partitions = partition(lambda i: "Tom" if i.value.name == "Tom" else "not Tom")(
         customers
     )
 
-    # take the DBF of RF with partitions and return one RF with one aggregated TFs per partition:
+    # take partitions (a DBF of RFs) and return one RF with one aggregated TF per partition:
     aggregates = transform_items[DBF, RF](
         transformation_function=lambda item: Item(
             key=item.key, value=TF({"count": len(item.value)})

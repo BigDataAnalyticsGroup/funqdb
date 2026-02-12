@@ -3,6 +3,7 @@ from typing import Generator
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
+from fql.predicates.constraints import AttributeFunctionConstraint
 from fql.util import (
     Item,
     ConstraintViolationErrorFromOutside,
@@ -44,34 +45,67 @@ class DictionaryAttributeFunction[Key, Value](
 
         super().__init__()
 
-    def add_attribute_function_constraint(self, constraint):
+    def add_attribute_function_constraint(
+        self, constraint: AttributeFunctionConstraint
+    ):
         """Add an attribute function-constraint to this AttributeFunction.
         @param constraint: A callable that takes a value and returns True if the value satisfies the constraint, False otherwise.
         """
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to add a function constraint. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["af_constraint"].add(constraint)
 
     def remove_attribute_function_constraint(self, constraint):
         """Remove an attribute function-constraint from the AttributeFunction.
         @param constraint: The constraint to remove.
         """
+
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to remove a function constraint. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["af_constraint"].remove(constraint)
 
-    def add_items_constraint(self, constraint):
+    def add_items_constraint(self, constraint: AttributeFunctionConstraint):
         """Add an item-constraint to this AttributeFunction, i.e., this constraint must be fulfilled for all items.
         @param constraint: A callable that takes an Item and returns True if the item satisfies the constraint, False otherwise.
         """
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to add an items constraint. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["items_constraints"].add(constraint)
 
     def remove_items_constraint(self, constraint):
         """Remove an item-constraint from the AttributeFunction.
         @param constraint: The constraint to remove.
         """
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to remove an items constraint. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["items_constraints"].remove(constraint)
 
     def add_observer(self, observer: Observer):
         """Add an observer to the AttributeFunction.
         @param observer: The observer to add.
         """
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to add an observer. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["observers"].append(observer)
 
     def notify_observers(self, item: Item):
@@ -85,6 +119,12 @@ class DictionaryAttributeFunction[Key, Value](
         """Remove an observer from the AttributeFunction.
         @param observer: The observer to remove.
         """
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to remove an observer. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["observers"].remove(observer)
 
     def freeze(self):
@@ -123,18 +163,17 @@ class DictionaryAttributeFunction[Key, Value](
         else:
             raise AttributeError
 
-    def _check_items_constraints(
-        self, item: Item, triggered_by_notification: bool = False
+    def _check_value_constraints(
+        self, value: Value, triggered_by_notification: bool = False
     ):
         """Check all constraints on a given item.
         @param item: The item to check.
         @param triggered_by_notification: Whether the check was triggered by a notification from an observed value.
         """
         for constraint in self.__dict__["items_constraints"]:
-            if not constraint(item):
+            if not constraint(value):
                 message: str = (
-                    f"Value '{item.value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n "
-                    f"for key '{item.key}' and value '{item.value}'."
+                    f"Value '{value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n "
                 )
                 if triggered_by_notification:
                     raise ConstraintViolationErrorFromOutside(message)
@@ -166,7 +205,9 @@ class DictionaryAttributeFunction[Key, Value](
         # TODO: maybe we should keep an inverted index for that?
         for item in self:
             if item.value == observable:
-                self._check_items_constraints(item, triggered_by_notification=True)
+                self._check_value_constraints(
+                    item.value, triggered_by_notification=True
+                )
         # TODO: do we need to notify recursively here?
         # self.notify_observers(item)
         self._check_attribute_function_constraints(triggered_by_notification=True)
@@ -192,7 +233,8 @@ class DictionaryAttributeFunction[Key, Value](
         self.__dict__["data"][key] = value
 
         try:
-            self._check_items_constraints(item)
+            # TODO: maybe rename to value_constraints?
+            self._check_value_constraints(item.value)
             self._check_attribute_function_constraints()
         except ConstraintViolationError as e:
             # rollback change:
@@ -321,6 +363,13 @@ class DictionaryAttributeFunction[Key, Value](
 
     def add_lineage(self, entry: str):
         """Add an entry to the lineage of this AttributeFunction."""
+
+        # check if frozen:
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"attempt to add lineage. This DictionaryAttributeFunction is read-only."
+            )
+
         self.__dict__["lineage"].append(entry)
 
     def __getstate__(self):
