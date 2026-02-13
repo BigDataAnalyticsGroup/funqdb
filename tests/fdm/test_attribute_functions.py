@@ -6,6 +6,7 @@ from fdm.attribute_functions import (
     RF,
     DBF,
     CompositeKey,
+    RSF,
 )
 from fql.operators.filters import filter_items
 from fql.util import (
@@ -169,7 +170,7 @@ def test_relationship_function():
     customers: RF = db.customers
 
     # N:M-relationship between users and customers with an additional attribute "date" for each relationship:
-    meetings: RF = RF(frozen=False)
+    meetings: RSF = RSF(frozen=False)
     assert len(meetings) == 0
     # note that as we are assigning instances, we do not require an extra check like in the relational model that
     # the foreign key "exists"
@@ -179,7 +180,7 @@ def test_relationship_function():
     assert len(meetings) == 3
 
     # overwrites the previous meeting between user 2 and customer 1:
-    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2027-01-01"})
+    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "202-01-01"})
     assert len(meetings) == 3
 
     # lookup meetings for user 1:

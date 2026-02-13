@@ -11,6 +11,7 @@ from fql.util import (
     ReadOnlyError,
     KeyDeletedSentinel,
 )
+
 from store.store import Store
 
 
@@ -454,6 +455,16 @@ class CompositeKey:
     def subkey(self, index: int) -> AttributeFunction:
         """Get the subkey at the given index."""
         return self.keys[index]
+
+    def __len__(self) -> int:
+        """Get the number of subkeys in the CompositeKey."""
+        return len(self.keys)
+
+
+class RSF[Value](DictionaryAttributeFunction[CompositeKey, Value]):
+    """A dictionary-based attribute function that behaves like a relationship."""
+
+    ...
 
 
 class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
