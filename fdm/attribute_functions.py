@@ -1,8 +1,9 @@
 import inspect
-from typing import Generator
+from typing import Generator, Iterable
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
+from fql.operators.filters import filter_items
 from fql.predicates.constraints import AttributeFunctionConstraint
 from fql.util import (
     Item,
@@ -464,7 +465,21 @@ class CompositeKey:
 class RSF[Value](DictionaryAttributeFunction[CompositeKey, Value]):
     """A dictionary-based attribute function that behaves like a relationship."""
 
-    ...
+    def related_values(
+        self, subkey_index: int, subkey: AttributeFunction
+    ) -> Iterable[AttributeFunction]:
+        """Get the related values for a given subkey value at a given subkey index."""
+
+        return map(
+            lambda item: item.key.subkey(
+                subkey_index
+            ),  # extract the related subkey value at the given index from the composite key of the item
+            filter(
+                lambda item: item.key.subkey(subkey_index)
+                == subkey,  # filter items based on the subkey value at the given index
+                self,  # iterate on all items of this attribute function
+            ),
+        )
 
 
 class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):

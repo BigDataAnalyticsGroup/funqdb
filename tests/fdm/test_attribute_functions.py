@@ -195,6 +195,10 @@ def test_relationship_function():
     )
     assert len(res) == 2
 
+    # same through the more convenient syntax:
+    assert len(list(meetings.related_values(0, users[1]))) == 1
+    assert len(list(meetings.related_values(0, users[2]))) == 2
+
 
 def test_key_constraint():
     # This is implicitly and automatically given as the dictionary attribute function will not allow this!
