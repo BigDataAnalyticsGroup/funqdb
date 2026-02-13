@@ -1,8 +1,11 @@
 from fdm.attribute_functions import TF, RF, DBF
+from fdm.schema import Schema
 from fql.operators.filters import filter_items_scan
 
 
-def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
+def _create_testdata(
+    frozen: bool = False, observe_items: bool = False, add_schemas=False
+) -> DBF:
     """Creates test data for unit tests.
     @param frozen: Whether the created data structures should be frozen (read-only).
     @param observe_items: Whether the created data structures should observe item changes.
@@ -19,6 +22,8 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
         frozen=frozen,
         observe_items=observe_items,
     )
+    if add_schemas:
+        departments.add_values_constraint(Schema({"name": str, "budget": int}))
 
     # users tuples and relation:
     users: RF = RF(
@@ -31,6 +36,8 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
         frozen=frozen,
         observe_items=observe_items,
     )
+    if add_schemas:
+        users.add_values_constraint(Schema({"name": str, "yob": int, "department": TF}))
 
     # customers tuples and relation:
     customers: RF = RF(
@@ -45,6 +52,8 @@ def _create_testdata(frozen: bool = False, observe_items: bool = False) -> DBF:
         frozen=frozen,
         observe_items=observe_items,
     )
+    if add_schemas:
+        customers.add_values_constraint(Schema({"name": str, "company": str}))
 
     # database of relations:
     db: DBF = DBF(

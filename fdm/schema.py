@@ -49,6 +49,3 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
         @return: The hash value of the Schema.
         """
         return AttributeFunction.__hash__(self)
-
-
-# TODO: write test

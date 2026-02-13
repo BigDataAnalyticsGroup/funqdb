@@ -1,5 +1,3 @@
-from copy import copy
-
 import pytest
 
 from fdm.attribute_functions import (
@@ -9,13 +7,11 @@ from fdm.attribute_functions import (
     DBF,
     CompositeKey,
 )
-from fdm.schema import Schema
+from fql.operators.filters import filter_items
 from fql.util import (
     Item,
-    ConstraintViolationError,
-    ReadOnlyError,
 )
-from tests.lib import _create_testdata, _subset_DBF
+from tests.lib import _create_testdata
 
 
 def test_DictionaryAttributeFunction():
@@ -178,60 +174,25 @@ def test_relationship_function():
     # note that as we are assigning instances, we do not require an extra check like in the relational model that
     # the foreign key "exists"
     meetings[CompositeKey([users[1], customers[1]])] = TF({"date": "2024-01-01"})
-    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2024-01-01"})
-    meetings[CompositeKey([users[2], customers[3]])] = TF({"date": "2024-01-01"})
+    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2025-01-01"})
+    meetings[CompositeKey([users[2], customers[3]])] = TF({"date": "2026-01-01"})
     assert len(meetings) == 3
 
     # overwrites the previous meeting between user 2 and customer 1:
-    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2025-01-01"})
+    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2027-01-01"})
     assert len(meetings) == 3
 
+    # lookup meetings for user 1:
+    res: RF = filter_items(lambda i: i.key.subkey(0) == users[1], lambda _: RF())(
+        meetings
+    )
+    assert len(res) == 1
 
-def test_schema_constraint():
-    user = _subset_DBF({"users"}, frozen=False).users[1]
-
-    # create a schema that requires the keys "name", "yob" and "department" with any types:
-    user_schema = Schema({"name": str, "yob": int, "department": TF})
-    assert user_schema(user)
-
-    user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
-    user_wrong["extra_key"] = "extra_value"
-    assert user_schema(user_wrong) == False
-
-    user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
-    user_wrong["name"] = "asd"
-
-    assert user_schema(user_wrong) == True
-
-    # add schema to RF and check that it is enforced on all items:
-    users: RF = _subset_DBF({"users"}, frozen=True).users
-
-    # RF still frozen, cannot work:
-    with pytest.raises(ReadOnlyError):
-        users.add_values_constraint(user_schema)
-    users.unfreeze()
-
-    # now it works:
-    users.add_values_constraint(user_schema)
-
-    # wrong key:
-    with pytest.raises(ConstraintViolationError):
-        users[4] = TF(
-            {"namde": "Alice", "yob": 1990, "department": users[1].department}
-        )
-
-    # wrong type for "yob":
-    with pytest.raises(ConstraintViolationError):
-        users[4] = TF(
-            {"name": "Alice", "yob": "1990", "department": users[1].department}
-        )
-
-    # wrong type for "department":
-    with pytest.raises(ConstraintViolationError):
-        users[4] = TF({"name": "Alice", "yob": "1984", "department": RF})
-
-    # this works:
-    users[4] = TF({"name": "Alice", "yob": 1990, "department": users[1].department})
+    # lookup meetings for user 2:
+    res: RF = filter_items(lambda i: i.key.subkey(0) == users[2], lambda _: RF())(
+        meetings
+    )
+    assert len(res) == 2
 
 
 def test_key_constraint():

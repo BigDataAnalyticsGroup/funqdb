@@ -451,6 +451,10 @@ class CompositeKey:
         """Check if a given AttributeFunction is part of the CompositeKey."""
         return key in self.keys
 
+    def subkey(self, index: int) -> AttributeFunction:
+        """Get the subkey at the given index."""
+        return self.keys[index]
+
 
 class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
     """A tensor is simply a dictionary function with a composite key. It may have additional methods for tensor-specific
