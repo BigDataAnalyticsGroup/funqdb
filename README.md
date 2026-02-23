@@ -1,8 +1,6 @@
 # funqDB
 
-<blockquote>
-The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the long run.
-</blockquote>
+*The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the long run.*
 
 ## Background
 
@@ -22,6 +20,16 @@ FQL are much more expressive than the relational model and SQL. In addition, in 
 SQL, FQL integrates smoothly into existing programming languages. In our approach both QL
 and PL become the ‘same thing’, thus opening up several interesting holistic optimization
 opportunities between compilers and databases.
+
+```latex
+@inproceedings{dittrich2026FDMFQL,
+title={A Functional Data Model and Query Language is All You Need},
+author={Jens Dittrich},
+booktitle = {EDBT},
+year={2026},
+} 
+```
+
 </blockquote>
 
 We **highly** recommend reading that paper to understand the motivation and the ideas behind funqDB: **FDM**,
@@ -36,19 +44,52 @@ how to use it, and how to contribute.
 This project is in an early alpha state (I started implementing end of January 2026). This project is **not** (yet)
 ready for production use.
 It is a proof of concept for the ideas in the paper and a playground and thought experiment and exercise how a
-functional data model and functional query language may look like.
+functional data model (FDM) and functional query language (FQL) may look like. Currently, everything is implemented in
+Python (I love Python).
+Hence, performance-wise the current version will obviously not be a match against data processing done in C++ or Rust.
+However,
+keep in mind that most data management problems are "small". If you are wondering whether your data is "big" or "small",
+the likelihood is high (>95%) that your data is "small". By "small" I mean that it can be processed in memory on a
+single machine, using Python, and that will be just fine: you won't feel a performance bottleneck. The latter is
+actually one of the reasons why Python has become so popular for data processing in the past decade.
 
-My goal is to make this project as complete as possible, and make it
-usable in production environments as a replacement for ORMs, the relational model, and SQL.
+Anyway, notice, and as outlined in the paper, the ideas of FDM and FQL are not bound to one particular programming
+language: *FQL is just a programming language façade* (in this particular case a Python façade) for a backend. In
+the long run, I would like to have backends in other languages as well, e.g. Rust, C++, etc., and also support beyond
+tabular data, e.g. tensors, etc.
 
 ### Open Source
 
-I believe that such fundamental software as data management and query processing should be open. that is why I am
-publishing the project under AGPL. As my main job is being a Professor of Computer Science at Saarland University, I
-have the freedom to do this. However, I also have other obligations, e.g. teaching, research, administration, etc., so
+I believe that such fundamental software as data management and query processing should be open source. That is why I am
+publishing the project under an [AGPL license](LICENSE.txt). As my main job is being
+a [Professor of Computer Science at Saarland University](https://bigdata.uni-saarland.de/), I
+have the freedom to do this. However, I also have other obligations, e.g. [teaching](https://www.youtube.com/@jensdit),
+[research](https://bigdata.uni-saarland.de/publications/), administration, developing
+the [Masterhorst application system](https://apply.cs.uni-saarland.de) etc., so
 at this point, this cannot be a full time job (unfortunately).
 
-### Supported features include:
+### Contributing
+
+Eventually, I would like to back the development of this project by more people, ideally as part of a foundation.
+If you are interested in supporting this project through such a foundation financially, get in touch.
+
+If you are a developer and want to contribute code, in general, for bug reports and small fixes, you can just open
+an issue or a PR. For larger features, we first discuss the feature in an issue before starting to implement it, to make
+sure that we are on the same page about the feature and its implementation.
+
+For any PR make sure:
+
+1. that your PR is about a single issue, e.g. a bug fix, a new feature, etc., not a mix of multiple issues,
+2. that all your code is unit tested, you should have tests for all new features and bug fixes
+3. that you test (line) coverage is high, ideally 100%, but at least above 90%
+4. that all tests pass before submitting your PR, and that you have run all tests locally before submitting your PR
+5. that your code is well documented:
+    - docstrings for all public functions and classes
+    - code comments for all non-trivial code
+    - update the documentation if you add new features or change existing ones
+    - ideally also update the tutorial if you add new features or change existing ones
+
+### Already Supported features include:
 
 - [x] attribute functions (AFs) as replacements for tuples, relations, and databases, and sets of databases
 - [x] operators including simple relational algebra operators such as selection, projection, join, etc., but also
@@ -60,52 +101,51 @@ at this point, this cannot be a full time job (unfortunately).
   between AFs, e.g. one-to-many, many-to-many, etc.
 - [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
   cannot push down query processing
-- [x] automatic swizzlling/unswizzling of references
+- [x] automatic swizzling/unswizzling of references (for read)
 
 ### TODO and Ongoing Work:
 
 - [ ] pipelining
 - [ ] tensors
-- [ ] other non-Python backends
+- [ ] other non-Python (C++ or Rust) backends
 - [ ] query optimization
 - [ ] backends in other languages, e.g. Rust, C++, etc.
 
 ### Project Goals
 
-My midterm goals are:
+My **midterm** goals are:
 
 1. to have a complete implementation of the ideas in the [Dit26] paper.
 2. to have a complete [tutorial](docs/tutorial) and documentation for the project.
 3. to have minimal transactional processing capabilities, e.g. support for concurrent updates and ACID
 4. to have the project be capable of replacing ORMs in production environments, to proof the point...
 
-## Contributing
+My **longterm** goals are:
 
-Eventually, I would like to back development by more people, ideally as part of a foundation. If you are interested in
-supporting this project financially, get in touch. If you want to contribute code, make sure:
-
-1. that your PR is about a single issue, e.g. a bug fix, a new feature, etc., and that your PR is not a mix of multiple
-   issues,
-2. that all your code is unit tested, and that you have tests for all new features and bug fixes
-3. that all tests pass before submitting your PR, and that you have run all tests locally before submitting your PR
-4. that your code is well documented:
-    - docstrings for all public functions and classes
-    - code comments for all non-trivial code
-    - update the documentation if you add new features or change existing ones
-    - ideally also update the tutorial if you add new features or change existing ones
-
-In general, for bug reports and small fixes, you can just open an issue or a PR. For larger features, it would be good
-to first discuss the feature in an issue before starting to implement it, to make sure that we are on the same page
-about the feature and its implementation.
+5. other backends in other languages, e.g. Rust, C++, etc.
+6. other attribute functions beyond tabular data, e.g. tensors, etc.
+7. to have a complete implementation of the ideas in the [ND25] and [RD25] papers, i.e. support for database-returning
+   queries and query optimization for database-returning
 
 ## Installation
 
-for the moment there is the option to clone or download a zip of the repository and install the dependencies
+For the moment there is the option to clone or download a zip of the repository and install the dependencies
 through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
 
-## Usage
+## Tests
+
+All tests are located in the `tests` directory. You can run all tests through `pytest` in the project directory, e.g.
+through
+`pytest tests`. You can also run individual test files, e.g. `pytest tests/test_attribute_functions.py`.
+
+The tests also serve as a good starting point to understand how to use the project, as they contain a lot of
+textbook-style code examples.
+
+## Tutorial
 
 see the [tutorial](docs/tutorial/README.md)
+
+---
 
 ## Project History
 
@@ -115,6 +155,32 @@ The [Dit26] was preceded by a couple of previous version of that paper (with qui
 Dittrich. [A Functional Data Model and Query Language is All You Need](https://arxiv.org/abs/2507.20671). arXiv:
 2507.20671 [cs.DB].
 *This paper also contains a lot of Python/FQL code examples.*
+
+<blockquote>
+Abstract:
+
+We propose the vision of a functional data model (FDM) and an associated functional query language (FQL). Our proposal
+has far-reaching consequences: we show a path to come up with a modern QL that solves (almost if not) all problems of
+SQL (NULL-values, impedance mismatch, SQL injection, missing querying capabilities for updates, etc.). FDM and FQL are
+much more expressive than the relational model and SQL. In addition, in contrast to SQL, FQL integrates smoothly into
+existing programming languages. In our approach both QL and PL become the "same thing", thus opening up some interesting
+holistic optimization opportunities between compilers and databases. In FQL, we also do not need to force application
+developers to switch to unfamiliar programming paradigms (like SQL or datalog): developers can stick with the
+abstractions provided by their programming language.
+
+```latex
+@misc{dittrich2025functionaldatamodelquery,
+title={A Functional Data Model and Query Language is All You Need},
+author={Jens Dittrich},
+year={2025},
+eprint={2507.20671},
+archivePrefix={arXiv},
+primaryClass={cs.DB},
+url={https://arxiv.org/abs/2507.20671},
+}
+```
+
+</blockquote>
 
 But all of this started with this one: this was a thought experiment to explore the ideas that eventually led to the
 vision papers [Dit25b] and then [Dit26]. It
@@ -142,6 +208,19 @@ problems of SQL. Our QL is much more expressive than SQL and integrates smoothly
 PL). We also show results of an initial experiment showcasing that just by switching to our data model, and without
 changing the underlying query processing algorithms, we can achieve speed-ups of up to a factor 3. We will conclude
 that, if we build a database system from scratch, we could and should do this without SQL, RA, RM, ERM, and ORMs.
+
+```latex
+@misc{dittrich2025ridsqlrelationalalgebra,
+title={How to get Rid of SQL, Relational Algebra, the Relational Model, ERM, and ORMs in a Single Paper -- A Thought Experiment},
+author={Jens Dittrich},
+year={2025},
+eprint={2504.12953},
+archivePrefix={arXiv},
+primaryClass={cs.DB},
+url={https://arxiv.org/abs/2504.12953},
+}
+```
+
 </blockquote>
 
 
@@ -172,6 +251,17 @@ several SQL-based rewrite methods. In addition, we present an efficient algorith
 that we integrated into an open-source database system. We conduct a comprehensive experimental study. Our results show
 that returning multiple individual result sets can significantly decrease the result set size. Furthermore, our rewrite
 methods and algorithm introduce minimal overhead and can even outperform single-table execution in certain cases.
+
+```latex
+@inproceedings{Nix2025ExtendingSQL,
+title={Extending SQL to Return a Subdatabase},
+author={Joris Nix and Jens Dittrich},
+year={2025}
+booktitle = {SIGMOD},
+publisher = {ACM}
+}
+```
+
 </blockquote>
 
 <a id="5">[RD25]</a> Simon Rink, Jens
@@ -205,6 +295,22 @@ introduced by our methods remains minimal. Furthermore, by effectively solving t
 speed-up in query execution time for ResultDB<sub>Semi-Join</sub>, whereas TD<sub>ResultDB</sub> consistently selects
 the best available
 plans.
+
+```latex
+@inproceedings{RinkD2026,
+title={Query Optimization for Database-Returning Queries},
+author={Simon Rink and Jens Dittrich},
+issue_date = {December 2025},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {3},
+number = {6},
+journal = {Proc. ACM Manag. Data},
+url = {https://doi.org/10.1145/3769818},
+doi = {10.1145/3769818},
+}
+```
+
 </blockquote>
 
 ## License
