@@ -1,15 +1,15 @@
 # funqDB
 
-## Background
-
 <blockquote>
 The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the long run.
 </blockquote>
+
+## Background
+
 funqDB is built around the central ideas of the vision paper:
 
 <a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
-the
-25th International Conference on Extending Database Technology ([EDBT 2026](https://edbticdt2026.github.io)).
+the 25th International Conference on Extending Database Technology ([EDBT 2026](https://edbticdt2026.github.io)).
 
 <blockquote>
 Abstract:
@@ -29,9 +29,87 @@ and **FQL**.
 This README is not meant to be a replacement for the paper, but rather a guide to the project and its current state,
 how to use it, and how to contribute.
 
-## History
+## State of this Project
 
-That paper, [Dit26], was preceded by a couple of previous version of that paper (with quite some variation in content):
+### Summary
+
+This project is in an early alpha state (I started implementing end of January 2026). This project is **not** (yet)
+ready for production use.
+It is a proof of concept for the ideas in the paper and a playground and thought experiment and exercise how a
+functional data model and functional query language may look like.
+
+My goal is to make this project as complete as possible, and make it
+usable in production environments as a replacement for ORMs, the relational model, and SQL.
+
+### Open Source
+
+I believe that such fundamental software as data management and query processing should be open. that is why I am
+publishing the project under AGPL. As my main job is being a Professor of Computer Science at Saarland University, I
+have the freedom to do this. However, I also have other obligations, e.g. teaching, research, administration, etc., so
+at this point, this cannot be a full time job (unfortunately).
+
+### Supported features include:
+
+- [x] attribute functions (AFs) as replacements for tuples, relations, and databases, and sets of databases
+- [x] operators including simple relational algebra operators such as selection, projection, join, etc., but also
+  more complex ones such as subdatabase, group-by, etc.
+- [x] an observer mechanism for AFs, i.e. when an AF is updated, all AFs that depend on it are informed and can react to
+  the change
+- [x] support for composite primary keys
+- [x] relationship functions (RFs) as replacements for n:m-relationships, i.e. they can be used to express relationships
+  between AFs, e.g. one-to-many, many-to-many, etc.
+- [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
+  cannot push down query processing
+- [x] automatic swizzlling/unswizzling of references
+
+### TODO and Ongoing Work:
+
+- [ ] pipelining
+- [ ] tensors
+- [ ] other non-Python backends
+- [ ] query optimization
+- [ ] backends in other languages, e.g. Rust, C++, etc.
+
+### Project Goals
+
+My midterm goals are:
+
+1. to have a complete implementation of the ideas in the [Dit26] paper.
+2. to have a complete [tutorial](docs/tutorial) and documentation for the project.
+3. to have minimal transactional processing capabilities, e.g. support for concurrent updates and ACID
+4. to have the project be capable of replacing ORMs in production environments, to proof the point...
+
+## Contributing
+
+Eventually, I would like to back development by more people, ideally as part of a foundation. If you are interested in
+supporting this project financially, get in touch. If you want to contribute code, make sure:
+
+1. that your PR is about a single issue, e.g. a bug fix, a new feature, etc., and that your PR is not a mix of multiple
+   issues,
+2. that all your code is unit tested, and that you have tests for all new features and bug fixes
+3. that all tests pass before submitting your PR, and that you have run all tests locally before submitting your PR
+4. that your code is well documented:
+    - docstrings for all public functions and classes
+    - code comments for all non-trivial code
+    - update the documentation if you add new features or change existing ones
+    - ideally also update the tutorial if you add new features or change existing ones
+
+In general, for bug reports and small fixes, you can just open an issue or a PR. For larger features, it would be good
+to first discuss the feature in an issue before starting to implement it, to make sure that we are on the same page
+about the feature and its implementation.
+
+## Installation
+
+for the moment there is the option to clone or download a zip of the repository and install the dependencies
+through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
+
+## Usage
+
+see the [tutorial](docs/tutorial/README.md)
+
+## Project History
+
+The [Dit26] was preceded by a couple of previous version of that paper (with quite some variation in content):
 
 <a id="3">[Dit25b]</a> Jens
 Dittrich. [A Functional Data Model and Query Language is All You Need](https://arxiv.org/abs/2507.20671). arXiv:
@@ -128,51 +206,6 @@ speed-up in query execution time for ResultDB<sub>Semi-Join</sub>, whereas TD<su
 the best available
 plans.
 </blockquote>
-
-## Current State of the Project
-
-This project is in an early alpha state (we started implementing end of January 2026) and it is not (yet) ready for
-production use.
-It is a proof of concept for the ideas in the paper. Yet our goal is to make it as complete as possible, and make it
-usable in production
-environments.
-
-### Supported features include:
-
-- [x] attribute functions (AFs) as replacements for tuples, relations, and databases, and sets of databases
-- [x] operators including simple relational algebra operators such as selection, projection, join, etc., but also
-  more complex ones such as subdatabase, group-by, etc.
-- [x] an observer mechanism for AFs, i.e. when an AF is updated, all AFs that depend on it are informed and can react to
-  the change
-- [x] support for composite primary keys
-- [x] relationship functions (RFs) as replacements for n:m-relationships, i.e. they can be used to express relationships
-  between AFs, e.g. one-to-many, many-to-many, etc.
-- [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
-  cannot push down query processing
-- [x] automatic swizzlling/unswizzling of references
-
-### TODO and ongoing work:
-
-- [ ] pipelining
-- [ ] tensors
-- [ ] other non-Python backends
-- [ ] query optimization
-- [ ] backends in other languages, e.g. Rust, C++, etc.
-
-## Installation
-
-for the moment there is the option to clone or download a zip of the repository and install the dependencies
-through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
-
-## Usage
-
-see the [tutorial](docs/tutorial/README.md)
-
-## Contributing
-
-If you want to contribute code to this project, let me know. You should have a solid background in databases as well as
-software engineering concepts like unit testing, proper documentation, design patterns, software architecture,
-git/gitlab as well as a team- and fun(q)-oriented working style.
 
 ## License
 
