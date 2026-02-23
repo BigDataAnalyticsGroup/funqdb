@@ -54,9 +54,8 @@ single machine, using Python, and that will be just fine: you won't feel a perfo
 actually one of the reasons why Python has become so popular for data processing in the past decade.
 
 Anyway, notice, and as outlined in the paper, the ideas of FDM and FQL are not bound to one particular programming
-language: *FQL is just a programming language façade* (in this particular case a Python façade) for a backend. In
-the long run, I would like to have backends in other languages as well, e.g. Rust, C++, etc., and also support beyond
-tabular data, e.g. tensors, etc.
+language: *FQL is just a programming language façade* (in this particular case a *Python façade*) for a backend. In
+the long run, I would like to have façades in other languages, as well as a C++ or Rust backend.
 
 ### Open Source
 
@@ -106,10 +105,10 @@ For any PR make sure:
 ### TODO and Ongoing Work:
 
 - [ ] pipelining
-- [ ] tensors
 - [ ] other non-Python (C++ or Rust) backends
-- [ ] query optimization
+- [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [ ] backends in other languages, e.g. Rust, C++, etc.
+- [ ] tensors
 
 ### Project Goals
 
@@ -149,7 +148,7 @@ see the [tutorial](docs/tutorial/README.md)
 
 ## Project History
 
-The [Dit26] was preceded by a couple of previous version of that paper (with quite some variation in content):
+The [Dit26] paper was preceded by a couple of previous version of that paper (with quite some variation in content):
 
 <a id="3">[Dit25b]</a> Jens
 Dittrich. [A Functional Data Model and Query Language is All You Need](https://arxiv.org/abs/2507.20671). arXiv:
@@ -200,9 +199,8 @@ both the relational model(RM) and the entity-relationship model (ERM). We provid
 map type model (RMTM) which can represent both RM and ERM as special cases and overcomes all of their problems. We
 proceed to identify seven rules that an RMTM query language (QL) must fulfill and provide a foundation of a language
 fulfilling all seven rules. Our QL operates on maps which may represent tuples, relations, databases or sets of
-databases. Like that we dramatically expand the existing operational abstractions found in SQL and relational algebra (
-RA)
-which only operate on relations/tables. In fact, RA is just a special case of our much more generic approach. This
+databases. Like that we dramatically expand the existing operational abstractions found in SQL and relational algebra
+(RA) which only operate on relations/tables. In fact, RA is just a special case of our much more generic approach. This
 work has far-reaching consequences: we show a path how to come up with a modern QL that solves (almost if not) all
 problems of SQL. Our QL is much more expressive than SQL and integrates smoothly into existing programming languages (
 PL). We also show results of an initial experiment showcasing that just by switching to our data model, and without
