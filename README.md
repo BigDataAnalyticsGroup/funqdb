@@ -94,55 +94,77 @@ For any PR make sure:
 - [x] operators including simple relational algebra operators such as selection, projection, join, etc., but also
   more complex ones such as subdatabase, group-by, etc.
 - [x] an observer mechanism for AFs, i.e. when an AF is updated, all AFs that depend on it are informed and can react to
-  the change
+  the change (TODO: make this work through the store)
 - [x] support for composite primary keys
 - [x] relationship functions (RFs) as replacements for n:m-relationships, i.e. they can be used to express relationships
   between AFs, e.g. one-to-many, many-to-many, etc.
 - [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
   cannot push down query processing
-- [x] automatic swizzling/unswizzling of references (for read)
+- [x] automatic on-demand swizzling/unswizzling of references (for read, TODO: writes)
 
 ### TODO and Ongoing Work:
 
+- [ ] updates and transactions
 - [ ] pipelining
-- [ ] other non-Python (C++ or Rust) backends
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [ ] backends in other languages, e.g. Rust, C++, etc.
-- [ ] tensors
+- [ ] façades in other languages
+- [ ] other non-flat data like tensors
 
 ### Project Goals
 
-My **midterm** goals are:
+My **mid term** goals are:
 
 1. to have a complete implementation of the ideas in the [Dit26] paper.
 2. to have a complete [tutorial](docs/tutorial) and documentation for the project.
-3. to have minimal transactional processing capabilities, e.g. support for concurrent updates and ACID
-4. to have the project be capable of replacing ORMs in production environments, to proof the point...
+3. to have minimal transactional processing capabilities (in Python, but this can also be done in non-Python backends):
+    1. e.g. CRUD support for concurrent updates and ACID
+    2. MVCC
+    3. recovery
+    4. database versioning as of [this paper](https://vldb.org/cidrdb/papers/2025/p24-yilmaz.pdf)
+4. to have the project capable of replacing ORMs in production environments, to proof the point...:
+    1. sample Django project using FDM and FQL rather than sqlite
+    2. data model definitions without resorting to automatic and manual migrations
+    3. POC for ResultDB extension
 
-My **longterm** goals are:
+5. educational slide sets
+6. educational videos that can be used for lectures
 
-5. other backends in other languages, e.g. Rust, C++, etc.
-6. other attribute functions beyond tabular data, e.g. tensors, etc.
-7. to have a complete implementation of the ideas in the [ND25] and [RD25] papers, i.e. support for database-returning
-   queries and query optimization for database-returning
+My **long term** goals are:
 
-## Installation
+1. other backends in other languages, e.g. Rust, C++, etc. (volunteers needed)
+2. other attribute functions beyond tabular data, e.g. tensors, etc.  (volunteers needed)
+3. to have a complete implementation of the ideas in the [ND25] and [RD25] papers, i.e. support for database-returning
+   queries and query optimization for database-returning  (volunteers needed)
+
+## Getting Started
+
+### Installation
 
 For the moment there is the option to clone or download a zip of the repository and install the dependencies
 through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
 
-## Tests
+### Tutorial
+
+see the [tutorial](docs/tutorial/README.md) which is work in progress
+
+### Tests
 
 All tests are located in the `tests` directory. You can run all tests through `pytest` in the project directory, e.g.
 through
 `pytest tests`. You can also run individual test files, e.g. `pytest tests/test_attribute_functions.py`.
 
 The tests also serve as a good starting point to understand how to use the project, as they contain a lot of
-textbook-style code examples.
+textbook-style code examples. I often re-use the examples from the tests in the [tutorial](docs/tutorial/README.md).
 
-## Tutorial
+### Talks
 
-see the [tutorial](docs/tutorial/README.md)
+upcoming, see [talks](docs/talks)
+
+### Videos
+
+TODO, will be published [here](https://www.youtube.com/jensdit)
+
 
 ---
 
