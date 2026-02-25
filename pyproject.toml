@@ -11,8 +11,8 @@ requires-python = ">=3.12"
 [tool.poetry.dependencies]
 pytest = ">=9.0.2, <10.0.0"
 black = ">=26.1.0, <27.0.0"
-sqlitedict = ">=2.1.0,<3.0.0"
-sphinx = "=9.1.0,<10.0.0"
+sqlitedict = ">=2.1.0, <3.0.0"
+sphinx = "=9.1.0, <10.0.0"
 coverage = { extras = ["toml"], version = "7.10.6" }
 
 [build-system]

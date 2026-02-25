@@ -37,9 +37,7 @@ pytest:
     - poetry install --no-root
     # Run all unit tests with coverage
     - poetry run coverage run -m pytest
-    # Combine potential coverage files
-    - coverage combine
-    # Generage coverage reports
+    # Generate coverage reports
     - coverage html --fail-under=80
     - coverage json --fail-under=80
   interruptible: true
