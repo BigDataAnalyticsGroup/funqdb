@@ -36,6 +36,13 @@ pytest:
     # Use most recent version from Pipfile
     - poetry install --no-root
     # Run all unit tests with coverage
-    - poetry run pytest
+    - poetry run coverage run pytest
   interruptible: true
+  artifacts:
+    # Take whole HTML folder and the json report
+    name: "coverage-report-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - htmlcov-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/*
+      - coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.json
+    expire_in: 1 week
 
