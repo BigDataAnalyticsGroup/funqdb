@@ -55,7 +55,7 @@ pytest:
 check-coverage:
   stage: test
   tags:
-    - dev
+    - test
   variables:
     MIN_COVERAGE_NEW: "90"
     MIN_COVERAGE_OLD: "81"
