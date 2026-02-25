@@ -36,6 +36,42 @@ pytest:
     # Use most recent version from Pipfile
     - poetry install --no-root
     # Run all unit tests with coverage
-    - poetry run pytest
+    - poetry run coverage run -m pytest
+    # Generate coverage reports
+    - coverage html --fail-under=80
+    - cp -r htmlcov htmlcov-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+    - coverage json --fail-under=80
+    - cp coverage.json coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.json
   interruptible: true
+  artifacts:
+    # Take whole HTML folder and the json report
+    name: "coverage-report-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    paths:
+      - htmlcov-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/*
+      - coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.json
+    expire_in: 1 week
+
+
+check-coverage:
+  stage: test
+  tags:
+    - test
+  variables:
+    MIN_COVERAGE_NEW: "90"
+    MIN_COVERAGE_OLD: "81"
+    COVERAGE_EPSILON: "3.14"
+  dependencies:
+    - pytest
+  script:
+    - ./ci/check-coverage.sh
+  needs:
+    - job: pytest
+    - project: $CI_PROJECT_PATH
+      job: pytest
+      ref: $CI_DEFAULT_BRANCH
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "ci-deployment"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
 
