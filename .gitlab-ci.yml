@@ -61,7 +61,7 @@ check-coverage:
     MIN_COVERAGE_OLD: "81"
     COVERAGE_EPSILON: "3.14"
   dependencies:
-    - test-django
+    - pytest
   script:
     - cd docker/ci
     - ./coverage/check-coverage.sh
