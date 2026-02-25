@@ -51,3 +51,28 @@ pytest:
       - coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.json
     expire_in: 1 week
 
+
+check-coverage:
+  stage: test
+  tags:
+    - dev
+  variables:
+    MIN_COVERAGE_NEW: "90"
+    MIN_COVERAGE_OLD: "81"
+    COVERAGE_EPSILON: "3.14"
+  dependencies:
+    - test-django
+  script:
+    - cd docker/ci
+    - ./coverage/check-coverage.sh
+  needs:
+    - job: pytest
+    - project: $CI_PROJECT_PATH
+      job: pytest
+      ref: $CI_DEFAULT_BRANCH
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "ci-deployment"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+
