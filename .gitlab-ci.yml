@@ -63,8 +63,7 @@ check-coverage:
   dependencies:
     - pytest
   script:
-    - cd docker/ci
-    - ./coverage/check-coverage.sh
+    - ./ci/check-coverage.sh
   needs:
     - job: pytest
     - project: $CI_PROJECT_PATH
