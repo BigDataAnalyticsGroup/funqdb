@@ -36,7 +36,12 @@ pytest:
     # Use most recent version from Pipfile
     - poetry install --no-root
     # Run all unit tests with coverage
-    - poetry run coverage run pytest
+    - poetry run coverage run -m pytest
+    # Combine potential coverage files
+    - coverage combine
+    # Generage coverage reports
+    - coverage html --fail-under=80
+    - coverage json --fail-under=80
   interruptible: true
   artifacts:
     # Take whole HTML folder and the json report
