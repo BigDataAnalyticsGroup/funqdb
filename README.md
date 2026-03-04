@@ -41,7 +41,7 @@ how to use it, and how to contribute.
 
 ### Summary
 
-This project is in an early alpha state (I started implementing end of January 2026). This project is **not** (yet)
+This project is in an **early alpha state** (I started implementing end of January 2026). This project is **not** (yet)
 ready for production use.
 It is a proof of concept for the ideas in the paper and a playground and thought experiment and exercise how a
 functional data model (FDM) and functional query language (FQL) may look like. Currently, everything is implemented in
@@ -159,11 +159,11 @@ textbook-style code examples. I often re-use the examples from the tests in the 
 
 ### Talks
 
-upcoming, see [talks](docs/talks)
+see [talks](docs/talks)
 
 ### Videos
 
-TODO, will be published [here](https://www.youtube.com/jensdit)
+will be published [here](https://www.youtube.com/jensdit)
 
 
 ---
