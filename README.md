@@ -6,7 +6,9 @@
 
 funqDB is built around the central ideas of the vision paper:
 
-<a id="1">[Dit26]</a> Dittrich, Jens. "A Functional Data Model and Query Language is All You Need." In Proceedings of
+<a id="1">[Dit26]</a> Dittrich,
+Jens. <a href="https://bigdata.uni-saarland.de/publications/Dittrich%20-%20A%20Functional%20Data%20Model%20and%20Query%20Language%20is%20All%20You%20Need%20@EDBT2026.pdf">
+A Functional Data Model and Query Language is All You Need.</a> In Proceedings of
 the 25th International Conference on Extending Database Technology ([EDBT 2026](https://edbticdt2026.github.io)).
 
 <blockquote>
@@ -115,7 +117,9 @@ For any PR make sure:
 
 My **mid term** goals are:
 
-1. to have a complete implementation of the ideas in the [Dit26] paper.
+1. to have a complete implementation of the ideas in
+   the <a href="https://bigdata.uni-saarland.de/publications/Dittrich%20-%20A%20Functional%20Data%20Model%20and%20Query%20Language%20is%20All%20You%20Need%20@EDBT2026.pdf">[Dit26]
+   paper</a>.
 2. to have a complete [tutorial](docs/tutorial) and documentation for the project.
 3. to have minimal transactional processing capabilities (in Python, but this can also be done in non-Python backends):
     1. e.g. CRUD support for concurrent updates and ACID
@@ -170,7 +174,8 @@ will be published [here](https://www.youtube.com/jensdit)
 
 ## Project History
 
-The [Dit26] paper was preceded by a couple of previous version of that paper (with quite some variation in content):
+The <a href="https://bigdata.uni-saarland.de/publications/Dittrich%20-%20A%20Functional%20Data%20Model%20and%20Query%20Language%20is%20All%20You%20Need%20@EDBT2026.pdf">[Dit26]
+paper</a> was preceded by a couple of previous version of that paper (with quite some variation in content):
 
 <a id="3">[Dit25b]</a> Jens
 Dittrich. [A Functional Data Model and Query Language is All You Need](https://arxiv.org/abs/2507.20671). arXiv:
