@@ -21,16 +21,16 @@
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
-from fql.operators.filters import filter_items_scan, filter_items
+from fql.operators.filters import fil, filter_items
 from fql.util import Item
-from tests.lib import _create_testdata, _subset_DBF
+from tests.lib import _create_testdata, _subset_DBF, _subset_highly_filtered_DBF
 
 
 def test_filter_items():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = filter_items_scan[RF, RF](
+    filter_RF: Operator[RF, RF] = fil[RF, RF](
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
@@ -43,11 +43,47 @@ def test_filter_items():
     assert filtered_user_names == {"Horst", "Tom"}
 
 
+def test_filter_items_multiple_filters():
+    db: DBF = _subset_highly_filtered_DBF(frozen=True)
+    departments: RF = db.departments
+    assert len(departments) == 1
+
+    users: RF = db.users
+    assert len(users) == 1
+
+
+def test_filter_as_a_parameter():
+    db: DBF = _create_testdata(frozen=True)
+
+    class A:
+        def foo(self, **kwargs):
+            print("foo", kwargs)
+
+        def __call__(self, *args, **kwargs):
+            """Make the object callable through () syntax.
+            @return: The result of the call.
+            """
+            print("args", args)
+            print("kwargs", kwargs)
+
+    a: A = A()
+    a.foo(d=4)
+    a(12, d=42)
+
+
+def test_AF_instantiation():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    # instantiate an attribute function subtype instance with the same type as variable users:
+    relation = type(users)()
+    assert type(relation) == RF
+
+
 def test_filter_items_reused_and_chained():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = filter_items_scan[RF, RF](
+    filter_RF: Operator[RF, RF] = fil[RF, RF](
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
@@ -93,7 +129,7 @@ def test_filter_items_complement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filter_RF: Operator[RF, RF] = filter_items_scan[RF, RF](
+    filter_RF: Operator[RF, RF] = fil[RF, RF](
         filter_predicate=filter_predicate_complement,
         output_factory=lambda _: RF(),
     )

@@ -23,7 +23,7 @@ from typing import Callable, Any
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
-from fql.operators.filters import filter_items_scan
+from fql.operators.filters import fil
 
 
 class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -102,14 +102,14 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         # create a reduced output database:
         output_DBF = DBF(frozen=False)
 
-        # add reduced relations, delegated to filter_items_scan operator:
+        # add reduced relations, delegated to fil operator:
         # left relation:
-        output_DBF[self.left] = filter_items_scan[RF, RF](
+        output_DBF[self.left] = fil[RF, RF](
             lambda i: i.key in left_qualifying_items, lambda _: RF(frozen=False)
         )(left_RF)
 
         # right relation:
-        output_DBF[self.right] = filter_items_scan[RF, RF](
+        output_DBF[self.right] = fil[RF, RF](
             lambda i: i.key in right_qualifying_items, lambda _: RF(frozen=False)
         )(right_RF)
 

@@ -21,7 +21,7 @@
 
 from fdm.attribute_functions import TF, RF, DBF
 from fdm.schema import Schema
-from fql.operators.filters import filter_items_scan
+from fql.operators.filters import fil
 
 
 def _create_testdata(
@@ -92,12 +92,29 @@ def _create_testdata(
 
 
 def _users_customers_DBF(frozen: bool = True) -> DBF:
-    return filter_items_scan(
-        lambda i: i.key in ["users", "customers"], lambda _: DBF()
-    )(_create_testdata(frozen=frozen))
+    return fil(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+        _create_testdata(frozen=frozen)
+    )
+
+
+def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
+    db: DBF = _create_testdata(frozen=False)
+    departments: RF = db.departments
+    users: RF = db.users
+    # TODO: the syntax is too complicated, need sargable filters that can be easily applied to any attribute function
+    return DBF(
+        data={
+            "departments": departments(name="Dev"),
+            # ),
+            #            "departments": fil(lambda i: i.value.name == "Dev", lambda _: RF())(
+            #                departments
+            #            ),
+            "users": fil(lambda i: i.value.name == "Horst", lambda _: RF())(users),
+        }
+    )
 
 
 def _subset_DBF(whitelist: set[str], frozen: bool = True, observe_items=False) -> DBF:
-    return filter_items_scan(lambda i: i.key in whitelist, lambda _: DBF())(
+    return fil(lambda i: i.key in whitelist, lambda _: DBF())(
         _create_testdata(frozen=frozen, observe_items=observe_items)
     )

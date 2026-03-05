@@ -41,7 +41,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        """Initialize the filter_items_scan operator.
+        """Initialize the fil operator.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be kept, False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
@@ -56,9 +56,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         if not create_lineage:
             # standard python filter operation returning list of values
             assert input_function is not None
-            return filter_items_scan(self.filter_predicate, self.output_factory)(
-                input_function
-            )
+            return fil(self.filter_predicate, self.output_factory)(input_function)
         else:  # execute on db:
             # create lineage without executing anything
             output_function: OUTPUT_AttributeFunction = self.output_factory(None)
@@ -71,7 +69,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             return output_function
 
 
-class filter_items_scan[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class fil[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that filters the values found in the input instance. In contrast to standard filter operations
@@ -88,7 +86,7 @@ class filter_items_scan[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def explain(self) -> str:
         """Explains the filter."""
-        return f"filter_items_scan operator with predicate {self.filter_predicate}."
+        return f"fil operator with predicate {self.filter_predicate}."
 
     def __call__(
         self, input_function: INPUT_AttributeFunction, create_lineage=False
@@ -121,9 +119,9 @@ class filter_items_scan[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
-    filter_items_scan[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+    fil[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """Computes the complement of the filter_items_scan operator."""
+    """Computes the complement of the fil operator."""
 
     def __init__(
         self,
@@ -140,5 +138,5 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
     def __call__(
         self, input_function: INPUT_AttributeFunction, create_lineage=False
     ) -> OUTPUT_AttributeFunction:
-        """Call the filter_items_scan operator with the negated predicate."""
+        """Call the fil operator with the negated predicate."""
         super.__call__(lambda x: not self.filter_predicate)

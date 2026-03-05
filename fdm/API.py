@@ -115,7 +115,21 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Make the object callable through () syntax.
         @return: The result of the call.
         """
-        return self.__getitem__(*args, **kwargs)
+        if len(kwargs) > 0:
+            # TODO:
+            # allow kwargs to carry filter conditions in order to enable easy filters,
+            #  then return a new(!) filtered instance
+            logger.warning(
+                "Keyword arguments are currently not supported in __call__; ignoring them."
+            )
+            # create a new instance of the same type as self and return it:
+            ret: AttributeFunction = type(self)()
+            # filter the items of self based on the kwargs and enter them into ret:
+            # TODO
+            # evaluate filter conditions based on kwargs and filter items of self accordingly, then enter them into ret
+
+            return ret
+        return self.__getitem__(*args)
 
     @abstractmethod
     def __eq__(self, other: "AttributeFunction") -> bool:
