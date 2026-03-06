@@ -21,7 +21,7 @@
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
-from fql.operators.filters import fil, filter_items
+from fql.operators.filters import filter_values, filter_items
 from fql.util import Item
 from tests.lib import _create_testdata, _subset_DBF, _subset_highly_filtered_DBF
 
@@ -30,7 +30,7 @@ def test_filter_items():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = fil[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
@@ -66,9 +66,15 @@ def test_filter_as_a_parameter():
             print("args", args)
             print("kwargs", kwargs)
 
+        def __getitem__(self, key):
+            """Make the object callable through []-syntax."""
+            return "bla"
+
     a: A = A()
     a.foo(d=4)
     a(12, d=42)
+    assert a["test"] == "bla"
+    assert a(a=42) == None
 
 
 def test_AF_instantiation():
@@ -83,7 +89,7 @@ def test_filter_items_reused_and_chained():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = fil[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
@@ -129,7 +135,7 @@ def test_filter_items_complement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filter_RF: Operator[RF, RF] = fil[RF, RF](
+    filter_RF: Operator[RF, RF] = filter_values[RF, RF](
         filter_predicate=filter_predicate_complement,
         output_factory=lambda _: RF(),
     )

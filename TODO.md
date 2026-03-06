@@ -2,17 +2,18 @@
 
 - need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
 - from the store
+- [ONGOING] simpler additional filter syntax on attribute functions
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 - [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
 - [ ] done with care, maybe only allow loading from trusted sources
-- https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
+- [ ] https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
 
 ### Github
 - [x] mirroring from gitlab
-- [ ] license: AGPL LGTM, asked triathlon for the official statement
-- [ ] add license header to every file
-- [ ] write decent README.md, see template in the wiki
+- [x] license: AGPL
+- [x] add license header to every file
+- [x] write decent README.md, see template in the wiki
 
 
 ### Other tasks

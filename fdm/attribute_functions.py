@@ -256,7 +256,6 @@ class DictionaryAttributeFunction[Key, Value](
         self.__dict__["data"][key] = value
 
         try:
-            # TODO: maybe rename to value_constraints?
             self._check_value_constraints(item.value)
             self._check_attribute_function_constraints()
         except ConstraintViolationError as e:

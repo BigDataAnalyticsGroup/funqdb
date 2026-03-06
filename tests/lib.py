@@ -20,8 +20,8 @@
 
 
 from fdm.attribute_functions import TF, RF, DBF
-from fdm.schema import Schema
-from fql.operators.filters import fil
+from fdm.schema import Schema, ForeignKeyConstraint
+from fql.operators.filters import filter_values
 
 
 def _create_testdata(
@@ -54,9 +54,13 @@ def _create_testdata(
             3: TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen),
         },
         lineage=["RF(users)"],
-        frozen=frozen,
+        frozen=False,
         observe_items=observe_items,
     )
+    users.add_values_constraint(ForeignKeyConstraint("department", departments))
+    if frozen:
+        users.freeze()
+
     if add_schemas:
         users.add_values_constraint(Schema({"name": str, "yob": int, "department": TF}))
 
@@ -92,7 +96,7 @@ def _create_testdata(
 
 
 def _users_customers_DBF(frozen: bool = True) -> DBF:
-    return fil(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+    return filter_values(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
         _create_testdata(frozen=frozen)
     )
 
@@ -104,17 +108,27 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
     # TODO: the syntax is too complicated, need sargable filters that can be easily applied to any attribute function
     return DBF(
         data={
-            "departments": departments(name="Dev"),
-            # ),
-            #            "departments": fil(lambda i: i.value.name == "Dev", lambda _: RF())(
-            #                departments
-            #            ),
-            "users": fil(lambda i: i.value.name == "Horst", lambda _: RF())(users),
+            # "departments": departments,
+            "departments": filter_values(
+                lambda i: i.value.name == "Dev", lambda _: RF()
+            )(departments),
+            "users": filter_values(lambda i: i.value.name == "Horst", lambda _: RF())(
+                users
+            ),
+            # goal:
+            # "departments": filter_values(lambda val: val.name == "Dev")(departments),
+            # "users": filter_values(lambda val: val.name == "Horst")(users),
+            # or:
+            # shall we create a shortcut for easy filtering on values of items in a relation?
+            # this could technically be similar to filters in Django ORM, yet, the "_"-syntax is not very intuitive,
+            # maybe we can do better here?
+            # "departments": departments.where(name="Dev"),
+            # "users": users.where(name="Horst"),
         }
     )
 
 
 def _subset_DBF(whitelist: set[str], frozen: bool = True, observe_items=False) -> DBF:
-    return fil(lambda i: i.key in whitelist, lambda _: DBF())(
+    return filter_values(lambda i: i.key in whitelist, lambda _: DBF())(
         _create_testdata(frozen=frozen, observe_items=observe_items)
     )

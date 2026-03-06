@@ -20,8 +20,8 @@
 
 import pytest
 
-from fdm.attribute_functions import TF, RF
-from fdm.schema import Schema
+from fdm.attribute_functions import TF, RF, DBF
+from fdm.schema import Schema, ForeignKeyConstraint
 from fql.util import ReadOnlyError, ConstraintViolationError
 from tests.lib import _subset_DBF
 
@@ -32,6 +32,7 @@ def test_schema_constraint():
     # create a schema that requires the keys "name", "yob" and "department" with any types:
     # TODO: maybe we could be more precise here in directly specifying that it is not only some TF but rather
     # TFs from a specific RF that we expect here for the department key?
+    # i.e. to express a foreign key constraint here that the department key must be a TF from the departments RF?
     user_schema = Schema({"name": str, "yob": int, "department": TF})
     assert user_schema(user)
 
@@ -73,3 +74,27 @@ def test_schema_constraint():
 
     # this works:
     users[4] = TF({"name": "Alice", "yob": 1990, "department": users[1].department})
+
+
+def test_foreign_key_constraint():
+    # so what is a foreign key constraint anyway? It says that we reference an attribute function (tuple function)
+    # that is mapped to by another relation function
+    # for the departments referenced in the users relation, we want to express that the department key must reference
+    # a tuple function that is mapped to by the departments relation
+    # -> a foreign key constraint is a value constraint
+    # -> this might be interesting for relationship functions to then also add key constraints
+    db: DBF = _subset_DBF({"users", "departments"}, frozen=False)
+    departments: RF = db.departments
+    users: RF = db.users
+    user: TF = users[1]
+
+    # if we do it as an attribute function constraint, we have to look up the value in the parent which is not indexed
+
+    # for all values in users: the key "department" must map to a value contained in departments:
+    users.add_values_constraint(ForeignKeyConstraint("department", departments))
+
+    users[4] = TF({"namde": "Alice", "yob": 1990, "department": departments.d1})
+    with pytest.raises(ConstraintViolationError):
+        users[5] = TF({"namde": "Alice", "yob": 1990, "department": users[2]})
+    with pytest.raises(ConstraintViolationError):
+        users[6] = TF({"namde": "Alice", "yob": 1990, "department": TF()})

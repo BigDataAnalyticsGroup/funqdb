@@ -70,3 +70,23 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
         @return: The hash value of the Schema.
         """
         return AttributeFunction.__hash__(self)
+
+
+class ForeignKeyConstraint[Key](AttributeFunctionConstraint):
+    """A foreign key constraint is an attribute function that defines the expected keys and their types for items in a relation."""
+
+    def __init__(self, key, parent_attribute_function: AttributeFunction):
+        self.key = key
+        self.parent_attribute_function = parent_attribute_function
+
+    def __call__(self, attribute_function: AttributeFunction) -> bool:
+        assert isinstance(attribute_function, AttributeFunction)
+
+        # check if the attribute_function[self.key] is mapped to by the  parent_attribute_function
+        # dumb, loop-version:
+        # TODO: replace by indexed version
+        for item in self.parent_attribute_function:
+            if item.value == attribute_function[self.key]:
+                return True
+
+        return False
