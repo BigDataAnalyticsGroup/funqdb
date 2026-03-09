@@ -49,6 +49,10 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self.filter_predicate = filter_predicate
         self.output_factory = output_factory
 
+    def explain(self) -> str:
+        """Explains the filter."""
+        return f"filter_items operator with predicate {self.filter_predicate}."
+
     def __call__(
         self, input_function: INPUT_AttributeFunction, create_lineage=False
     ) -> OUTPUT_AttributeFunction | str:
@@ -129,9 +133,9 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     ):
         super().__init__(lambda i: filter_predicate(i.key), output_factory)
 
-        def explain(self) -> str:
-            """Explains the filter."""
-            return f"filter_keys operator with predicate {self.filter_predicate}."
+    def explain(self) -> str:
+        """Explains the filter."""
+        return f"filter_keys operator with predicate {self.filter_predicate}."
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -150,3 +154,7 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         @param output_factory: This factory function will be used to create the output instance.
         """
         super().__init__(lambda x: not filter_predicate, output_factory)
+
+    def explain(self) -> str:
+        """Explains the filter."""
+        return f"filter_items_scan_complement operator with predicate {self.filter_predicate}."
