@@ -98,3 +98,13 @@ def test_foreign_key_constraint():
         users[5] = TF({"namde": "Alice", "yob": 1990, "department": users[2]})
     with pytest.raises(ConstraintViolationError):
         users[6] = TF({"namde": "Alice", "yob": 1990, "department": TF()})
+
+    # TODO: reverse constraint, i.e. if we delete department d1 from departments,
+    # how to fix:
+    # (1.) some sort of ref counting in departments, if ref exists, do not allow delete
+    # (2.) through observer mechanism: if we delete d1, we notify users, users check if any of their items reference d1,
+    # if yes, raise an error and roll back the delete in departments
+
+    # the following delete should trigger a warning, however currently it does not:
+    del departments.d1
+    assert "d1" not in departments

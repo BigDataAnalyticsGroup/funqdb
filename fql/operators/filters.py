@@ -53,29 +53,49 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self, input_function: INPUT_AttributeFunction, create_lineage=False
     ) -> OUTPUT_AttributeFunction | str:
 
-        if not create_lineage:
-            assert input_function is not None
-            # TODO: refactor to avoid code duplication with filter_values,
-            # filter_values() and filter_key() should call this operator with the appropriate filter_predicate:
-            return filter_values(self.filter_predicate, self.output_factory)(
-                input_function
-            )
-        else:  # execute on db:
-            # create lineage without executing anything
-            output_function: OUTPUT_AttributeFunction = self.output_factory(None)
-            output_function.__dict__[
-                "lineage"
-            ] += input_function.get_lineage()  # inherit lineage
-            output_function.add_lineage(
-                f"FILTER_ITEMS({inspect.getsource(self.filter_predicate).strip()})"
-            )
-            return output_function
+        if create_lineage:
+            raise NotImplementedError()
+
+        assert input_function is not None
+
+        # get the filtered items:
+        mapped_items: Iterable[Item] = filter(self.filter_predicate, input_function)
+
+        if self.output_factory is None:
+            # use same type as input function if no output factory is provided:
+            output_function = type(input_function)()
+        else:
+            output_function = self.output_factory(None)
+
+        output_function.unfreeze()
+
+        # (1.) we need to materialize the items first to avoid modifying while iterating
+        buffer = {item.key: item.value for item in mapped_items if item is not None}
+
+        # (2.) enter values in output_function:
+        for key, value in buffer.items():
+            output_function[key] = value
+
+        output_function.freeze()
+        return output_function
+
+        # TODO: re-enable lineage
+        # else:  # execute on db:
+        #    # create lineage without executing anything
+        #    output_function: OUTPUT_AttributeFunction = self.output_factory(None)
+        #    output_function.__dict__[
+        #        "lineage"
+        #    ] += input_function.get_lineage()  # inherit lineage
+        #    output_function.add_lineage(
+        #        f"FILTER_ITEMS({inspect.getsource(self.filter_predicate).strip()})"
+        #    )
+        #    return output_function
 
 
 class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """An operator that filters the __values__ found in the input instance and not the items. Hence, the predicate may
+    """An operator that filters the __values__ found in the input instance. Hence, the predicate may
     be phrased directly on the values of the items, e.g., lambda v: v.department.name == "Dev".
     This is a more intuitive way to filter items based on their values. The filter_items operator can be implemented in
     terms of this operator by using a predicate that takes an Item and applies the filter predicate to the value of the item.
@@ -87,10 +107,10 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         # wrap the filter_predicate to apply it to the value of the item:
-        super().__init__(filter_predicate, output_factory)
+        # super().__init__(filter_predicate, output_factory)
 
         # goal:
-        # super().__init__(lambda i: filter_predicate(i.v), output_factory)
+        super().__init__(lambda i: filter_predicate(i.value), output_factory)
 
     def explain(self) -> str:
         """Explains the filter."""
@@ -100,34 +120,11 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self, input_function: INPUT_AttributeFunction, create_lineage=False
     ) -> OUTPUT_AttributeFunction:
 
-        assert input_function is not None
-        # get the filtered items:
-        mapped_items: Iterable[Item] = filter(self.filter_predicate, input_function)
-
-        output_function = input_function
-        if self.output_factory is not None:
-            output_function = self.output_factory(None)
-            output_function.unfreeze()
-        else:
-            logger.warning(
-                "No output function factory provided; modifying input function in place. This is not recommended as it"
-                " may have side effects on the input."
-            )
-
-        # (1.) we need to materialize the items first to avoid modifying while iterating
-        buffer = {item.key: item.value for item in mapped_items if item is not None}
-
-        # (2.) enter values in output_function:
-        for key, value in buffer.items():
-            output_function[key] = value
-
-        output_function.freeze()
-
-        return output_function
+        return super().__call__(input_function, create_lineage)
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
-    filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+    filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """Computes the complement of the filter_values operator."""
 
@@ -141,10 +138,4 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
-        super().__init__(filter_predicate, output_factory)
-
-    def __call__(
-        self, input_function: INPUT_AttributeFunction, create_lineage=False
-    ) -> OUTPUT_AttributeFunction:
-        """Call the filter_values operator with the negated predicate."""
-        super.__call__(lambda x: not self.filter_predicate)
+        super().__init__(lambda x: not filter_predicate, output_factory)

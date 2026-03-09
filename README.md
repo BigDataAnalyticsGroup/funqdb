@@ -104,14 +104,7 @@ For any PR make sure:
   cannot push down query processing
 - [x] automatic on-demand swizzling/unswizzling of references (for read, TODO: writes)
 
-### TODO and Ongoing Work:
 
-- [ ] updates and transactions
-- [ ] pipelining
-- [ ] query optimization, in particular Yannakakis-style query processing and optimization
-- [ ] backends in other languages, e.g. Rust, C++, etc.
-- [ ] façades in other languages
-- [ ] other non-flat data like tensors
 
 ### Project Goals
 

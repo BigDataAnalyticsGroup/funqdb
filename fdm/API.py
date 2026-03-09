@@ -20,7 +20,7 @@
 
 import logging
 from abc import abstractmethod, ABC
-from typing import Generator
+from typing import Generator, Callable, Any
 
 from fdm.util import Explainable
 
@@ -205,3 +205,15 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         @return: An iterable of the values.
         """
         ...
+
+        # @abstractmethod
+        # def where(self, predicate: Callable[..., Any], **kwargs) -> "AttributeFunction":
+        """Filter the items of this AttributeFunction based on the given conditions.
+        @param predicate: A callable defined on the values of this attribute function and returns True if the item
+        should be included in the result, False otherwise.
+
+        @param kwargs: Keyword arguments for filtering conditions.
+        @return: A new AttributeFunction instance containing only the items that satisfy the filtering conditions.
+        """
+
+    #   ...
