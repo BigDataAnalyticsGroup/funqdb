@@ -21,7 +21,7 @@
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
-from fql.operators.filters import filter_values, filter_items
+from fql.operators.filters import filter_values, filter_items, filter_keys
 from fql.util import Item
 from tests.lib import _create_testdata, _subset_DBF, _subset_highly_filtered_DBF
 
@@ -73,6 +73,28 @@ def test_filter_values():
             assert item.value.department.name == "Dev"
         filtered_user_names = {user.value.name for user in users_filtered}
         assert filtered_user_names == {"Horst", "Tom"}
+
+
+def test_filter_keys():
+    db: DBF = _create_testdata(frozen=True)
+    departments: RF = db.departments
+    for i in range(2):
+        if i == 0:
+            # with output factory parameter:
+            filter_RF: Operator[RF, RF] = filter_keys[RF, RF](
+                filter_predicate=lambda k: k == "d1",
+                output_factory=lambda _: RF(),
+            )
+        else:
+            # without output factory parameter:
+            filter_RF: Operator[RF, RF] = filter_keys[RF, RF](
+                filter_predicate=lambda k: k == "d1",
+            )
+        departments_filtered: RF = filter_RF(departments)
+        assert type(departments_filtered) == RF
+        assert len(departments_filtered) == 1
+        for item in departments_filtered:
+            assert item.value.name == "Dev"
 
 
 # TODO

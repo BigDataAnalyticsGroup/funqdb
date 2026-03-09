@@ -1,6 +1,9 @@
 ### To Do List
 
-- [ ] FIX: filter values vs filter items
+- [x] FIX: filter values vs filter items
+- [ ] ONGOING simpler additional filter syntax on attribute functions
+- [ ] directly specify query graph
+- 
 - [ ] updates and transactions
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
@@ -8,8 +11,6 @@
 - [ ] other non-flat data like tensors
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
 from the store
-- [ ] ONGOING simpler additional filter syntax on attribute functions
-- [ ] directly specify query graph
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 - [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be

@@ -106,21 +106,32 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        # wrap the filter_predicate to apply it to the value of the item:
-        # super().__init__(filter_predicate, output_factory)
-
-        # goal:
         super().__init__(lambda i: filter_predicate(i.value), output_factory)
 
     def explain(self) -> str:
         """Explains the filter."""
         return f"filter_values operator with predicate {self.filter_predicate}."
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction, create_lineage=False
-    ) -> OUTPUT_AttributeFunction:
 
-        return super().__call__(input_function, create_lineage)
+class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+    filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
+):
+    """An operator that filters the __keys__ found in the input instance. Hence, the predicate may
+    be phrased directly on the keys of the items, e.g., lambda k: k.startswith("user_").
+    This is a more intuitive way to filter items based on their keys. The filter_items operator can be implemented in
+    terms of this operator by using a predicate that takes an Item and applies the filter predicate to the key of the item.
+    """
+
+    def __init__(
+        self,
+        filter_predicate: Callable[..., Any],
+        output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
+    ):
+        super().__init__(lambda i: filter_predicate(i.key), output_factory)
+
+        def explain(self) -> str:
+            """Explains the filter."""
+            return f"filter_keys operator with predicate {self.filter_predicate}."
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
