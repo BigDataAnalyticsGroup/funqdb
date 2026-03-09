@@ -21,7 +21,7 @@
 
 from fdm.attribute_functions import TF, RF, DBF
 from fdm.schema import Schema, ForeignKeyConstraint
-from fql.operators.filters import filter_values, filter_items
+from fql.operators.filters import filter_values, filter_keys
 
 
 def _create_testdata(
@@ -96,7 +96,7 @@ def _create_testdata(
 
 
 def _users_customers_DBF(frozen: bool = True) -> DBF:
-    return filter_items(lambda i: i.key in ["users", "customers"], lambda _: DBF())(
+    return filter_keys(lambda key: key in ["users", "customers"], lambda _: DBF())(
         _create_testdata(frozen=frozen)
     )
 
@@ -129,6 +129,6 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
 
 
 def _subset_DBF(whitelist: set[str], frozen: bool = True, observe_items=False) -> DBF:
-    return filter_items(lambda i: i.key in whitelist, lambda _: DBF())(
+    return filter_keys(lambda key: key in whitelist, lambda _: DBF())(
         _create_testdata(frozen=frozen, observe_items=observe_items)
     )

@@ -1,0 +1,7 @@
+# 06 FQL Operators
+
+| signature       | parameters                         | input function | output function                           | semantic                                                                                                   | example                                                          |
+|:----------------|:-----------------------------------|:---------------|:------------------------------------------|------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------|
+| `filter_items`  | predicate (phrased against items)  | any            | new instance, same type as input function | returns a new instance of the input functioncontaining only the items qualifiyng under the given predicate | filter relaiton function on conjunction of its key and its value |
+| `filter_values` | predicate (phrased against values) | any            | new instance, same type as input function | same as `filter_items`                                                                                     | filter values of a relation function                             |
+| `filter_keys`   | predicate (phrased against keys)   | any            | new instance, same type as input function | same as `filter_items`                                                                                     | filter relation names of a database function                     |
