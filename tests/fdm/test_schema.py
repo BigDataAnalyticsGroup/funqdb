@@ -21,7 +21,7 @@
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
-from fdm.schema import Schema, ForeignKeyConstraint
+from fdm.schema import Schema, ForeignKeyConstraint, ReverseForeignKeyConstraint
 from fql.util import ReadOnlyError, ConstraintViolationError
 from tests.lib import _subset_DBF
 
@@ -99,12 +99,16 @@ def test_foreign_key_constraint():
     with pytest.raises(ConstraintViolationError):
         users[6] = TF({"namde": "Alice", "yob": 1990, "department": TF()})
 
+    # the following delete should trigger an error, however currently it does not:
+    del departments.d1
+    assert "d1" not in departments
+
     # TODO: reverse constraint, i.e. if we delete department d1 from departments,
     # how to fix:
     # (1.) some sort of ref counting in departments, if ref exists, do not allow delete
     # (2.) through observer mechanism: if we delete d1, we notify users, users check if any of their items reference d1,
     # if yes, raise an error and roll back the delete in departments
+    # (3.) an actual reverse constraint, i.e. if we add an fk to users why not add at the same time a reverse constraint
+    # to departments that says: if any of my items is referenced by users, do not allow delete in departments
 
-    # the following delete should trigger a warning, however currently it does not:
-    del departments.d1
-    assert "d1" not in departments
+    departments.add_values_constraint(ReverseForeignKeyConstraint(users))

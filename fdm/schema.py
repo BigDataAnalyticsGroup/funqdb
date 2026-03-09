@@ -73,7 +73,10 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
 
 
 class ForeignKeyConstraint[Key](AttributeFunctionConstraint):
-    """A foreign key constraint is an attribute function that defines the expected keys and their types for items in a relation."""
+    """A foreign key constraint is an attribute function constraint that a given value of an attribute function must
+    be mapped to by another attribute function (the parent). This is used to express foreign key constraints between
+    relations. This class is from the point of view of the referrer, i.e., the relation that has the foreign key
+    reference to another relation."""
 
     def __init__(self, key, parent_attribute_function: AttributeFunction):
         self.key = key
@@ -90,3 +93,15 @@ class ForeignKeyConstraint[Key](AttributeFunctionConstraint):
                 return True
 
         return False
+
+
+class ReverseForeignKeyConstraint[Key](AttributeFunctionConstraint):
+    """This is the reverse of a foreign key constraint, i.e., it is from the point of view of the referenced relation."""
+
+    def __init__(self, child_attribute_function: AttributeFunction):
+        self.child_attribute_function = child_attribute_function
+
+    def __call__(self, attribute_function: AttributeFunction) -> bool:
+        assert isinstance(attribute_function, AttributeFunction)
+        # TODO
+        return True
