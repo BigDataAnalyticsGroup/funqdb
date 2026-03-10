@@ -2,9 +2,10 @@
 
 - [x] FIX: filter values vs filter items vs filter keys
 - [x] simpler additional filter syntax on attribute functions where()
-- [ ] where() extensions
-- [ ] view()? 
-- [ ] directly specify query graph
+- [x] basic "__"-syntax for filters, e.g. equality
+- [x] directly specify query graph
+- [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
+- [ ] view()-method for afs, handy for all kinds of nesting? 
 - [ ] updates and transactions
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization

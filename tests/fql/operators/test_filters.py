@@ -146,8 +146,7 @@ def test_DB_filter_keys():
     assert type(db_filtered.departments) == RF
 
 
-# TODO
-def _test_filter_items_multiple_filters():
+def test_filter_items_multiple_filters():
     db: DBF = _subset_highly_filtered_DBF(frozen=True)
     departments: RF = db.departments
     assert len(departments) == 1

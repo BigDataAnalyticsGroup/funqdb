@@ -173,25 +173,11 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
     db: DBF = _create_testdata(frozen=False)
     departments: RF = db.departments
     users: RF = db.users
-    # TODO: the syntax is too complicated, need sargable filters that can be easily applied to any attribute function
+    # oopsie, my database looks like a query graph! (that is how it should be)
     return DBF(
-        data={
-            # "departments": departments,
-            "departments": filter_values(
-                lambda i: i.value.name == "Dev", lambda _: RF()
-            )(departments),
-            "users": filter_values(lambda i: i.value.name == "Horst", lambda _: RF())(
-                users
-            ),
-            # goal:
-            # "departments": filter_values(lambda val: val.name == "Dev")(departments),
-            # "users": filter_values(lambda val: val.name == "Horst")(users),
-            # or:
-            # shall we create a shortcut for easy filtering on values of items in a relation?
-            # this could technically be similar to filters in Django ORM, yet, the "_"-syntax is not very intuitive,
-            # maybe we can do better here?
-            # "departments": departments.where(name="Dev"),
-            # "users": users.where(name="Horst"),
+        {
+            "departments": departments.where(name="Dev"),
+            "users": users.where(name="Horst"),
         }
     )
 
