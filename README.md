@@ -2,6 +2,17 @@
 
 *The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the long run.*
 
+## Core Ideas:
+1. purely functional (key/value) data model
+2. same modeling concept at all levels, no matter whether we are looking at “tuples“, “relations“, or “databases“, ...
+3. all operators are unary: input is a function, output is a function
+4. query language is a façade and part of the embedding programming language
+5. same power for updates as for reading
+6. easily extensible
+7. the notion of an “index“ is built into the data model
+   
+**None** of this is true for SQL.
+
 ## Background
 
 funqDB is built around the central ideas of the vision paper:
