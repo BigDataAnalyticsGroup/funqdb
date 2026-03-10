@@ -51,6 +51,44 @@ def test_filter_items():
         assert filtered_user_names == {"Horst", "Tom"}
 
 
+def test_filter_items_where_clause():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    for i in range(0, 2):
+        if i == 0:
+            users_filtered: RF = users.where(lambda i: i.value.department.name == "Dev")
+        else:
+            users_filtered: RF = users.where(department__name="Dev")
+
+        assert type(users_filtered) == RF
+        assert len(users_filtered) == 2
+        for item in users_filtered:
+            assert item.value.department.name == "Dev"
+        filtered_user_names = {user.value.name for user in users_filtered}
+        assert filtered_user_names == {"Horst", "Tom"}
+
+
+def test_filter_items_complement():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    # filter the values in the users relation to only keep those NOT in the "Dev" department
+    def filter_predicate_complement(item: Item) -> bool:
+        user: TF = item.value
+        return user.department.name != "Dev"
+
+    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+        filter_predicate=filter_predicate_complement,
+    )
+    users_filtered: RF = filter_RF(users)
+    assert type(users_filtered) == RF
+    assert len(users_filtered) == 1
+    for item in users_filtered:
+        assert item.value.department.name == "Consulting"
+    filtered_user_names = {user.value.name for user in users_filtered}
+    assert filtered_user_names == {"John"}
+
+
 def test_filter_values():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
@@ -97,6 +135,17 @@ def test_filter_keys():
             assert item.value.name == "Dev"
 
 
+def test_DB_filter_keys():
+    # get subdatabase:
+    db_filtered: DBF = _subset_DBF({"users", "departments"}, frozen=True)
+
+    assert type(db_filtered) == DBF
+    assert len(db_filtered) == 2  # users and departments relations only
+
+    assert type(db_filtered.users) == RF
+    assert type(db_filtered.departments) == RF
+
+
 # TODO
 def _test_filter_items_multiple_filters():
     db: DBF = _subset_highly_filtered_DBF(frozen=True)
@@ -130,14 +179,6 @@ def test_filter_as_a_parameter():
     a(12, d=42)
     assert a["test"] == "bla"
     assert a(a=42) == None
-
-
-def test_AF_instantiation():
-    db: DBF = _create_testdata(frozen=True)
-    users: RF = db.users
-    # instantiate an attribute function subtype instance with the same type as variable users:
-    relation = type(users)()
-    assert type(relation) == RF
 
 
 def test_filter_items_reused_and_chained():
@@ -180,35 +221,3 @@ def _test_filter_explain():
     lineage: list[str] = ret2.get_lineage()
     # for i, lin in enumerate(lineage, 1):
     #    print(f"{i}.\t->", lin)
-
-
-def test_filter_items_complement():
-    db: DBF = _create_testdata(frozen=True)
-    users: RF = db.users
-
-    # filter the values in the users relation to only keep those NOT in the "Dev" department
-    def filter_predicate_complement(item: Item) -> bool:
-        user: TF = item.value
-        return user.department.name != "Dev"
-
-    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
-        filter_predicate=filter_predicate_complement,
-    )
-    users_filtered: RF = filter_RF(users)
-    assert type(users_filtered) == RF
-    assert len(users_filtered) == 1
-    for item in users_filtered:
-        assert item.value.department.name == "Consulting"
-    filtered_user_names = {user.value.name for user in users_filtered}
-    assert filtered_user_names == {"John"}
-
-
-def test_DB_filter_keys():
-    # get subdatabase:
-    db_filtered: DBF = _subset_DBF({"users", "departments"}, frozen=True)
-
-    assert type(db_filtered) == DBF
-    assert len(db_filtered) == 2  # users and departments relations only
-
-    assert type(db_filtered.users) == RF
-    assert type(db_filtered.departments) == RF

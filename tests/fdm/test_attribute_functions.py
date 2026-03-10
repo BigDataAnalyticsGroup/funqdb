@@ -93,6 +93,15 @@ def test_DictionaryAttributeFunction():
     assert len(daf) == 3
 
 
+def test_underscore_syntax():
+    db: DBF = _create_testdata(frozen=False)
+    users: RF = db.users
+
+    assert users[1]["department__name"] == "Dev"
+    assert users[2]["department__name"] == "Dev"
+    assert users[3]["department__name"] == "Consulting"
+
+
 def test_DictionaryTupleRelationDatabaseFunction():
     db: DBF = _create_testdata(frozen=False)
     users: RF = db.users

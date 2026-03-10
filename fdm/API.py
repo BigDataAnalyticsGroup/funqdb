@@ -206,14 +206,15 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """
         ...
 
-        # @abstractmethod
-        # def where(self, predicate: Callable[..., Any], **kwargs) -> "AttributeFunction":
+    @abstractmethod
+    def where(self, predicate: Callable[..., Any], **kwargs) -> "AttributeFunction":
         """Filter the items of this AttributeFunction based on the given conditions.
         @param predicate: A callable defined on the values of this attribute function and returns True if the item
         should be included in the result, False otherwise.
 
-        @param kwargs: Keyword arguments for filtering conditions.
+        @param kwargs: Keyword arguments for filtering conditions, phrased directly against the value of this attribute
+        function.
         @return: A new AttributeFunction instance containing only the items that satisfy the filtering conditions.
         """
 
-    #   ...
+        ...

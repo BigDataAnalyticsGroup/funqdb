@@ -1,7 +1,9 @@
 ### To Do List
 
 - [x] FIX: filter values vs filter items vs filter keys
-- [ ] ONGOING simpler additional filter syntax on attribute functions
+- [x] simpler additional filter syntax on attribute functions where()
+- [ ] where() extensions
+- [ ] view()? 
 - [ ] directly specify query graph
 - [ ] updates and transactions
 - [ ] pipelining

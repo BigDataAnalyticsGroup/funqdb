@@ -20,7 +20,7 @@
 
 
 import inspect
-from typing import Generator, Iterable
+from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
@@ -166,9 +166,18 @@ class DictionaryAttributeFunction[Key, Value](
 
     def __getitem__(self, key: Key) -> Value:
         """Customize item access. This must be used for non-str-type keys.
+        TODO: discuss whether we really want to have this
+        Supports __-syntax for accessing sub-items of values, e.g., if we have an item with key "department" and value
+        being a TF with an item with key "name", we can access the name of the department with "department__name".
+
         @param key: The key of the item being accessed.
         @return: The value of the requested item.
         """
+        key_suffix: str | None = None
+        if type(key) is str:
+            if "__" in key:
+                key_suffix: str | None = key.split("__")[1:]
+                key: str = key.split("__")[0]
         if key in self.__dict__["data"]:
             value: Value | AttributeFunctionSentinel = self.__dict__["data"][key]
 
@@ -182,7 +191,13 @@ class DictionaryAttributeFunction[Key, Value](
                 # update the data dict with the loaded AttributeFunction for future accesses:
                 self.__dict__["data"][key] = value
 
-            return value
+            # if the suffix is not empty, we try to access the sub-item of the value with the suffix as key, otherwise
+            # we return the value itself:
+            return (
+                value.__getitem__("__".join(key_suffix))
+                if (key_suffix and len(key_suffix) > 0)
+                else value
+            )
         else:
             raise AttributeError
 
@@ -423,6 +438,45 @@ class DictionaryAttributeFunction[Key, Value](
         """This method defines how to restore the object when unpickling.
         TODO: Custom unpickling logic to restore observers."""
         self.__dict__.update(state)
+
+    def where(
+        self, predicate: Callable[..., Any] = None, **kwargs
+    ) -> "DictionaryAttributeFunction":
+        """Filter the items of this DictionaryAttributeFunction based on the given conditions.
+        @param predicate: A callable defined on the values of this attribute function and returns True if the item
+        should be included in the result, False otherwise.
+        @param kwargs: Keyword arguments for filtering conditions, phrased directly against the value of this attribute
+        function.
+
+        @return: A new DictionaryAttributeFunction instance containing only the items that satisfy the filtering conditions.
+        """
+        result: DictionaryAttributeFunction = type(
+            self
+        )()  # create result instance of the same type as self
+
+        assert predicate is None or callable(predicate)
+        assert kwargs is None or dict
+
+        item: Item
+        # loop over entries of self:
+        for item in self:
+            # if predicate exists, evaluate it:
+            if predicate is not None and not predicate(item):
+                continue
+
+            # if kwargs conditions exist, evaluate them:
+            match: bool = True
+            for key, value in kwargs.items():
+                # all conditions passed are considered part of a conjunct (just like in Django ORM),
+                # i.e., all must be satisfied for the item to be included in the result function:
+                if not (hasattr(item.value, key) and getattr(item.value, key) == value):
+                    match = False
+                    break
+
+            if match:
+                result[item.key] = item.value
+
+        return result
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
