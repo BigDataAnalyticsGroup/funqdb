@@ -22,6 +22,7 @@
 from fdm.attribute_functions import TF, RF, DBF
 from fdm.schema import Schema, ForeignKeyConstraint
 from fql.operators.filters import filter_values, filter_keys
+from faker import Faker
 
 
 def _create_testdata(
@@ -86,6 +87,73 @@ def _create_testdata(
             "departments": departments,
             "users": users,
             "customers": customers,
+        },
+        lineage=["DBF()"],
+        frozen=frozen,
+        observe_items=observe_items,
+    )
+
+    return db
+
+
+def _create_test_data_scalable(
+    frozen: bool = False,
+    observe_items: bool = False,
+    add_schemas=False,
+    num_departments: int = 100,
+    num_users: int = 1000,
+):
+    faker: Faker = Faker()
+
+    # departments tuples and relation:
+    departments: RF = RF(
+        {
+            "d"
+            + str(i): TF(
+                {
+                    "name": faker.company(),
+                    "budget": str(faker.pyint(10, 30)) + "M",
+                },
+                frozen,
+            )
+            for i in range(1, num_departments + 1)
+        },
+        lineage=["RF(departments)"],
+        frozen=frozen,
+        observe_items=observe_items,
+    )
+    if add_schemas:
+        departments.add_values_constraint(Schema({"name": str, "budget": int}))
+
+    # users tuples and relation:
+    users: RF = RF(
+        {
+            i: TF(
+                {
+                    "name": faker.first_name(),
+                    "yob": faker.year(),
+                    "department": departments.random_item().value,
+                },
+                frozen,
+            )
+            for i in range(1, num_users + 1)
+        },
+        lineage=["RF(users)"],
+        frozen=False,
+        observe_items=observe_items,
+    )
+    users.add_values_constraint(ForeignKeyConstraint("department", departments))
+    if frozen:
+        users.freeze()
+
+    if add_schemas:
+        users.add_values_constraint(Schema({"name": str, "yob": int, "department": TF}))
+
+    # database of relations:
+    db: DBF = DBF(
+        {
+            "departments": departments,
+            "users": users,
         },
         lineage=["DBF()"],
         frozen=frozen,

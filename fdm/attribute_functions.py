@@ -20,6 +20,7 @@
 
 
 import inspect
+import random
 from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
@@ -477,6 +478,17 @@ class DictionaryAttributeFunction[Key, Value](
                 result[item.key] = item.value
 
         return result
+
+    def random_item(self) -> Any:
+        """Get a random item from the AttributeFunction.
+        @return: A random item.
+        """
+        assert (
+            len(self) > 0
+        ), "Cannot get a random item from an empty AttributeFunction."
+
+        # TODO: could be more efficient
+        return random.choice(list(self))
 
 
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):

@@ -218,3 +218,10 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """
 
         ...
+
+    @abstractmethod
+    def random_item(self) -> Any:
+        """Get a random item from the AttributeFunction.
+        @return: A random item.
+        """
+        ...
