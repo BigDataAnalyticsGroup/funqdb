@@ -9,7 +9,7 @@
 4. query language is a façade and part of the embedding programming language
 5. same power for updates as for reading
 6. easily extensible
-7. the notion of an “index“ is built into the data model
+7. the notion of an "index" is built into the data model
    
 **None** of this is true for SQL.
 
