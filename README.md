@@ -66,7 +66,7 @@ publishing the project under an [AGPL license](LICENSE.txt). As my main job is b
 a [Professor of Computer Science at Saarland University](https://bigdata.uni-saarland.de/), I
 have the freedom to do this. However, I also have other obligations, e.g. [teaching](https://www.youtube.com/@jensdit),
 [research](https://bigdata.uni-saarland.de/publications/), administration, developing
-the [Masterhorst application system](https://apply.cs.uni-saarland.de) etc., so
+the [Masterhorst application system](https://apply.cs.uni-saarland.de), etc., so
 at this point, this cannot be a full time job (unfortunately).
 
 ### Contributing
@@ -103,8 +103,6 @@ For any PR make sure:
 - [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
   cannot push down query processing
 - [x] automatic on-demand swizzling/unswizzling of references (for read, TODO: writes)
-
-
 
 ### Project Goals
 

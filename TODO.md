@@ -1,9 +1,8 @@
 ### To Do List
 
-- [x] FIX: filter values vs filter items
+- [x] FIX: filter values vs filter items vs filter keys
 - [ ] ONGOING simpler additional filter syntax on attribute functions
 - [ ] directly specify query graph
-- 
 - [ ] updates and transactions
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
