@@ -33,8 +33,6 @@ from fql.util import (
     ReadOnlyError,
     KeyDeletedSentinel,
     ChangeEvent,
-    Update,
-    Delete,
 )
 
 from store.store import Store
@@ -292,8 +290,8 @@ class DictionaryAttributeFunction[Key, Value](
         self.__dict__["data"][key] = value
 
         try:
-            self._check_value_constraints(item.value, Update())
-            self._check_attribute_function_constraints(Update())
+            self._check_value_constraints(item.value, ChangeEvent.UPDATE)
+            self._check_attribute_function_constraints(ChangeEvent.UPDATE)
         except ConstraintViolationError as e:
             # rollback change:
             if key_existed_before:
@@ -303,7 +301,7 @@ class DictionaryAttributeFunction[Key, Value](
             raise e
 
         # notify observers about the change:
-        self.notify_observers(item, Update())
+        self.notify_observers(item, ChangeEvent.UPDATE)
 
     def __delitem__(self, key):
         """Customize item deletion. This must be used for non-str-type keys."""
@@ -319,14 +317,14 @@ class DictionaryAttributeFunction[Key, Value](
 
             try:
                 del self.__dict__["data"][key]
-                self._check_attribute_function_constraints(Delete())
-                self._check_value_constraints(_old_value, Delete())
+                self._check_attribute_function_constraints(ChangeEvent.DELETE)
+                self._check_value_constraints(_old_value, ChangeEvent.DELETE)
             except ConstraintViolationError as e:
                 # rollback change:
                 self.__dict__["data"][key] = _old_value
                 raise e
             # notify observers about the change:
-            self.notify_observers(Item(key, KeyDeletedSentinel), Delete())
+            self.notify_observers(Item(key, KeyDeletedSentinel), ChangeEvent.DELETE)
 
         else:
             raise AttributeError

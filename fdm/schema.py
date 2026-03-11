@@ -24,7 +24,7 @@ from typing import Type
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import DictionaryAttributeFunction
 from fql.predicates.constraints import AttributeFunctionConstraint
-from fql.util import ChangeEvent, Delete
+from fql.util import ChangeEvent
 from store.store import Store
 
 
@@ -122,7 +122,7 @@ class ReverseForeignObjectConstraint[Key](AttributeFunctionConstraint):
     ) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
         # only relevant for delete events:
-        return type(event) != Delete or (
+        return event != ChangeEvent.DELETE or (
             len(
                 self.child_attribute_function.where(
                     lambda i: i.value[self.key] == attribute_function

@@ -18,6 +18,7 @@
 #
 #
 from abc import ABC
+from enum import Enum
 
 
 class ReadOnlyError(Exception):
@@ -115,19 +116,9 @@ class Item[Key, Value]:
         return {"key": self.key, "_value": _value_to_pickle}
 
 
-class ChangeEvent(ABC):
+class ChangeEvent(str, Enum):
     """represents the type of change operation being executed."""
 
-    pass
-
-
-class Update(ChangeEvent):
-    pass
-
-
-class Insert(ChangeEvent):
-    pass
-
-
-class Delete(ChangeEvent):
-    pass
+    UPDATE = "update"
+    INSERT = "insert"
+    DELETE = "delete"

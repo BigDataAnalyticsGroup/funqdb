@@ -22,7 +22,7 @@ import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
 from fdm.schema import Schema, ForeignValueConstraint, ReverseForeignObjectConstraint
-from fql.util import ReadOnlyError, ConstraintViolationError, Update
+from fql.util import ReadOnlyError, ConstraintViolationError, ChangeEvent
 from tests.lib import _subset_DBF
 
 
@@ -34,16 +34,16 @@ def test_schema_constraint():
     # TFs from a specific RF that we expect here for the department key?
     # i.e. to express a foreign value constraint here that the department key must be a TF from the departments RF?
     user_schema = Schema({"name": str, "yob": int, "department": TF})
-    assert user_schema(user, Update())
+    assert user_schema(user, ChangeEvent.UPDATE)
 
     user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
     user_wrong["extra_key"] = "extra_value"
-    assert user_schema(user_wrong, Update()) == False
+    assert user_schema(user_wrong, ChangeEvent.UPDATE) == False
 
     user_wrong = _subset_DBF({"users"}, frozen=False).users[1]
     user_wrong["name"] = "asd"
 
-    assert user_schema(user_wrong, Update()) == True
+    assert user_schema(user_wrong, ChangeEvent.UPDATE) == True
 
     # add schema to RF and check that it is enforced on all values of the RF:
     users: RF = _subset_DBF({"users"}, frozen=True).users
