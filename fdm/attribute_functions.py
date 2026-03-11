@@ -32,6 +32,9 @@ from fql.util import (
     ConstraintViolationError,
     ReadOnlyError,
     KeyDeletedSentinel,
+    ChangeEvent,
+    Update,
+    Delete,
 )
 
 from store.store import Store
@@ -120,6 +123,21 @@ class DictionaryAttributeFunction[Key, Value](
 
         self.__dict__["values_constraints"].remove(constraint)
 
+    def references(self, key: Key, parent_attribute_function: AttributeFunction):
+        """Convenience method to express a foreign value constraint, i.e., the value of the item with the given key
+        mapped to by the given parent attribute function. Adds constraints to both the parent and the child attribute function.
+        """
+        from fdm.schema import ForeignValueConstraint
+
+        self.add_values_constraint(
+            ForeignValueConstraint(key, parent_attribute_function)
+        )
+        from fdm.schema import ReverseForeignObjectConstraint
+
+        parent_attribute_function.add_values_constraint(
+            ReverseForeignObjectConstraint(key, self)
+        )
+
     def add_observer(self, observer: Observer):
         """Add an observer to the AttributeFunction.
         @param observer: The observer to add.
@@ -132,12 +150,12 @@ class DictionaryAttributeFunction[Key, Value](
 
         self.__dict__["observers"].append(observer)
 
-    def notify_observers(self, item: Item):
+    def notify_observers(self, item: Item, event: ChangeEvent):
         """Notify all observers of a change.
         @param item: The item that has changed.
         """
         for observer in self.__dict__["observers"]:
-            observer.receive_notification(self, item)
+            observer.receive_notification(self, item, event)
 
     def remove_observer(self, observer):
         """Remove an observer from the AttributeFunction.
@@ -203,14 +221,14 @@ class DictionaryAttributeFunction[Key, Value](
             raise AttributeError
 
     def _check_value_constraints(
-        self, value: Value, triggered_by_notification: bool = False
+        self, value: Value, event: ChangeEvent, triggered_by_notification: bool = False
     ):
         """Check all constraints on a given item.
         @param item: The item to check.
         @param triggered_by_notification: Whether the check was triggered by a notification from an observed value.
         """
         for constraint in self.__dict__["values_constraints"]:
-            if not constraint(value):
+            if not constraint(value, event):
                 message: str = (
                     f"Value '{value}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'.\n "
                 )
@@ -219,11 +237,11 @@ class DictionaryAttributeFunction[Key, Value](
                 raise ConstraintViolationError(message)
 
     def _check_attribute_function_constraints(
-        self, triggered_by_notification: bool = False
+        self, event: ChangeEvent, triggered_by_notification: bool = False
     ):
         """Check all attribute function constraints on the current AttributeFunction."""
         for constraint in self.__dict__["af_constraints"]:
-            if not constraint(self):
+            if not constraint(self, event):
                 message: str = (
                     f"AttributeFunction'{self}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'."
                 )
@@ -232,7 +250,7 @@ class DictionaryAttributeFunction[Key, Value](
                 raise ConstraintViolationError(message)
 
     def receive_notification(
-        self, observable: "Observable", item_from_observable: Item
+        self, observable: "Observable", item_from_observable: Item, event: ChangeEvent
     ):
         """Notify the AttributeFunction of a change in an observed value.
         @param item: The item that has changed.
@@ -245,11 +263,13 @@ class DictionaryAttributeFunction[Key, Value](
         for item in self:
             if item.value == observable:
                 self._check_value_constraints(
-                    item.value, triggered_by_notification=True
+                    item.value, event, triggered_by_notification=True
                 )
         # TODO: do we need to notify recursively here?
         # self.notify_observers(item)
-        self._check_attribute_function_constraints(triggered_by_notification=True)
+        self._check_attribute_function_constraints(
+            event, triggered_by_notification=True
+        )
 
     def __setitem__(self, key: Key, value: Value):
         """Customize item assignment. This must be used for non-str-type keys.
@@ -272,8 +292,8 @@ class DictionaryAttributeFunction[Key, Value](
         self.__dict__["data"][key] = value
 
         try:
-            self._check_value_constraints(item.value)
-            self._check_attribute_function_constraints()
+            self._check_value_constraints(item.value, Update())
+            self._check_attribute_function_constraints(Update())
         except ConstraintViolationError as e:
             # rollback change:
             if key_existed_before:
@@ -283,7 +303,7 @@ class DictionaryAttributeFunction[Key, Value](
             raise e
 
         # notify observers about the change:
-        self.notify_observers(item)
+        self.notify_observers(item, Update())
 
     def __delitem__(self, key):
         """Customize item deletion. This must be used for non-str-type keys."""
@@ -299,14 +319,14 @@ class DictionaryAttributeFunction[Key, Value](
 
             try:
                 del self.__dict__["data"][key]
-                self._check_attribute_function_constraints()
-                self._check_value_constraints(_old_value)
+                self._check_attribute_function_constraints(Delete())
+                self._check_value_constraints(_old_value, Delete())
             except ConstraintViolationError as e:
                 # rollback change:
                 self.__dict__["data"][key] = _old_value
                 raise e
             # notify observers about the change:
-            self.notify_observers(Item(key, KeyDeletedSentinel))
+            self.notify_observers(Item(key, KeyDeletedSentinel), Delete())
 
         else:
             raise AttributeError

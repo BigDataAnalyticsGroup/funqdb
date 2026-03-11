@@ -22,6 +22,7 @@
 from abc import abstractmethod, ABC
 
 from fdm.API import AttributeFunction
+from fql.util import ChangeEvent
 
 
 class in_subset:
@@ -37,7 +38,9 @@ class AttributeFunctionConstraint(ABC):
     just one particular item."""
 
     @abstractmethod
-    def __call__(self, attribute_function: AttributeFunction) -> bool:
+    def __call__(
+        self, attribute_function: AttributeFunction, event: ChangeEvent
+    ) -> bool:
         """Evaluates whether the given attribute_function fulfills the constraint."""
         ...
 
@@ -48,7 +51,9 @@ class attribute_name_equivalence(AttributeFunctionConstraint):
     def __init__(self, attribute_names: set[str]):
         self.attribute_names = attribute_names
 
-    def __call__(self, attribute_function: AttributeFunction) -> bool:
+    def __call__(
+        self, attribute_function: AttributeFunction, event: ChangeEvent
+    ) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
         return self.attribute_names == {item.key for item in attribute_function}
 

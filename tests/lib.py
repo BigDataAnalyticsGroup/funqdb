@@ -41,7 +41,7 @@ def _create_testdata(
             "d2": TF({"name": "Consulting", "budget": "22M"}, frozen),
         },
         lineage=["RF(departments)"],
-        frozen=frozen,
+        frozen=False,
         observe_items=observe_items,
     )
     if add_schemas:
@@ -58,9 +58,10 @@ def _create_testdata(
         frozen=False,
         observe_items=observe_items,
     )
-    users.add_values_constraint(ForeignValueConstraint("department", departments))
+    users.references("department", departments)
     if frozen:
         users.freeze()
+        departments.freeze()
 
     if add_schemas:
         users.add_values_constraint(Schema({"name": str, "yob": int, "department": TF}))

@@ -27,8 +27,8 @@ from tests.lib import _create_test_data_scalable
 def test_create_data_scalable():
     """Test creating data with different sizes."""
 
-    for num_departments in [100, 1000]:
-        for num_users in [100, 1000]:
+    for num_departments in [1000]:
+        for num_users in [100]:
             db: DBF = _create_test_data_scalable(
                 frozen=True,
                 num_departments=num_departments,

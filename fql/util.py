@@ -17,6 +17,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 #
+from abc import ABC
 
 
 class ReadOnlyError(Exception):
@@ -112,3 +113,21 @@ class Item[Key, Value]:
         # _value_to_pickle: Value | int = self.value
 
         return {"key": self.key, "_value": _value_to_pickle}
+
+
+class ChangeEvent(ABC):
+    """represents the type of change operation being executed."""
+
+    pass
+
+
+class Update(ChangeEvent):
+    pass
+
+
+class Insert(ChangeEvent):
+    pass
+
+
+class Delete(ChangeEvent):
+    pass

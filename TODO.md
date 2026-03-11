@@ -5,12 +5,13 @@
 - [x] simpler additional filter syntax on attribute functions where()
 - [x] basic "__"-syntax for filters, e.g. equality
 - [x] directly specify query graph
-- [ ] foreign object constraints with the stor (similar to observer)]
+- [ ] complete set of operators, e.g. subdatabase, joins, unions, etc.
+- [ ] foreign object constraints with the store (similar to observer)]
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
-- [ ] updates and transactions
+- [ ] transactions
 - [ ] ordering
 - [ ] top-k queries
-- [ ] TPC_H and/or TPC-C queries in FQL
+- [ ] TPC-H and/or TPC-C queries in FQL
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it

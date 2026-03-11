@@ -21,14 +21,16 @@
 
 from abc import ABC, abstractmethod
 
-from fql.util import Item
+from fql.util import Item, ChangeEvent
 
 
 class Observer(ABC):
     """An observer that can be notified of changes."""
 
     @abstractmethod
-    def receive_notification(self, observable: "Observable", item: Item):
+    def receive_notification(
+        self, observable: "Observable", item: Item, event: ChangeEvent
+    ):
         """Notify the observer of a change.
         @param item: The item that has changed.
         """
@@ -50,7 +52,7 @@ class Observable(ABC):
         """
         ...
 
-    def notify_observers(self, item: Item):
+    def notify_observers(self, item: Item, event: ChangeEvent):
         """Notify all observers of a change.
         @param item: The item that has changed.
         """

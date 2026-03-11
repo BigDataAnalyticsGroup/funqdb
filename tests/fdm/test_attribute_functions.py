@@ -181,7 +181,8 @@ def test_function_observers():
     assert departments.__dict__["observers"] == [db]
 
     # now change an attribute in a tuple and see that the observers are notified:
-    users[1].department.name = "NewDeptName"
+    department = users[1].department
+    department.name = "NewDeptName"
 
     assert users[1].department.name == "NewDeptName"
     assert departments.d1.name == "NewDeptName"

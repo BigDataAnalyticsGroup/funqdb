@@ -24,6 +24,7 @@ from typing import Type
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import DictionaryAttributeFunction
 from fql.predicates.constraints import AttributeFunctionConstraint
+from fql.util import ChangeEvent, Delete
 from store.store import Store
 
 
@@ -53,7 +54,9 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
             store=store,
         )
 
-    def __call__(self, attribute_function: AttributeFunction) -> bool:
+    def __call__(
+        self, attribute_function: AttributeFunction, event: ChangeEvent
+    ) -> bool:
         """Evaluates whether the given attribute_function fulfills the schema."""
         assert isinstance(attribute_function, AttributeFunction)
 
@@ -85,7 +88,9 @@ class ForeignValueConstraint[Key](AttributeFunctionConstraint):
         self.key = key
         self.parent_attribute_function = parent_attribute_function
 
-    def __call__(self, attribute_function: AttributeFunction) -> bool:
+    def __call__(
+        self, attribute_function: AttributeFunction, event: ChangeEvent
+    ) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
 
         # check whether the value mapped to by attribute_function[self.key] is available in the parent attribute
@@ -109,9 +114,15 @@ class ReverseForeignObjectConstraint[Key](AttributeFunctionConstraint):
         self.key = key
         self.child_attribute_function = child_attribute_function
 
-    def __call__(self, attribute_function: AttributeFunction) -> bool:
+    # TODO: actually this only has to be true in case we want to delete!
+    # this will yield a constraint validation error if we do a change of the instance without deleting it, but that is
+    # not what we want, so we need to distinguish between delete and update operations in the constraint check
+    def __call__(
+        self, attribute_function: AttributeFunction, event: ChangeEvent
+    ) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
-        return (
+        # only relevant for delete events:
+        return type(event) != Delete or (
             len(
                 self.child_attribute_function.where(
                     lambda i: i.value[self.key] == attribute_function
