@@ -101,6 +101,16 @@ def test_underscore_syntax():
     assert users[2]["department__name"] == "Dev"
     assert users[3]["department__name"] == "Consulting"
 
+    # dot syntax combined with underscore syntax:
+    assert users[1].department__name == "Dev"
+    assert users[2].department__name == "Dev"
+    assert users[3].department__name == "Consulting"
+
+    # vs good old dot syntax:
+    assert users[1].department.name == "Dev"
+    assert users[2].department.name == "Dev"
+    assert users[3].department.name == "Consulting"
+
 
 def test_DictionaryTupleRelationDatabaseFunction():
     db: DBF = _create_testdata(frozen=False)
@@ -150,7 +160,6 @@ def test_DictionaryTupleRelationDatabaseFunction():
 
 # TODO
 def test_function_observers():
-    # those tuples may be referenced anywhere else: maybe we need an event mechanism to notify dependent functions?
     db: DBF = _create_testdata(frozen=False, observe_items=True)
     users: RF = db.users
     departments: RF = db.departments
@@ -231,7 +240,7 @@ def test_relationship_function():
 
 def test_key_constraint():
     # This is implicitly and automatically given as the dictionary attribute function will not allow this!
-    # In contrast, in the relational model this has to be tested separately, in FDM this is automatically guaranteed
+    # In contrast, in the relational model this has to be tested explicitly; in FDM this is automatically guaranteed
     # for all attribute functions like TFs, RFs, DBFs, etc.!
     # In addition, also for the results from FQL operators, duplicate keys cannot occur. This is again in sharp
     # contrast to SQL where this confusion may happen.

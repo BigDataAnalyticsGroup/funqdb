@@ -99,16 +99,27 @@ def test_foreign_key_constraint():
     with pytest.raises(ConstraintViolationError):
         users[6] = TF({"namde": "Alice", "yob": 1990, "department": TF()})
 
-    # the following delete should trigger an error, however currently it does not:
-    del departments.d1
-    assert "d1" not in departments
+    # add reverse constraint to departments, i.e. if we delete a department that is referenced by users, we should get
+    # an error:
+    departments.add_values_constraint(ReverseForeignKeyConstraint("department", users))
+    with pytest.raises(ConstraintViolationError):
+        del departments.d1
+    # there must still be 2 departments, as the delete operation should have been rolled back:
+    assert len(departments) == 2
+    assert "d1" in departments
 
     # TODO: reverse constraint, i.e. if we delete department d1 from departments,
     # how to fix:
-    # (1.) some sort of ref counting in departments, if ref exists, do not allow delete
+    # (1.) some sort of ref counting in departments, if ref exists, do not allow delete, already an optimization
     # (2.) through observer mechanism: if we delete d1, we notify users, users check if any of their items reference d1,
-    # if yes, raise an error and roll back the delete in departments
+    # if yes, raise an error and roll back the delete in departments, again: for observers, this has to be decided
+    # how to handle it with the store
     # (3.) an actual reverse constraint, i.e. if we add an fk to users why not add at the same time a reverse constraint
     # to departments that says: if any of my items is referenced by users, do not allow delete in departments
-
-    departments.add_values_constraint(ReverseForeignKeyConstraint(users))
+    # actually the cleanest and purest approach in my understanding of the FDM would be (3.), as it is a pure
+    # constraint that is independent of the implementation and does not require any special handling in the store,
+    # but it is also the most expensive one, as we have to check for all items in departments if they are referenced
+    # by users, which is O(n) in the number of items in departments, while (1.) and (2.) can be implemented in O(1)
+    # time. So maybe we can do (1.) or (2.) as an optimization, but also add (3.) as a pure constraint that can be
+    # used if we do not want to rely on the optimization. For now, we do (3.) and then we can add (1.) or (2.) as an
+    # optimization later.

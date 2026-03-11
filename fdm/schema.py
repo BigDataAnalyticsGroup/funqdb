@@ -78,30 +78,40 @@ class ForeignKeyConstraint[Key](AttributeFunctionConstraint):
     relations. This class is from the point of view of the referrer, i.e., the relation that has the foreign key
     reference to another relation."""
 
-    def __init__(self, key, parent_attribute_function: AttributeFunction):
+    def __init__(self, key: Key, parent_attribute_function: AttributeFunction):
         self.key = key
         self.parent_attribute_function = parent_attribute_function
 
     def __call__(self, attribute_function: AttributeFunction) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
 
-        # check if the attribute_function[self.key] is mapped to by the  parent_attribute_function
-        # dumb, loop-version:
-        # TODO: replace by indexed version
-        for item in self.parent_attribute_function:
-            if item.value == attribute_function[self.key]:
-                return True
-
-        return False
+        # check whether the value mapped to by attribute_function[self.key] is available in the parent attribute
+        # function, i.e., whether there is an item in the parent attribute function that maps to this value
+        # O(n) find, TODO: replace by indexed version
+        # maybe extend AFs to generally index on their values
+        value_to_find = attribute_function[self.key]
+        return (
+            len(
+                self.parent_attribute_function.where(lambda i: i.value == value_to_find)
+            )
+            > 0
+        )
 
 
 class ReverseForeignKeyConstraint[Key](AttributeFunctionConstraint):
     """This is the reverse of a foreign key constraint, i.e., it is from the point of view of the referenced relation."""
 
-    def __init__(self, child_attribute_function: AttributeFunction):
+    def __init__(self, key: Key, child_attribute_function: AttributeFunction):
+        self.key = key
         self.child_attribute_function = child_attribute_function
 
     def __call__(self, attribute_function: AttributeFunction) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
-        # TODO
-        return True
+        return (
+            len(
+                self.child_attribute_function.where(
+                    lambda i: i.value[self.key] == attribute_function
+                )
+            )
+            == 0
+        )

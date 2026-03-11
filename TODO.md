@@ -1,16 +1,17 @@
 ### To Do List
 
 - [x] FIX: filter values vs filter items vs filter keys
+- [x] fix reverse fks
 - [x] simpler additional filter syntax on attribute functions where()
 - [x] basic "__"-syntax for filters, e.g. equality
 - [x] directly specify query graph
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
-- [ ] view()-method for afs, handy for all kinds of nesting? 
 - [ ] updates and transactions
+- [ ] ordering
+- [ ] top-k queries
+- [ ] TPC_H and/or TPC-C queries in FQL
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
-- [ ] backends in other languages, e.g. Rust, C++, etc.
-- [ ] other non-flat data like tensors
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
 from the store
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
@@ -19,6 +20,8 @@ from the store
 - [ ] done with care, maybe only allow loading from trusted sources
 - [ ] https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
 - [ ] façades in other languages
+- [ ] backends in other languages, e.g. Rust, C++, etc.
+- [ ] other non-flat data like tensors
 
 ### Other tasks
 
@@ -47,6 +50,7 @@ from the store
 
 ### Discarded
 
+- [ ] view()-method for afs, handy for all kinds of nesting?  NOT required in FDM
 - [ ] ~~get rid of `__call__` in operators and integrate into `__init__`~~
   No, actually good to keep it apart. Other option: make these classes functions instead of classes. Everything in one
   call.

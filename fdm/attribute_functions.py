@@ -52,7 +52,7 @@ class DictionaryAttributeFunction[Key, Value](
     ):
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = frozen
-        self.__dict__["af_constraint"] = set()
+        self.__dict__["af_constraints"] = set()
         self.__dict__["values_constraints"] = set()
         self.__dict__["observe_items"] = observe_items
         self.__dict__["observers"] = list()
@@ -80,7 +80,7 @@ class DictionaryAttributeFunction[Key, Value](
                 f"attempt to add a function constraint. This DictionaryAttributeFunction is read-only."
             )
 
-        self.__dict__["af_constraint"].add(constraint)
+        self.__dict__["af_constraints"].add(constraint)
 
     def remove_attribute_function_constraint(self, constraint):
         """Remove an attribute function-constraint from the AttributeFunction.
@@ -93,7 +93,7 @@ class DictionaryAttributeFunction[Key, Value](
                 f"attempt to remove a function constraint. This DictionaryAttributeFunction is read-only."
             )
 
-        self.__dict__["af_constraint"].remove(constraint)
+        self.__dict__["af_constraints"].remove(constraint)
 
     def add_values_constraint(self, constraint: AttributeFunctionConstraint):
         """Add a values-constraint to this AttributeFunction, i.e., this constraint must be fulfilled for all values.
@@ -222,7 +222,7 @@ class DictionaryAttributeFunction[Key, Value](
         self, triggered_by_notification: bool = False
     ):
         """Check all attribute function constraints on the current AttributeFunction."""
-        for constraint in self.__dict__["af_constraint"]:
+        for constraint in self.__dict__["af_constraints"]:
             if not constraint(self):
                 message: str = (
                     f"AttributeFunction'{self}' does not satisfy constraint:\n'{inspect.getsource(constraint.__call__)}'."
@@ -300,6 +300,7 @@ class DictionaryAttributeFunction[Key, Value](
             try:
                 del self.__dict__["data"][key]
                 self._check_attribute_function_constraints()
+                self._check_value_constraints(_old_value)
             except ConstraintViolationError as e:
                 # rollback change:
                 self.__dict__["data"][key] = _old_value

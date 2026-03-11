@@ -174,6 +174,7 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
     departments: RF = db.departments
     users: RF = db.users
     # oopsie, my database looks like a query graph! (that is how it should be)
+    # and oopsie: we do not have to repeat the foreign key constraints in such query! (which is how it should be)
     return DBF(
         {
             "departments": departments.where(name="Dev"),
