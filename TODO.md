@@ -5,8 +5,11 @@
 - [x] simpler additional filter syntax on attribute functions where()
 - [x] basic "__"-syntax for filters, e.g. equality
 - [x] directly specify query graph
+- [ ] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
+  computing new attributes based on the existing ones, e.g. by applying a function to them
+- [ ] maybe a special projection method for AFs: project() and 𝜋()
 - [ ] complete set of operators, e.g. subdatabase, joins, unions, etc.
-- [ ] foreign object constraints with the store (similar to observer)]
+- [ ] foreign object constraints with the store (similar to observer)
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
 - [ ] transactions
 - [ ] ordering
@@ -15,7 +18,7 @@
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
-from the store
+  from the store
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 - [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
@@ -52,7 +55,7 @@ from the store
 
 ### Discarded
 
-- [ ] view()-method for afs, handy for all kinds of nesting?  NOT required in FDM
+- [ ] view()-method for afs, handy for all kinds of nesting? NOT required in FDM
 - [ ] ~~get rid of `__call__` in operators and integrate into `__init__`~~
   No, actually good to keep it apart. Other option: make these classes functions instead of classes. Everything in one
   call.
@@ -61,14 +64,12 @@ from the store
 
 DONE:
 
-
 ### Github
+
 - [x] mirroring from gitlab
 - [x] license: AGPL
 - [x] add license header to every file
 - [x] write decent README.md, see template in the wiki
-
-
 
 ### POC
 

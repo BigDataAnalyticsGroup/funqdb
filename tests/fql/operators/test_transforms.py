@@ -159,20 +159,32 @@ def test_group_by_aggregate_stepwise():
 
 
 def test_group_by_aggregate_single_operator():
-    aggregates: RF = group_by_aggregate(
-        grouping_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
-        aggregation_function=lambda item: Item(
-            key=item.key, value=TF({"count": len(item.value)})
-        ),
-    )(_create_testdata(frozen=True).customers)
+    rel: RF = _create_testdata(frozen=True).customers
 
-    assert len(aggregates) == 2
-    assert type(aggregates) == RF
+    for i in range(2):
+        aggregates: RF | None = None
+        if i == 0:
+            aggregates = group_by_aggregate(
+                grouping_function=lambda i: (
+                    "Tom" if i.value.name == "Tom" else "not Tom"
+                ),
+                aggregation_function=lambda item: Item(
+                    key=item.key, value=TF({"count": len(item.value)})
+                ),
+            )(rel)
+        else:
+            aggregates = group_by_aggregate(
+                lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
+                lambda item: Item(key=item.key, value=TF({"count": len(item.value)})),
+            )(rel)
 
-    tom_aggregate: TF = aggregates["Tom"]
-    assert type(tom_aggregate) == TF
-    assert tom_aggregate.count == 2
+        assert len(aggregates) == 2
+        assert type(aggregates) == RF
 
-    not_tom_aggregate: TF = aggregates["not Tom"]
-    assert type(not_tom_aggregate) == TF
-    assert not_tom_aggregate.count == 3
+        tom_aggregate: TF = aggregates["Tom"]
+        assert type(tom_aggregate) == TF
+        assert tom_aggregate.count == 2
+
+        not_tom_aggregate: TF = aggregates["not Tom"]
+        assert type(not_tom_aggregate) == TF
+        assert not_tom_aggregate.count == 3

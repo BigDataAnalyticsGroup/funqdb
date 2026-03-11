@@ -219,6 +219,10 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
 
         ...
 
+    def 𝛔(self, predicate: Callable[..., Any], **kwargs) -> "AttributeFunction":
+        """Rel algebra style naming for where."""
+        return self.where(predicate, **kwargs)
+
     @abstractmethod
     def random_item(self) -> Any:
         """Get a random item from the AttributeFunction.

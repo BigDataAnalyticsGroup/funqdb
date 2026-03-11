@@ -178,8 +178,8 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
     # and oopsie: we do not have to repeat the foreign value constraints in such query! (which is how it should be)
     return DBF(
         {
-            "departments": departments.where(name="Dev"),
-            "users": users.where(name="Horst"),
+            "departments": departments.𝛔(name="Dev"),
+            "users": users.𝛔(name="Horst"),
         }
     )
 
