@@ -72,11 +72,14 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
         return AttributeFunction.__hash__(self)
 
 
-class ForeignKeyConstraint[Key](AttributeFunctionConstraint):
-    """A foreign key constraint is an attribute function constraint that a given value of an attribute function must
-    be mapped to by another attribute function (the parent). This is used to express foreign key constraints between
-    relations. This class is from the point of view of the referrer, i.e., the relation that has the foreign key
-    reference to another relation."""
+class ForeignValueConstraint[Key](AttributeFunctionConstraint):
+    """A foreign value constraint is an attribute function constraint that a given value of an attribute function must
+    be mapped to by another attribute function (the parent). This is used to express foreign value constraints between
+    relations. This class is from the point of view of the referrer, i.e., the relation that has the foreign value
+    reference to another relation.
+    Note that is in contrast to relational DBMS that have foreign key constraints leading to an additional
+    indirection. FDM does not require that indirection.
+    """
 
     def __init__(self, key: Key, parent_attribute_function: AttributeFunction):
         self.key = key
@@ -98,8 +101,9 @@ class ForeignKeyConstraint[Key](AttributeFunctionConstraint):
         )
 
 
-class ReverseForeignKeyConstraint[Key](AttributeFunctionConstraint):
-    """This is the reverse of a foreign key constraint, i.e., it is from the point of view of the referenced relation."""
+class ReverseForeignObjectConstraint[Key](AttributeFunctionConstraint):
+    """This is the reverse of a foreign value constraint, i.e., it is from the point of view of the referenced
+    attribute function."""
 
     def __init__(self, key: Key, child_attribute_function: AttributeFunction):
         self.key = key

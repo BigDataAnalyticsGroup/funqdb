@@ -21,7 +21,7 @@
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
-from fdm.schema import Schema, ForeignKeyConstraint, ReverseForeignKeyConstraint
+from fdm.schema import Schema, ForeignValueConstraint, ReverseForeignObjectConstraint
 from fql.util import ReadOnlyError, ConstraintViolationError
 from tests.lib import _subset_DBF
 
@@ -32,7 +32,7 @@ def test_schema_constraint():
     # create a schema that requires the keys "name", "yob" and "department" with any types:
     # TODO: maybe we could be more precise here in directly specifying that it is not only some TF but rather
     # TFs from a specific RF that we expect here for the department key?
-    # i.e. to express a foreign key constraint here that the department key must be a TF from the departments RF?
+    # i.e. to express a foreign value constraint here that the department key must be a TF from the departments RF?
     user_schema = Schema({"name": str, "yob": int, "department": TF})
     assert user_schema(user)
 
@@ -76,22 +76,19 @@ def test_schema_constraint():
     users[4] = TF({"name": "Alice", "yob": 1990, "department": users[1].department})
 
 
-def test_foreign_key_constraint():
-    # so what is a foreign key constraint anyway? It says that we reference an attribute function (tuple function)
+def test_foreign_value_constraint():
+    # so what is a foreign value constraint anyway? It says that we reference an attribute function (tuple function)
     # that is mapped to by another relation function
     # for the departments referenced in the users relation, we want to express that the department key must reference
     # a tuple function that is mapped to by the departments relation
-    # -> a foreign key constraint is a value constraint
+    # -> a foreign value constraint is a value constraint
     # -> this might be interesting for relationship functions to then also add key constraints
     db: DBF = _subset_DBF({"users", "departments"}, frozen=False)
     departments: RF = db.departments
     users: RF = db.users
-    user: TF = users[1]
-
-    # if we do it as an attribute function constraint, we have to look up the value in the parent which is not indexed
 
     # for all values in users: the key "department" must map to a value contained in departments:
-    users.add_values_constraint(ForeignKeyConstraint("department", departments))
+    users.add_values_constraint(ForeignValueConstraint("department", departments))
 
     users[4] = TF({"namde": "Alice", "yob": 1990, "department": departments.d1})
     with pytest.raises(ConstraintViolationError):
@@ -100,15 +97,20 @@ def test_foreign_key_constraint():
         users[6] = TF({"namde": "Alice", "yob": 1990, "department": TF()})
 
     # add reverse constraint to departments, i.e. if we delete a department that is referenced by users, we should get
-    # an error:
-    departments.add_values_constraint(ReverseForeignKeyConstraint("department", users))
+    # an error, see discussion below (3.):
+    departments.add_values_constraint(
+        ReverseForeignObjectConstraint("department", users)
+    )
+
+    # TODO, usability: should be able to add the constraint with a single method call
+    #
+
     with pytest.raises(ConstraintViolationError):
         del departments.d1
     # there must still be 2 departments, as the delete operation should have been rolled back:
     assert len(departments) == 2
     assert "d1" in departments
 
-    # TODO: reverse constraint, i.e. if we delete department d1 from departments,
     # how to fix:
     # (1.) some sort of ref counting in departments, if ref exists, do not allow delete, already an optimization
     # (2.) through observer mechanism: if we delete d1, we notify users, users check if any of their items reference d1,

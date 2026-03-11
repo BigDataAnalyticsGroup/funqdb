@@ -20,7 +20,7 @@
 
 
 from fdm.attribute_functions import TF, RF, DBF
-from fdm.schema import Schema, ForeignKeyConstraint
+from fdm.schema import Schema, ForeignValueConstraint
 from fql.operators.filters import filter_values, filter_keys
 from faker import Faker
 
@@ -58,7 +58,7 @@ def _create_testdata(
         frozen=False,
         observe_items=observe_items,
     )
-    users.add_values_constraint(ForeignKeyConstraint("department", departments))
+    users.add_values_constraint(ForeignValueConstraint("department", departments))
     if frozen:
         users.freeze()
 
@@ -142,7 +142,7 @@ def _create_test_data_scalable(
         frozen=False,
         observe_items=observe_items,
     )
-    users.add_values_constraint(ForeignKeyConstraint("department", departments))
+    users.add_values_constraint(ForeignValueConstraint("department", departments))
     if frozen:
         users.freeze()
 
@@ -174,7 +174,7 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
     departments: RF = db.departments
     users: RF = db.users
     # oopsie, my database looks like a query graph! (that is how it should be)
-    # and oopsie: we do not have to repeat the foreign key constraints in such query! (which is how it should be)
+    # and oopsie: we do not have to repeat the foreign value constraints in such query! (which is how it should be)
     return DBF(
         {
             "departments": departments.where(name="Dev"),

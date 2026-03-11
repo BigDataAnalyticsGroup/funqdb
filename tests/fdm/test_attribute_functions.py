@@ -211,7 +211,7 @@ def test_relationship_function():
     meetings: RSF = RSF(frozen=False)
     assert len(meetings) == 0
     # note that as we are assigning instances, we do not require an extra check like in the relational model that
-    # the foreign key "exists"
+    # the foreign value "exists"
     meetings[CompositeKey([users[1], customers[1]])] = TF({"date": "2024-01-01"})
     meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2025-01-01"})
     meetings[CompositeKey([users[2], customers[3]])] = TF({"date": "2026-01-01"})

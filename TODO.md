@@ -5,6 +5,7 @@
 - [x] simpler additional filter syntax on attribute functions where()
 - [x] basic "__"-syntax for filters, e.g. equality
 - [x] directly specify query graph
+- [ ] foreign object constraints with the stor (similar to observer)]
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
 - [ ] updates and transactions
 - [ ] ordering
