@@ -24,20 +24,20 @@ import pytest
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
 from fql.operators.transforms import (
-    map_instance,
     transform_items,
     partition,
     group_by_aggregate,
+    transform,
 )
 from fql.util import Item, ReadOnlyError
 from tests.lib import _create_testdata
 
 
-def test_map_instance():
+def test_transform_instance():
     """map input RF to output RF using identity mapping function."""
     db: DBF = _create_testdata()
     users: RF = db.users
-    map_RF: Operator[RF, RF] = map_instance[RF, RF](mapping_function=lambda el: el)
+    map_RF: Operator[RF, RF] = transform[RF, RF](mapping_function=lambda el: el)
     users_mapped: RF = map_RF(users)
     assert type(users_mapped) == RF
     assert users == users_mapped

@@ -21,9 +21,7 @@
 
 from typing import Callable, Any, Iterable
 
-from fdm.API import AttributeFunction
 from fdm.attribute_functions import RF, DBF
-from fdm.schema import Schema
 from fql.operators.APIs import Operator
 from fql.util import Item
 
@@ -32,10 +30,10 @@ import logging
 logger = logging.Logger(__name__)
 
 
-class map_instance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
+class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """An operator that maps an input instance to an output instance."""
+    """An operator that transforms an input instance to an output instance."""
 
     def __init__(self, mapping_function: Callable[..., Any]):
         self.mapping_function = mapping_function
@@ -107,11 +105,14 @@ class partition(Operator[RF, DBF]):
     def __init__(
         self,
         partitioning_function: Callable[[Item], Any],
+        output_factory: Callable[..., DBF] = None,
     ):
         self.partitioning_function = partitioning_function
+        if output_factory is None:
+            self.output_factory = lambda _: DBF(frozen=False)
 
     def __call__(self, input_function: RF) -> DBF:
-        output_function: DBF = DBF(frozen=False)
+        output_function: DBF = self.output_factory(None)
         item: Item
         for item in input_function:
             partition_key = self.partitioning_function(item)
