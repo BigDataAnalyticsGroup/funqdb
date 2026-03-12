@@ -168,14 +168,14 @@ def test_group_by_aggregate_single_operator():
                 grouping_function=lambda i: (
                     "Tom" if i.value.name == "Tom" else "not Tom"
                 ),
-                aggregation_function=lambda item: Item(
-                    key=item.key, value=TF({"count": len(item.value)})
+                aggregation_function=lambda i: Item(
+                    key=i.key, value=TF({"count": len(i.value)})
                 ),
             )(rel)
         else:
             aggregates = group_by_aggregate(
                 lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
-                lambda item: Item(key=item.key, value=TF({"count": len(item.value)})),
+                lambda i: Item(key=i.key, value=TF({"count": len(i.value)})),
             )(rel)
 
         assert len(aggregates) == 2

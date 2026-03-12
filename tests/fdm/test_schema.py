@@ -30,9 +30,6 @@ def test_schema_constraint():
     user = _subset_DBF({"users"}, frozen=False).users[1]
 
     # create a schema that requires the keys "name", "yob" and "department" with any types:
-    # TODO: maybe we could be more precise here in directly specifying that it is not only some TF but rather
-    # TFs from a specific RF that we expect here for the department key?
-    # i.e. to express a foreign value constraint here that the department key must be a TF from the departments RF?
     user_schema = Schema({"name": str, "yob": int, "department": TF})
     assert user_schema(user, ChangeEvent.UPDATE)
 

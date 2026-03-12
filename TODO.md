@@ -1,10 +1,6 @@
 ### To Do List
 
-- [x] FIX: filter values vs filter items vs filter keys
-- [x] fix reverse fks
-- [x] simpler additional filter syntax on attribute functions where()
-- [x] basic "__"-syntax for filters, e.g. equality
-- [x] directly specify query graph
+
 - [ ] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
   computing new attributes based on the existing ones, e.g. by applying a function to them
 - [ ] maybe a special projection method for AFs: project() and 𝜋()
@@ -13,7 +9,8 @@
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
 - [ ] transactions
 - [ ] ordering
-- [ ] top-k queries
+- [ ] top-k queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a filter
+  operator
 - [ ] TPC-H and/or TPC-C queries in FQL
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
@@ -21,8 +18,8 @@
   from the store
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
-- [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be
-- [ ] done with care, maybe only allow loading from trusted sources
+- [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be done with
+  care, maybe only allow loading from trusted sources
 - [ ] https://docs.python.org/3/library/pickle.html#pickling-and-unpickling-normal-class-instances hmac?
 - [ ] façades in other languages
 - [ ] backends in other languages, e.g. Rust, C++, etc.
@@ -51,6 +48,17 @@
     3. ...
     4. that determines at the same time the root of the computation
 
+
+
+---
+
+### DONE
+ 
+- [x] FIX: filter values vs filter items vs filter keys
+- [x] fix reverse fks
+- [x] simpler additional filter syntax on attribute functions where()
+- [x] basic "__"-syntax for filters, e.g. equality
+- [x] directly specify query graph
 ---
 
 ### Discarded

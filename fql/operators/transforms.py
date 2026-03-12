@@ -21,7 +21,9 @@
 
 from typing import Callable, Any, Iterable
 
+from fdm.API import AttributeFunction
 from fdm.attribute_functions import RF, DBF
+from fdm.schema import Schema
 from fql.operators.APIs import Operator
 from fql.util import Item
 
@@ -50,7 +52,7 @@ class map_instance[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """An operator that transforms the input instance by mapping its values.
+    """An operator that transforms the input instance by mapping its items.
     The modified input instance will be returned as the output."""
 
     def __init__(
@@ -83,9 +85,11 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             )
 
         # (1.) we need to materialize the items first to avoid modifying while iterating
+        # TODO: discuss, really needed?
+        # TODO: shall we still support inplace modifications?
         buffer = {item.key: item.value for item in mapped_items if item is not None}
 
-        # (2.) enter values in output_function:
+        # (2.) enter key,values in output_function:
         for key, value in buffer.items():
             output_function[key] = value
 
@@ -94,10 +98,11 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return output_function
 
 
+# TODO: do we need a transform_values operator?
+
+
 class partition(Operator[RF, DBF]):
     """Partition an input RF into a DBF with its partitions as RFs."""
-
-    # TODO: do we even need any factories here as the output types are fixed anyhow?
 
     def __init__(
         self,

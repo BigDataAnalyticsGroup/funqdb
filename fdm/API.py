@@ -207,7 +207,9 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         ...
 
     @abstractmethod
-    def where(self, predicate: Callable[..., Any], **kwargs) -> "AttributeFunction":
+    def where(
+        self, predicate: Callable[..., Any] = None, **kwargs
+    ) -> "AttributeFunction":
         """Filter the items of this AttributeFunction based on the given conditions.
         @param predicate: A callable defined on the values of this attribute function and returns True if the item
         should be included in the result, False otherwise.
@@ -219,7 +221,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
 
         ...
 
-    def 𝛔(self, predicate: Callable[..., Any], **kwargs) -> "AttributeFunction":
+    def 𝛔(self, predicate: Callable[..., Any] = None, **kwargs) -> "AttributeFunction":
         """Rel algebra style naming for where."""
         return self.where(predicate, **kwargs)
 

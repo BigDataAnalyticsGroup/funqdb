@@ -176,6 +176,7 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
     users: RF = db.users
     # oopsie, my database looks like a query graph! (that is how it should be)
     # and oopsie: we do not have to repeat the foreign value constraints in such query! (which is how it should be)
+    # could be wrapped here with a subdb-operator to reduce DBFs to matching TFs
     return DBF(
         {
             "departments": departments.𝛔(name="Dev"),
