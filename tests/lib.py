@@ -20,7 +20,7 @@
 
 
 from fdm.attribute_functions import TF, RF, DBF
-from fdm.schema import Schema, ForeignValueConstraint
+from fdm.schema import Schema
 from fql.operators.filters import filter_keys
 from faker import Faker
 
@@ -120,7 +120,7 @@ def _create_test_data_scalable(
             for i in range(1, num_departments + 1)
         },
         lineage=["RF(departments)"],
-        frozen=frozen,
+        frozen=False,
         observe_items=observe_items,
     )
     if add_schemas:
@@ -143,9 +143,10 @@ def _create_test_data_scalable(
         frozen=False,
         observe_items=observe_items,
     )
-    users.add_values_constraint(ForeignValueConstraint("department", departments))
+    users.references("department", departments)
     if frozen:
         users.freeze()
+        departments.freeze()
 
     if add_schemas:
         users.add_values_constraint(Schema({"name": str, "yob": int, "department": TF}))

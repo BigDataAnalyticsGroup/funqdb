@@ -56,6 +56,6 @@ TODO: first change code to do this in one call rather than two
 
 ```python
 users: RF = db.users
-user_schema = Schema({"name": str, "yob": int, "department": TF})
-users.add_foreign_value_constraint("department", user_schema) # TODO: does not exist yet
+departments: RF = db.departments
+users.references("department", departments) # adds a foreign value constraint
 ```
