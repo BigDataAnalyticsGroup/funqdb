@@ -10,6 +10,8 @@ There are two important subclasses of constraints:
    function
 2. **Attribute Function Constraints**: these constraints make a restriction about the set of all
    key/value-pairs of an attribute function
+3. **Foreign Value Constraints**: these constraints restrict the values of an attribute function to be
+   instances of another attribute function. This replaces the relational *foreign key* constraints.
 
 ### 1. Value Constraints
 
@@ -32,6 +34,8 @@ The `user_schema` constraint will be checked for every key/value-mapping being i
 
 TODO
 
+
+
 ### 2. Attribute Function Constraints
 
 Attribute function constraints define a constraint on the **set of items** rather than on individual items. For
@@ -42,3 +46,16 @@ users.add_attribute_function_constraint(max_count(3))
 ```
 
 This constraint will forbid the attribute function `users`to keep more than 3 items.
+
+### 3. Foreign Value Constraints
+
+in the relational world known as 'foreign key constraints'. However in FDM, we do not have to refer to by an extra
+indirection via foreign keys but refer to instances directly.
+
+TODO: first change code to do this in one call rather than two
+
+```python
+users: RF = db.users
+user_schema = Schema({"name": str, "yob": int, "department": TF})
+users.add_foreign_value_constraint("department", user_schema) # TODO: does not exist yet
+```
