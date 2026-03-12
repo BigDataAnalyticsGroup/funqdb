@@ -135,6 +135,7 @@ class DictionaryAttributeFunction[Key, Value](
         parent_attribute_function.add_values_constraint(
             ReverseForeignObjectConstraint(key, self)
         )
+        return self
 
     def add_observer(self, observer: Observer):
         """Add an observer to the AttributeFunction.

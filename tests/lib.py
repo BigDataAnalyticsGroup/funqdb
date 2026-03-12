@@ -57,8 +57,7 @@ def _create_testdata(
         lineage=["RF(users)"],
         frozen=False,
         observe_items=observe_items,
-    )
-    users.references("department", departments)
+    ).references("department", departments)
     if frozen:
         users.freeze()
         departments.freeze()
@@ -142,8 +141,8 @@ def _create_test_data_scalable(
         lineage=["RF(users)"],
         frozen=False,
         observe_items=observe_items,
-    )
-    users.references("department", departments)
+    ).references("department", departments)
+
     if frozen:
         users.freeze()
         departments.freeze()
