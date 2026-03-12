@@ -100,6 +100,10 @@ def test_underscore_syntax():
     assert users[1]["department__name"] == "Dev"
     assert users[2]["department__name"] == "Dev"
     assert users[3]["department__name"] == "Consulting"
+    assert users[3]["department__name"] == "Consulting"
+    # multiple "__" should also work:
+    assert db["departments__d1__name"] == "Dev"
+    assert db("departments__d1__name") == "Dev"
 
     # dot syntax combined with underscore syntax:
     assert users[1].department__name == "Dev"

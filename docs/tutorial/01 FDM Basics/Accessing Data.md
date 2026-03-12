@@ -37,6 +37,15 @@ Or any mix you like (not recommended):
 name: str = persons("t1").name 
 ```
 
+Or a Django-ORM-style `__`-syntax (not recommended):
+
+```python
+name: str = persons("t1__name") 
+name: str = persons["t1__name"] 
+name: str = db["persons__t1__name"] 
+```
+
+
 All of these statements are equivalent and will yield the same result, i.e. the string "Tom".
 
 Note, that in Python, the dot syntax is only available for attributes that are valid **Python identifiers**, e.g. the

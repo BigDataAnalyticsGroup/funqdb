@@ -181,7 +181,7 @@ class DictionaryAttributeFunction[Key, Value](
         """
         return self.__dict__["frozen"]
 
-    def __getitem__(self, key: Key) -> Value:
+    def __getitem__(self, key: Key) -> Any:
         """Customize item access. This must be used for non-str-type keys.
         TODO: discuss whether we really want to have this
         Supports __-syntax for accessing sub-items of values, e.g., if we have an item with key "department" and value

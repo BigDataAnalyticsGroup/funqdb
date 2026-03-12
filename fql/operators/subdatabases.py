@@ -23,7 +23,7 @@ from typing import Callable, Any
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
-from fql.operators.filters import filter_values, filter_items
+from fql.operators.filters import filter_items
 
 
 class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](

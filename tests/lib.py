@@ -21,7 +21,7 @@
 
 from fdm.attribute_functions import TF, RF, DBF
 from fdm.schema import Schema, ForeignValueConstraint
-from fql.operators.filters import filter_values, filter_keys
+from fql.operators.filters import filter_keys
 from faker import Faker
 
 

@@ -99,7 +99,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         self.__delitem__(name)
 
     @abstractmethod
-    def __getitem__(self, key: Key) -> Value:
+    def __getitem__(self, key: Key) -> Any:
         """Make the object callable through []-syntax."""
         ...
 
@@ -111,7 +111,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """
         ...
 
-    def __call__(self, *args, **kwargs) -> "AttributeFunction":
+    def __call__(self, *args, **kwargs) -> Any:
         """Make the object callable through () syntax.
         @return: The result of the call.
         """
