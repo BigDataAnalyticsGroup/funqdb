@@ -140,6 +140,9 @@ class group_by_aggregate(Operator[RF, RF]):
         self.aggregation_function = aggregation_function
 
     def __call__(self, input_function: RF) -> RF:
+
+        # TODO: maybe keep one function which calls transform with a lambda
+        # and another one calling aggregate() and expecting aggregation functions?
         return transform_items[DBF, RF](
             transformation_function=self.aggregation_function,
             output_factory=lambda _: RF(),
@@ -147,13 +150,12 @@ class group_by_aggregate(Operator[RF, RF]):
 
 
 class aggregate(Operator[RF, RF]):
-    """Aggregate an input RF by a grouping function and aggregate the groups using the specified aggregation functions."""
+    """Aggregate an input RF using the specified aggregation functions."""
 
     def __init__(self, **aggregates):
         self.aggregates = aggregates
 
     def __call__(self, input_function: RF) -> RF:
-        # TODO
         output_function = type(input_function)(frozen=False)
         for key, value in self.aggregates.items():
             output_function[key] = value(input_function)

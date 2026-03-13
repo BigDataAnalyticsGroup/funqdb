@@ -28,7 +28,7 @@ def test_aggregation_functions():
     assert f(users) == 1983
 
 
-def test_aggregate_single_operator():
+def test_aggregate_operator():
     rel: RF = _create_testdata(frozen=True).users
 
     for i in range(2):
@@ -45,6 +45,7 @@ def test_aggregate_single_operator():
                 median=Median("yob"),
             )(rel)
         else:
+            # with relational algebra inspired syntax:
             aggregated = 𝜞(
                 min=Min("yob"),
                 max=Max("yob"),
