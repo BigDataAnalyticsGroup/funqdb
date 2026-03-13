@@ -51,7 +51,7 @@ class Median(AggregationFunction):
         data: list = sorted([i.value[self.attribute] for i in rf])
         n = len(data)
         if n == 0:
-            return None
+            raise ValueError("Cannot compute median of empty data")
         elif n % 2 == 1:
             return data[n // 2]
         else:

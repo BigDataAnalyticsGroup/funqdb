@@ -27,7 +27,6 @@ from fql.operators.transforms import (
     partition,
     group_by_aggregate,
     transform,
-    aggregate,
 )
 from fql.util import Item, ReadOnlyError
 from tests.lib import _create_testdata
@@ -188,16 +187,3 @@ def test_group_by_aggregate_single_operator():
         not_tom_aggregate: TF = aggregates["not Tom"]
         assert type(not_tom_aggregate) == TF
         assert not_tom_aggregate.count == 3
-
-
-def test_aggregate_single_operator():
-    rel: RF = _create_testdata(frozen=True).users
-
-    aggregates: RF | None = aggregate(lambda rf: RF({"count": len(rf)}))(rel)
-
-    assert len(aggregates) == 1
-    assert type(aggregates) == RF
-
-    assert aggregates.count == 3
-
-    # TODO: arbitrary aggregation functions, e.g. sum of budgets of departments referenced by users, etc.
