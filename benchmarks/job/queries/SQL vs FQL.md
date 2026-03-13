@@ -4,7 +4,7 @@ query <a href="https://raw.githubusercontent.com/gregrahn/join-order-benchmark/r
 <table>
 <tr>
 <td> 
-SQL </td> <td> FQL </td>
+SQL </td> <td> FQL (syntax in progress)</td>
 </tr>
 <tr>
 <td style="vertical-align: top;">
@@ -30,29 +30,33 @@ WHERE ci.note LIKE '%(producer)%'
   AND cn.id = mc.company_id
   AND ct.id = mc.company_type_id;
 
-
 ```
+
+Yes, you need to find a way to integrate this SQL into your programming language.
 
 </td>
 <td style="vertical-align: top;">
 
 ```python
 
-input: RF = join(
-    DBF(
-        {
-            "chn": char_name,
-            "ci": cast_info.where(note__like="(producer)"),
-            "cn": company_name.where(country_code="[us]"),
-            "t": title.𝛔(production_year > 1990),
-        }
-    )
-).aggregate(
+result: RF = aggregate(
+    join(
+        DBF(
+            {
+                "chn": char_name,
+                "ci": cast_info.where(note__like="(producer)"),
+                "cn": company_name.where(country_code="[us]"),
+                "t": title.𝛔(production_year > 1990),
+            }
+        )
+    ),
     character=Min("name"),
     movie_with_american_producer=Min("title"),
 )
-
 ```
+
+Yes, this is all Python, and thus directly integrated. A similar syntax can be used in most other
+programming languages.
 
 <tr>
 <td style="vertical-align: top;">
@@ -65,14 +69,17 @@ input: RF = join(
    the schema.
 2. **out-of-place filters**: sargable filters (i.e. filters on input relations) are notated out of place: the relation
    is in the FROM-clause, its
-   filters in the WHERE clause  (problem: <a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">split-attention</a>)
+   filters in the WHERE clause  (problem: <a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">
+   split-attention</a>)
 3. **wrong conceptual order**: the order of the statements does not correspond to the conceptual execution order
    places.
 4. **repeated the database structure**: some tables that are neither filtered nor used in the aggregates are repeated in
    the query even though they are part of the database schema
-5. **separate query and programming language**: SQL is a separate query language that has to be learned and mastered in addition to the
+5. **separate query and programming language**: SQL is a separate query language that has to be learned and mastered in
+   addition to the
    programming language used for application development. Thus, SQL requires an extra parser. SQL's integration into
-   programming languages may also lead to <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a> (as of 2025 the 2nd most dangerous software weakness in the world).
+   programming languages may also lead to <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL
+   injection</a> (as of 2025 the 2nd most dangerous software weakness in the world).
 
 <td style="vertical-align: top;">
 
@@ -82,15 +89,20 @@ input: RF = join(
    constraints already declared in
    the schema.
 2. **in-place filters**: sargable filters (i.e. filters on input relations) are directly notate with the relation and
-   not in two separate places  (<a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">spatial contiguity</a>)
+   not in two separate places  (<a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">spatial
+   contiguity</a>)
 3. **correct conceptual order**: the order of the statement corresponds to the conceptual execution order
-   places.
+   places, just read inside-out: first the relations with their filters, then the join, then the aggregation; inside an
+   operator simply read from top to bottom.
 4. **no repetition of database structure**: tables that are neither filtered nor used in the aggregates do not have to
-   be repeated
-   in the query as they are part of the database schema anyway and will be used for query processing as declared in the
+   be repeated in the query as they are part of the database schema anyway and will be used for query processing as
+   declared in the
    schema
-5. **integrated into query language**: FQL is integrated into the programming language used for application development. Thus, FQL does not
-   require an extra parser. FQL's integration into programming languages makes <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a> impossible.
+5. **integrated into programming language**: FQL is integrated into the programming language used for application
+   development.
+   Thus, FQL does not
+   require an extra parser. FQL's integration into programming languages
+   makes <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a> impossible.
 
 </td>
 </tr>
