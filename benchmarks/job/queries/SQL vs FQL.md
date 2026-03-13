@@ -46,7 +46,7 @@ result: RF = aggregate(
                 "chn": char_name,
                 "ci": cast_info.where(note__like="(producer)"),
                 "cn": company_name.where(country_code="[us]"),
-                "t": title.𝛔(production_year > 1990),
+                "t": title.where(production_year > 1990),
             }
         )
     ),
@@ -55,8 +55,8 @@ result: RF = aggregate(
 )
 ```
 
-Yes, this is all Python, and thus directly integrated. A similar syntax can be used in most other
-programming languages.
+Yes, this is all Python, and thus directly part of your application program. A similar syntax can be used in most other
+programming languages. 
 
 <tr>
 <td style="vertical-align: top;">
