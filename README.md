@@ -10,8 +10,25 @@
 5. same power for updates as for reading
 6. easily extensible
 7. the notion of an "index" is built into the data model
+8. no problems with NULL problems: no NULL values, no NULL semantics
    
 **None** of this is true for SQL.
+
+
+## Getting Started
+
+### Installation
+
+For the moment there is the option to clone or download a zip of the repository and install the dependencies
+through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
+
+### Tutorial
+
+see the [tutorial](docs/tutorial/README.md) which is work in progress
+
+### TLDR
+
+see the [SQL vs FQL](benchmarks/job/queries/SQL%20vs%20FQL.md) comparison
 
 ## Background
 
@@ -142,17 +159,6 @@ My **long term** goals are:
 2. other attribute functions beyond tabular data, e.g. tensors, etc.  (volunteers needed)
 3. to have a complete implementation of the ideas in the [ND25] and [RD25] papers, i.e. support for database-returning
    queries and query optimization for database-returning  (volunteers needed)
-
-## Getting Started
-
-### Installation
-
-For the moment there is the option to clone or download a zip of the repository and install the dependencies
-through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
-
-### Tutorial
-
-see the [tutorial](docs/tutorial/README.md) which is work in progress
 
 ### Tests
 
