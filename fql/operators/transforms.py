@@ -151,6 +151,7 @@ class aggregate(Operator[RF, RF]):
 
     def __init__(
         self,
+        #        aggregate:
         aggregation_function: Callable[[RF], Any],
     ):
         self.aggregation_function = aggregation_function
