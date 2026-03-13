@@ -58,6 +58,7 @@ def _create_testdata(
         frozen=False,
         observe_items=observe_items,
     ).references("department", departments)
+
     if frozen:
         users.freeze()
         departments.freeze()
