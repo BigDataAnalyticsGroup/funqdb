@@ -70,9 +70,9 @@ input: RF = join(
    places.
 4. **repeated the database structure**: some tables that are neither filtered nor used in the aggregates are repeated in
    the query even though they are part of the database schema
-5. **separate query language**: SQL is a separate query language that has to be learned and mastered in addition to the
+5. **separate query and programming language**: SQL is a separate query language that has to be learned and mastered in addition to the
    programming language used for application development. Thus, SQL requires an extra parser. SQL's integration into
-   programming languages may lead to <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a>.
+   programming languages may also lead to <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a> (as of 2025 the 2nd most dangerous software weakness in the world).
 
 <td style="vertical-align: top;">
 
@@ -89,7 +89,7 @@ input: RF = join(
    be repeated
    in the query as they are part of the database schema anyway and will be used for query processing as declared in the
    schema
-5. **integrated query language**: FQL is integrated into the programming language used for application development. Thus, FQL does not
+5. **integrated into query language**: FQL is integrated into the programming language used for application development. Thus, FQL does not
    require an extra parser. FQL's integration into programming languages makes <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a> impossible.
 
 </td>
