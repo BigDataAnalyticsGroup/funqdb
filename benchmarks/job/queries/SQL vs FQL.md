@@ -65,14 +65,14 @@ input: RF = join(
    the schema.
 2. **out-of-place filters**: sargable filters (i.e. filters on input relations) are notated out of place: the relation
    is in the FROM-clause, its
-   filters in the WHERE clause  (problem: split-attention)
+   filters in the WHERE clause  (problem: <a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">split-attention</a>)
 3. **wrong conceptual order**: the order of the statements does not correspond to the conceptual execution order
    places.
 4. **repeated the database structure**: some tables that are neither filtered nor used in the aggregates are repeated in
    the query even though they are part of the database schema
 5. **separate query language**: SQL is a separate query language that has to be learned and mastered in addition to the
    programming language used for application development, it requires an extra parser and its integration into
-   programming languages may lead to SQL injection
+   programming languages may lead to <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a>.
 
 <td style="vertical-align: top;">
 
@@ -82,15 +82,15 @@ input: RF = join(
    constraints already declared in
    the schema.
 2. **in-place filters**: sargable filters (i.e. filters on input relations) are directly notate with the relation and
-   not in two separate places  (spatial contiguity)
+   not in two separate places  (<a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">spatial contiguity</a>)
 3. **correct conceptual order**: the order of the statement corresponds to the conceptual execution order
    places.
 4. **no repetition of database structure**: tables that are neither filtered nor used in the aggregates do not have to
    be repeated
    in the query as they are part of the database schema anyway and will be used for query processing as declared in the
    schema
-5. **integrated query language**: FQL is integrated into the programming language used for application development, it does not
-   require an extra parser and its integration into programming languages makes SQL injection impossible
+5. **integrated query language**: FQL is integrated into the programming language used for application development. Thus, FQL does not
+   require an extra parser and its integration into programming languages makes <a href="https://cwe.mitre.org/top25/archive/2025/2025_cwe_top25.html">SQL injection</a> impossible.
 
 </td>
 </tr>
