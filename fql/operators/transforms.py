@@ -35,8 +35,8 @@ class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 ):
     """An operator that transforms an input instance to an output instance."""
 
-    def __init__(self, mapping_function: Callable[..., Any]):
-        self.mapping_function = mapping_function
+    def __init__(self, transformation_function: Callable[..., Any]):
+        self.transformation_function = transformation_function
 
     def __call__(
         self, input_function: INPUT_AttributeFunction
@@ -44,7 +44,7 @@ class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         """Make the object callable.
         @return: The result of the call.
         """
-        return self.mapping_function(input_function)
+        return self.transformation_function(input_function)
 
 
 class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -144,3 +144,18 @@ class group_by_aggregate(Operator[RF, RF]):
             transformation_function=self.aggregation_function,
             output_factory=lambda _: RF(),
         )(partition(partitioning_function=self.grouping_function)(input_function))
+
+
+class aggregate(Operator[RF, RF]):
+    """Aggregate an input RF by a grouping function and aggregate the groups using an aggregation function."""
+
+    def __init__(
+        self,
+        aggregation_function: Callable[[RF], Any],
+    ):
+        self.aggregation_function = aggregation_function
+
+    def __call__(self, input_function: RF) -> RF:
+        return transform[RF, RF](
+            transformation_function=self.aggregation_function,
+        )(input_function)

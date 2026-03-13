@@ -5,6 +5,7 @@
   computing new attributes based on the existing ones, e.g. by applying a function to them
 - [ ] maybe a special projection method for AFs: project() and 𝜋()
 - [ ] complete set of operators, e.g. subdatabase, joins, unions, etc.
+- [ ] revisit all basic operators required to mimic RA and basic SQL
 - [ ] foreign object constraints with the store (similar to observer)
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc.
 - [ ] transactions
