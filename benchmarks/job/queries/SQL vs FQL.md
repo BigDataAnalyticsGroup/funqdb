@@ -42,14 +42,14 @@ input: RF = join(
     DBF(
         {
             "chn": char_name,
-            "ci": cast_info.𝛔(note__like="(producer)"),
-            "cn": company_name.𝛔(country_code="[us]"),
+            "ci": cast_info.where(note__like="(producer)"),
+            "cn": company_name.where(country_code="[us]"),
             "t": title.𝛔(production_year > 1990),
         }
     )
 ).aggregate(
-    character=min("chn.name"),
-    movie_with_american_producer=min("t.title"),
+    character=Min("name"),
+    movie_with_american_producer=Min("title"),
 )
 
 ```

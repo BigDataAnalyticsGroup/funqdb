@@ -147,16 +147,21 @@ class group_by_aggregate(Operator[RF, RF]):
 
 
 class aggregate(Operator[RF, RF]):
-    """Aggregate an input RF by a grouping function and aggregate the groups using an aggregation function."""
+    """Aggregate an input RF by a grouping function and aggregate the groups using the specified aggregation functions."""
 
-    def __init__(
-        self,
-        #        aggregate:
-        aggregation_function: Callable[[RF], Any],
-    ):
-        self.aggregation_function = aggregation_function
+    def __init__(self, **aggregates):
+        self.aggregates = aggregates
 
     def __call__(self, input_function: RF) -> RF:
-        return transform[RF, RF](
-            transformation_function=self.aggregation_function,
-        )(input_function)
+        # TODO
+        output_function = type(input_function)(frozen=False)
+        for key, value in self.aggregates.items():
+            output_function[key] = value(input_function)
+        output_function.freeze()
+        return output_function
+
+
+class 𝜞(aggregate):
+    """Synonym for aggregate operator."""
+
+    pass
