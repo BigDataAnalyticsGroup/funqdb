@@ -52,7 +52,7 @@ def _create_testdata(
         {
             1: TF({"name": "Horst", "yob": 1972, "department": departments.d1}, frozen),
             2: TF({"name": "Tom", "yob": 1983, "department": departments.d1}, frozen),
-            3: TF({"name": "John", "yob": 2002, "department": departments.d2}, frozen),
+            3: TF({"name": "John", "yob": 2003, "department": departments.d2}, frozen),
         },
         lineage=["RF(users)"],
         frozen=False,

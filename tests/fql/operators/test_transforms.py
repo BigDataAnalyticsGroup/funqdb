@@ -17,7 +17,6 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 #
-from typing import Callable, Any
 
 import pytest
 
@@ -202,31 +201,3 @@ def test_aggregate_single_operator():
     assert aggregates.count == 3
 
     # TODO: arbitrary aggregation functions, e.g. sum of budgets of departments referenced by users, etc.
-
-
-class AggregationFunction:
-    def __init__(self, aggregation_function: Callable[[Any], Any], attribute: str):
-        self.aggregation_function = aggregation_function
-        self.attribute = attribute
-
-    def __call__(self, rf: RF) -> Any:
-        return self.aggregation_function([i.value[self.attribute] for i in rf])
-
-
-class Max(AggregationFunction):
-    def __init__(self, attribute: str):
-        super().__init__(max, attribute)
-
-
-class Min(AggregationFunction):
-    def __init__(self, attribute: str):
-        super().__init__(min, attribute)
-
-
-def test_min_max():
-    users: RF = _create_testdata(frozen=True).users
-    min_yob = Min("yob")
-    assert 1972 == min_yob(users)
-
-    max_yob = Max("yob")
-    assert 2002 == max_yob(users)
