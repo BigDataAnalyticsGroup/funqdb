@@ -1,7 +1,7 @@
 ## Example Comparison of SQL and FQL for a Join Query
 
 query <a href="https://raw.githubusercontent.com/gregrahn/join-order-benchmark/refs/heads/master/10c.sql">10 c</a>
-<table style="width:1000px; ">
+<table style="overflow-x: hidden!important;">
 <tr>
 <td> 
 SQL </td> <td> FQL (syntax in progress)</td>
