@@ -1,7 +1,7 @@
 ## Example Comparison of SQL and FQL for a Join Query
 
 query <a href="https://raw.githubusercontent.com/gregrahn/join-order-benchmark/refs/heads/master/10c.sql">10 c</a>
-<table>
+<table style="width:100%; ">
 <tr>
 <td> 
 SQL </td> <td> FQL (syntax in progress)</td>
@@ -30,6 +30,7 @@ WHERE ci.note LIKE '%(producer)%'
   AND cn.id = mc.company_id
   AND ct.id = mc.company_type_id;
 
+
 ```
 
 Yes, you need to find a way to integrate this SQL into your programming language.
@@ -56,7 +57,7 @@ result: RF = aggregate(
 ```
 
 Yes, this is all Python, and thus directly part of your application program. A similar syntax can be used in most other
-programming languages. 
+programming languages.
 
 <tr>
 <td style="vertical-align: top;">
