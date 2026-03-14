@@ -171,7 +171,7 @@ textbook-style code examples. I often re-use the examples from the tests in the 
 
 ### Talks
 
-see [talks](docs/talks)
+see [talks](docs/Talks.md)
 
 ### Videos
 
