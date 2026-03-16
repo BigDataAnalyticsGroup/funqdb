@@ -7,9 +7,14 @@ from fql.operators.aggregates import (
     Avg,
     Mean,
     Median,
-    group_by_aggregate,
 )
-from fql.operators.transforms import aggregate, 𝜞, partition, transform_items
+from fql.operators.transforms import (
+    aggregate,
+    𝜞,
+    partition,
+    transform_items,
+    partition_by_aggregate,
+)
 from fql.util import Item
 from tests.lib import _create_testdata
 
@@ -44,7 +49,7 @@ def test_aggregate_operator():
     rel: RF = _create_testdata(frozen=True).users
 
     for i in range(2):
-        # 7 aggregates at the same time:
+        # 7 aggregate_keys at the same time:
         aggregated: TF | None = None
         if i == 0:
             aggregated = aggregate(
@@ -79,7 +84,7 @@ def test_aggregate_operator():
         assert aggregated.median == 1983
 
 
-def test_group_by_aggregate_stepwise():
+def test_partition_by_aggregate_stepwise():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
@@ -90,6 +95,7 @@ def test_group_by_aggregate_stepwise():
     )
 
     # take partitions (a DBF of RFs) and return one RF with one aggregated TF per partition:
+    # TODO: introduce a separate nest()-operation for this?
     aggregates = transform_items[DBF, RF](
         transformation_function=lambda item: Item(
             item.key, aggregate(min=Min("yob"), max=Max("yob"))(item.value)
@@ -106,15 +112,15 @@ def test_group_by_aggregate_stepwise():
     assert aggregates["not Tom"].max == 2003
 
 
-def test_group_by_aggregate_single_operator():
+def test_partition_by_aggregate_single_operator():
     # TODO: redo with new aggregation operator
     rel: RF = _create_testdata(frozen=True).customers
 
     for i in range(2):
         aggregates: RF | None = None
         if i == 0:
-            aggregates = group_by_aggregate(
-                grouping_function=lambda i: (
+            aggregates = partition_by_aggregate(
+                partitioning_function=lambda i: (
                     "Tom" if i.value.name == "Tom" else "not Tom"
                 ),
                 aggregation_function=lambda i: Item(
@@ -122,7 +128,7 @@ def test_group_by_aggregate_single_operator():
                 ),
             )(rel)
         else:
-            aggregates = group_by_aggregate(
+            aggregates = partition_by_aggregate(
                 lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
                 lambda i: Item(key=i.key, value=TF({"count": len(i.value)})),
             )(rel)

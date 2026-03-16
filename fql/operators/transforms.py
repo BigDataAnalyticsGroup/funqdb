@@ -102,6 +102,8 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 class partition(Operator[RF, DBF]):
     """Partition an input RF into a DBF with its partitions as RFs.
 
+    #TODO: generic type: this operator can also partition an entire database...
+
     @param partitioning_function: A function that takes an Item and returns the partition key for that item.
     @param output_factory: If set, this factory function will be used to create the output DBF instance. If not set,
     a new DBF instance will be created.
@@ -138,11 +140,13 @@ class group_by(partition):
     Thus, this operator simulates the traditional group-by in relational algebra and SQL. The partitioning function is
     automatically derived from the specified grouping keys (attributes)."""
 
-    def __init__(self, *aggregates):
+    # TODO: generic type: this operator can also partition an entire database...
+
+    def __init__(self, *aggregate_keys):
         super().__init__(
             # convert the grouping function to a partitioning function that returns a tuple of the grouping keys for
             # the specified attributes:
-            lambda item: tuple(item.value[attribute] for attribute in aggregates)
+            lambda item: tuple(item.value[attribute] for attribute in aggregate_keys)
         )
 
 
@@ -164,3 +168,54 @@ class 𝜞(aggregate):
     """Synonym for aggregate operator."""
 
     pass
+
+
+class group_by_aggregate(Operator[RF, RF]):
+    """Group an input RF by the equality of the given keys (the values mapped to by those keys) and aggregate the
+    groups using the specified aggregation functions."""
+
+    def __init__(self, *aggregate_keys, **aggregates):
+        self.aggregate_keys = aggregate_keys
+        self.aggregates = aggregates
+
+    def __call__(self, input_function: RF) -> RF:
+        # partition the input RF into a DBF with one RF per partition:
+        group_by_result: DBF = group_by(self.aggregate_keys)(input_function)
+
+        aggregation_result = transform_items[DBF, RF](
+            transformation_function=lambda item: Item(
+                item.key, aggregate(**self.aggregates)(item.value)
+            ),
+            output_factory=lambda _: RF(),
+        )(group_by_result)
+
+        # take partitions (a DBF of RFs) and return one TF with one aggregated TF per partition:
+        return aggregation_result
+
+
+def __init__(self, *aggregate_keys, **aggregates):
+    pass
+
+
+class partition_by_aggregate(Operator[RF, RF]):
+    """Group an input RF by a grouping function and aggregate the groups using an aggregation function."""
+
+    # TODO: generic input and putput AFs: this operator can also be used to partition an entire database and aggregate
+    #  the partitions
+
+    def __init__(
+        self,
+        partitioning_function: Callable[[Item], Any],
+        aggregation_function: Callable[[RF], Any],
+    ):
+        self.partitioning_function = partitioning_function
+        self.aggregation_function = aggregation_function
+
+    def __call__(self, input_function: RF) -> RF:
+
+        # TODO: maybe keep one function which calls transform with a lambda
+        # and another one calling aggregate() and expecting aggregation functions?
+        return transform_items[DBF, RF](
+            transformation_function=self.aggregation_function,
+            output_factory=lambda _: RF(),
+        )(partition(partitioning_function=self.partitioning_function)(input_function))
