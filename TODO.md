@@ -1,5 +1,6 @@
 ### To Do List
 
+- [ ] unit test fpr group_by_aggregate, clean-up and unify tests for grouping and aggregation
 - [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__
 - [ ] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
   computing new attributes based on the existing ones, e.g. by applying a function to them
