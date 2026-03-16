@@ -25,8 +25,8 @@ from fql.operators.APIs import Operator
 from fql.operators.transforms import (
     transform_items,
     partition,
-    group_by_aggregate,
     transform,
+    group_by,
 )
 from fql.util import Item, ReadOnlyError
 from tests.lib import _create_testdata
@@ -81,7 +81,7 @@ def test_TransformValues():
         transform_RF(users)
 
 
-def test_TransformValues_new_output_instance():
+def test_transform_items_new_output_instance():
     # same with output factory to create a new output RF instance
     # transform the values in the users relation (note: this will NOT modify the original RF in the db)
     db: DBF = _create_testdata(frozen=True)
@@ -128,62 +128,34 @@ def test_partitioning():
         assert item.value.name != "Tom"
 
 
-def test_group_by_aggregate_stepwise():
+def test_partitioning_and_group_by_composed_partitioning_key():
     db: DBF = _create_testdata(frozen=True)
     customers: RF = db.customers
 
-    # partition the users RF into a DBF with one RF per partition: one with name Tom and one not named Tom:
-    partitions = partition(lambda i: "Tom" if i.value.name == "Tom" else "not Tom")(
-        customers
-    )
-
-    # take partitions (a DBF of RFs) and return one RF with one aggregated TF per partition:
-    aggregates = transform_items[DBF, RF](
-        transformation_function=lambda item: Item(
-            key=item.key, value=TF({"count": len(item.value)})
-        ),
-        output_factory=lambda _: RF(),
-    )(partitions)
-
-    assert len(aggregates) == 2
-    assert type(aggregates) == RF
-
-    tom_aggregate: TF = aggregates["Tom"]
-    assert type(tom_aggregate) == TF
-    assert tom_aggregate.count == 2
-
-    not_tom_aggregate: TF = aggregates["not Tom"]
-    assert type(not_tom_aggregate) == TF
-    assert not_tom_aggregate.count == 3
-
-
-def test_group_by_aggregate_single_operator():
-    rel: RF = _create_testdata(frozen=True).customers
-
+    # partition the users relation into two RFs: those name Tom and those not named Tom:
     for i in range(2):
-        aggregates: RF | None = None
+        partitions: DBF | None = None
         if i == 0:
-            aggregates = group_by_aggregate(
-                grouping_function=lambda i: (
-                    "Tom" if i.value.name == "Tom" else "not Tom"
-                ),
-                aggregation_function=lambda i: Item(
-                    key=i.key, value=TF({"count": len(i.value)})
-                ),
-            )(rel)
+            # generic partitioning based on a partitioning function:
+            partitions = partition(lambda i: (i.value.name, i.value.company))(customers)
         else:
-            aggregates = group_by_aggregate(
-                lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
-                lambda i: Item(key=i.key, value=TF({"count": len(i.value)})),
-            )(rel)
+            # explicit group by building partitions based on equality of multiple attributes:
+            partitions = group_by("name", "company")(customers)
+        assert len(partitions) == 4
+        assert type(partitions) == DBF
 
-        assert len(aggregates) == 2
-        assert type(aggregates) == RF
+        tom_whatever_partition: RF = partitions[("Tom", "whatever gmbh")]
+        assert type(tom_whatever_partition) == RF
+        assert len(tom_whatever_partition) == 2
 
-        tom_aggregate: TF = aggregates["Tom"]
-        assert type(tom_aggregate) == TF
-        assert tom_aggregate.count == 2
+        john_whatever_partition: RF = partitions[("John", "whatever gmbh")]
+        assert type(john_whatever_partition) == RF
+        assert len(john_whatever_partition) == 1
 
-        not_tom_aggregate: TF = aggregates["not Tom"]
-        assert type(not_tom_aggregate) == TF
-        assert not_tom_aggregate.count == 3
+        peter_ppmi_partition: RF = partitions[("Peter", "Peter, Paul, and Mary Inc.")]
+        assert type(peter_ppmi_partition) == RF
+        assert len(peter_ppmi_partition) == 1
+
+        frank_masterhorst_partition: RF = partitions[("Frank", "Masterhorst")]
+        assert type(frank_masterhorst_partition) == RF
+        assert len(frank_masterhorst_partition) == 1

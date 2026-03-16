@@ -20,7 +20,10 @@
 
 from typing import Callable, Any
 
-from fdm.attribute_functions import RF
+from fdm.attribute_functions import RF, DBF
+from fql.operators.APIs import Operator
+from fql.operators.transforms import transform_items, partition
+from fql.util import Item
 
 
 class AggregationFunction:
@@ -82,3 +85,24 @@ class Mean(Avg):
     """Synonym for Avg."""
 
     pass
+
+
+class group_by_aggregate(Operator[RF, RF]):
+    """Group an input RF by a grouping function and aggregate the groups using an aggregation function."""
+
+    def __init__(
+        self,
+        grouping_function: Callable[[Item], Any],
+        aggregation_function: Callable[[RF], Any],
+    ):
+        self.grouping_function = grouping_function
+        self.aggregation_function = aggregation_function
+
+    def __call__(self, input_function: RF) -> RF:
+
+        # TODO: maybe keep one function which calls transform with a lambda
+        # and another one calling aggregate() and expecting aggregation functions?
+        return transform_items[DBF, RF](
+            transformation_function=self.aggregation_function,
+            output_factory=lambda _: RF(),
+        )(partition(partitioning_function=self.grouping_function)(input_function))

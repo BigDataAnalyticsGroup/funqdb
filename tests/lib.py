@@ -69,10 +69,10 @@ def _create_testdata(
     # customers tuples and relation:
     customers: RF = RF(
         {
-            1: TF({"name": "Tom", "company": "sample company"}, frozen),
-            2: TF({"name": "Tom", "company": "example inc"}, frozen),
+            1: TF({"name": "Tom", "company": "whatever gmbh"}, frozen),
+            2: TF({"name": "Tom", "company": "whatever gmbh"}, frozen),
             3: TF({"name": "John", "company": "whatever gmbh"}, frozen),
-            4: TF({"name": "Peter", "company": "Peter, Paul, and Mary"}, frozen),
+            4: TF({"name": "Peter", "company": "Peter, Paul, and Mary Inc."}, frozen),
             5: TF({"name": "Frank", "company": "Masterhorst"}, frozen),
         },
         lineage=["RF(customers)"],

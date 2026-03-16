@@ -21,7 +21,7 @@
 
 from typing import Callable, Any, Iterable
 
-from fdm.attribute_functions import RF, DBF
+from fdm.attribute_functions import RF, DBF, TF
 from fql.operators.APIs import Operator
 from fql.util import Item
 
@@ -100,7 +100,12 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
 
 class partition(Operator[RF, DBF]):
-    """Partition an input RF into a DBF with its partitions as RFs."""
+    """Partition an input RF into a DBF with its partitions as RFs.
+
+    @param partitioning_function: A function that takes an Item and returns the partition key for that item.
+    @param output_factory: If set, this factory function will be used to create the output DBF instance. If not set,
+    a new DBF instance will be created.
+    """
 
     def __init__(
         self,
@@ -128,35 +133,27 @@ class partition(Operator[RF, DBF]):
         return output_function
 
 
-class group_by_aggregate(Operator[RF, RF]):
-    """Group an input RF by a grouping function and aggregate the groups using an aggregation function."""
+class group_by(partition):
+    """Partitions an input RF into a DBF based on the equality of the given keys (the values mapped to by those keys).
+    Thus, this operator simulates the traditional group-by in relational algebra and SQL. The partitioning function is
+    automatically derived from the specified grouping keys (attributes)."""
 
-    def __init__(
-        self,
-        grouping_function: Callable[[Item], Any],
-        aggregation_function: Callable[[RF], Any],
-    ):
-        self.grouping_function = grouping_function
-        self.aggregation_function = aggregation_function
-
-    def __call__(self, input_function: RF) -> RF:
-
-        # TODO: maybe keep one function which calls transform with a lambda
-        # and another one calling aggregate() and expecting aggregation functions?
-        return transform_items[DBF, RF](
-            transformation_function=self.aggregation_function,
-            output_factory=lambda _: RF(),
-        )(partition(partitioning_function=self.grouping_function)(input_function))
+    def __init__(self, *aggregates):
+        super().__init__(
+            # convert the grouping function to a partitioning function that returns a tuple of the grouping keys for
+            # the specified attributes:
+            lambda item: tuple(item.value[attribute] for attribute in aggregates)
+        )
 
 
-class aggregate(Operator[RF, RF]):
+class aggregate(Operator[RF, TF]):
     """Aggregate an input RF using the specified aggregation functions."""
 
     def __init__(self, **aggregates):
         self.aggregates = aggregates
 
-    def __call__(self, input_function: RF) -> RF:
-        output_function = type(input_function)(frozen=False)
+    def __call__(self, input_function: RF) -> TF:
+        output_function = TF(frozen=False)
         for key, value in self.aggregates.items():
             output_function[key] = value(input_function)
         output_function.freeze()

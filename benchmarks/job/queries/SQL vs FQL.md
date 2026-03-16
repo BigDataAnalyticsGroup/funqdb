@@ -51,8 +51,8 @@ result: RF = aggregate(
             }
         )
     ),
-    character=Min("name"),
-    movie_with_american_producer=Min("title"),
+    character=Min("chn.name"),
+    movie_with_american_producer=Min("t.title"),
 )
 ```
 
