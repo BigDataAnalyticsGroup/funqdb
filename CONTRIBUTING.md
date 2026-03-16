@@ -1,6 +1,6 @@
 # Contributing
                  
-## Financial support and development contributions
+## Financial contributions
 
 Eventually, I would like to back the development of this project by more people, ideally as part of a foundation.
 If you are interested in supporting this project through such a foundation financially, get in touch.
