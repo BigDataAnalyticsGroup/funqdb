@@ -20,7 +20,8 @@
 
 from typing import Callable, Any
 
-from fdm.attribute_functions import RF
+from fdm.attribute_functions import RF, TF
+from fql.operators.APIs import Operator
 
 
 class AggregationFunction:
@@ -80,5 +81,25 @@ class Median(AggregationFunction):
 
 class Mean(Avg):
     """Synonym for Avg."""
+
+    pass
+
+
+class aggregate(Operator[RF, TF]):
+    """Aggregate an input RF using the specified aggregation functions."""
+
+    def __init__(self, **aggregates):
+        self.aggregates = aggregates
+
+    def __call__(self, input_function: RF) -> TF:
+        output_function = TF(frozen=False)
+        for key, value in self.aggregates.items():
+            output_function[key] = value(input_function)
+        output_function.freeze()
+        return output_function
+
+
+class 𝜞(aggregate):
+    """Synonym for aggregate operator."""
 
     pass

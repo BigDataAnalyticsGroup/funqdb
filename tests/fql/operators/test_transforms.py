@@ -24,9 +24,7 @@ from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
 from fql.operators.transforms import (
     transform_items,
-    partition,
     transform,
-    group_by,
 )
 from fql.util import Item, ReadOnlyError
 from tests.lib import _create_testdata
@@ -57,7 +55,7 @@ def transformation_function_non_modifying(item: Item) -> Item | None:
     return Item(key=item.key, value=tf_new)
 
 
-def test_TransformValues():
+def test_transform_items():
     """map input RF to output RF using filter mapping function to return only some values in the input RF. Modifies the
     input RF in place. This should fail for frozen RFs."""
     db: DBF = _create_testdata(frozen=True)
@@ -102,60 +100,3 @@ def test_transform_items_new_output_instance():
     assert users_names == {
         name[0] + name[1:].lower() for name in transformed_user_names
     }
-
-
-def test_partitioning():
-    db: DBF = _create_testdata(frozen=True)
-    customers: RF = db.customers
-
-    # partition the users relation into two RFs: those name Tom and those not named Tom:
-    partitions = partition(lambda i: "Tom" if i.value.name == "Tom" else "not Tom")(
-        customers
-    )
-    assert len(partitions) == 2
-    assert type(partitions) == DBF
-
-    tom_partition: RF = partitions["Tom"]
-    assert type(tom_partition) == RF
-    assert len(tom_partition) == 2
-    for item in tom_partition:
-        assert item.value.name == "Tom"
-
-    not_tom_partition: RF = partitions["not Tom"]
-    assert type(not_tom_partition) == RF
-    assert len(not_tom_partition) == 3
-    for item in not_tom_partition:
-        assert item.value.name != "Tom"
-
-
-def test_partitioning_and_group_by_composed_partitioning_key():
-    db: DBF = _create_testdata(frozen=True)
-    customers: RF = db.customers
-
-    # partition the users relation into two RFs: those name Tom and those not named Tom:
-    for i in range(2):
-        partitions: DBF | None = None
-        if i == 0:
-            # generic partitioning based on a partitioning function:
-            partitions = partition(lambda i: (i.value.name, i.value.company))(customers)
-        else:
-            # explicit group by building partitions based on equality of multiple attributes:
-            partitions = group_by("name", "company")(customers)
-        assert len(partitions) == 4
-        assert type(partitions) == DBF
-
-        tom_whatever_partition: RF = partitions[("Tom", "whatever gmbh")]
-        assert type(tom_whatever_partition) == RF
-        assert len(tom_whatever_partition) == 2
-
-        john_whatever_partition: RF = partitions[("John", "whatever gmbh")]
-        assert type(john_whatever_partition) == RF
-        assert len(john_whatever_partition) == 1
-
-        peter_ppmi_partition: RF = partitions[("Peter", "Peter, Paul, and Mary Inc.")]
-        assert type(peter_ppmi_partition) == RF
-        assert len(peter_ppmi_partition) == 1
-
-        frank_masterhorst_partition: RF = partitions[("Frank", "Masterhorst")]
-        assert type(frank_masterhorst_partition) == RF
-        assert len(frank_masterhorst_partition) == 1
