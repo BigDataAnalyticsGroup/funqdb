@@ -9,6 +9,7 @@
 - [ ] rename
 - [ ] minus/difference/except (synonyms)
 - [ ] window functions
+- [ ] subqueries
 - [ ] some schema visualization, i.e. through .references(), graphviz, vue.js?
 - [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
