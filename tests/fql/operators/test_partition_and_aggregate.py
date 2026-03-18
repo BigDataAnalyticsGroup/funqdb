@@ -1,7 +1,10 @@
 from fdm.attribute_functions import DBF, RF, TF
-from fql.operators.aggregates import aggregate, Min, Max
+from fql.operators.aggregates import aggregate, Min, Max, Count
 from fql.operators.partition import partition, group_by
-from fql.operators.partition_and_aggregate import partition_by_aggregate
+from fql.operators.partition_and_aggregate import (
+    partition_by_aggregate,
+    group_by_aggregate,
+)
 from fql.operators.transforms import transform_items
 from fql.util import Item
 from tests.lib import _create_testdata
@@ -69,7 +72,6 @@ def test_partition_by_aggregate_stepwise():
 
 
 def test_partition_by_aggregate_single_operator():
-    # TODO: redo with new aggregation operator
     rel: RF = _create_testdata(frozen=True).customers
 
     for i in range(2):
@@ -99,3 +101,34 @@ def test_partition_by_aggregate_single_operator():
         not_tom_aggregate: TF = aggregates["not Tom"]
         assert type(not_tom_aggregate) == TF
         assert not_tom_aggregate.count == 3
+
+
+def test_group_by_aggregate_single_operator():
+    rel: RF = _create_testdata(frozen=True).customers
+
+    for i in range(2):
+        aggregates: RF | None = None
+        if True:
+            aggregates = group_by_aggregate(
+                "name",
+                count=Count("name"),
+            )(rel)
+
+        assert len(aggregates) == 4
+        assert type(aggregates) == RF
+
+        assert "Tom" in aggregates
+        assert type(aggregates["Tom"]) == TF
+        assert aggregates["Tom"].count == 2
+
+        assert "John" in aggregates
+        assert type(aggregates["John"]) == TF
+        assert aggregates["John"].count == 1
+
+        assert "Peter" in aggregates
+        assert type(aggregates["Peter"]) == TF
+        assert aggregates["Peter"].count == 1
+
+        assert "Frank" in aggregates
+        assert type(aggregates["Frank"]) == TF
+        assert aggregates["Frank"].count == 1

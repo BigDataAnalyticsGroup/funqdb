@@ -46,7 +46,7 @@ class AttributeFunctionConstraint(ABC):
 
 
 class attribute_name_equivalence(AttributeFunctionConstraint):
-    """Predicate that checks if the keys in a given attribute_function match a given set."""
+    """Predicate that checks if the foreign_objects in a given attribute_function match a given set."""
 
     def __init__(self, attribute_names: set[str]):
         self.attribute_names = attribute_names

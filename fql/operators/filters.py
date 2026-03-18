@@ -121,8 +121,8 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that filters the __keys__ found in the input instance. Hence, the predicate may
-    be phrased directly on the keys of the items, e.g., lambda k: k.startswith("user_").
-    This is a more intuitive way to filter items based on their keys. The filter_items operator can be implemented in
+    be phrased directly on the foreign_objects of the items, e.g., lambda k: k.startswith("user_").
+    This is a more intuitive way to filter items based on their foreign_objects. The filter_items operator can be implemented in
     terms of this operator by using a predicate that takes an Item and applies the filter predicate to the key of the item.
     """
 

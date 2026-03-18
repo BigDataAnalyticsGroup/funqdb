@@ -105,7 +105,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
 
     @abstractmethod
     def __setitem__(self, key: Key, value: Value):
-        """Customize item assignment. This must be used for non-str-type keys.
+        """Customize item assignment. This must be used for non-str-type foreign_objects.
         @param key: The key of the item being assigned.
         @param value: The value to assign to the item.
         """
@@ -194,8 +194,8 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
 
     @abstractmethod
     def keys(self) -> Generator:
-        """Get the keys of the AttributeFunction.
-        @return: An iterable of the keys.
+        """Get the foreign_objects of the AttributeFunction.
+        @return: An iterable of the foreign_objects.
         """
         ...
 

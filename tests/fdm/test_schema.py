@@ -29,7 +29,7 @@ from tests.lib import _subset_DBF
 def test_schema_constraint():
     user = _subset_DBF({"users"}, frozen=False).users[1]
 
-    # create a schema that requires the keys "name", "yob" and "department" with any types:
+    # create a schema that requires the foreign_objects "name", "yob" and "department" with any types:
     user_schema = Schema({"name": str, "yob": int, "department": TF})
     assert user_schema(user, ChangeEvent.UPDATE)
 

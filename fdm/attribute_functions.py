@@ -183,7 +183,7 @@ class DictionaryAttributeFunction[Key, Value](
         return self.__dict__["frozen"]
 
     def __getitem__(self, key: Key) -> Any:
-        """Customize item access. This must be used for non-str-type keys.
+        """Customize item access. This must be used for non-str-type foreign_objects.
         TODO: discuss whether we really want to have this
         Supports __-syntax for accessing sub-items of values, e.g., if we have an item with key "department" and value
         being a TF with an item with key "name", we can access the name of the department with "department__name".
@@ -271,7 +271,7 @@ class DictionaryAttributeFunction[Key, Value](
         )
 
     def __setitem__(self, key: Key, value: Value):
-        """Customize item assignment. This must be used for non-str-type keys.
+        """Customize item assignment. This must be used for non-str-type foreign_objects.
         @param key: The key of the item being assigned.
         @param value: The value to assign to the item.
         """
@@ -305,7 +305,7 @@ class DictionaryAttributeFunction[Key, Value](
         self.notify_observers(item, ChangeEvent.UPDATE)
 
     def __delitem__(self, key):
-        """Customize item deletion. This must be used for non-str-type keys."""
+        """Customize item deletion. This must be used for non-str-type foreign_objects."""
         if self.__dict__["frozen"]:
             raise ReadOnlyError(
                 f"Delete attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
@@ -343,10 +343,10 @@ class DictionaryAttributeFunction[Key, Value](
         return map(mapper, self.__dict__["data"].items())
 
     def keys(self) -> Generator:
-        """Get the keys of the AttributeFunction.
-        @return: An iterable of the keys.
+        """Get the foreign_objects of the AttributeFunction.
+        @return: An iterable of the foreign_objects.
         """
-        return iter(self.__dict__["data"].keys())
+        return iter(self.__dict__["data"].foreign_objects())
 
     def values(self):
         """Get the values of the AttributeFunction.
@@ -535,39 +535,40 @@ class SDBF[Key](DictionaryAttributeFunction[Key, DBF]):
     ...
 
 
-class CompositeKey:
-    """A composite key"""
+class CompositeForeignObject:
+    """A composite foreign object represents a relationship between multiple AFs. This replaces the traditional
+    composite key in a relational database."""
 
-    def __init__(self, keys: list[AttributeFunction]):
-        self.keys: list[AttributeFunction] = keys
+    def __init__(self, foreign_objects: list[AttributeFunction]):
+        self.foreign_objects: list[AttributeFunction] = foreign_objects
 
     def __hash__(self):
         """The hash of the MKey is based on the UUIDs of the user and customer, as those are immutable and unique
-        identifiers for the respective TFs. This allows us to use MKey instances as keys in a dictionary (or RF) to
+        identifiers for the respective TFs. This allows us to use MKey instances as foreign_objects in a dictionary (or RF) to
         represent relationships between users and customers."""
-        return hash(tuple([k.uuid for k in self.keys]))
+        return hash(tuple([k.uuid for k in self.foreign_objects]))
 
-    def __eq__(self, other_keys: list[AttributeFunction]):
+    def __eq__(self, other_foreign_objects: list[AttributeFunction]):
         """Two MKey instances are considered equal if they have the same user and customer UUIDs. This ensures that
         the relationship is correctly identified based on the involved TFs, regardless of whether the same MKey
         instance is used or different instances with the same user and customer are created.
         """
-        return self.keys == other_keys
+        return self.foreign_objects == other_foreign_objects
 
-    def __contains__(self, key: AttributeFunction):
-        """Check if a given AttributeFunction is part of the CompositeKey."""
-        return key in self.keys
+    def __contains__(self, foreign_object: AttributeFunction):
+        """Check if a given AttributeFunction is part of the CompositeForeignObject."""
+        return foreign_object in self.foreign_objects
 
     def subkey(self, index: int) -> AttributeFunction:
         """Get the subkey at the given index."""
-        return self.keys[index]
+        return self.foreign_objects[index]
 
     def __len__(self) -> int:
-        """Get the number of subkeys in the CompositeKey."""
-        return len(self.keys)
+        """Get the number of subkeys in the CompositeForeignObject."""
+        return len(self.foreign_objects)
 
 
-class RSF[Value](DictionaryAttributeFunction[CompositeKey, Value]):
+class RSF[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
     """A dictionary-based attribute function that behaves like a relationship."""
 
     def related_values(
@@ -587,7 +588,7 @@ class RSF[Value](DictionaryAttributeFunction[CompositeKey, Value]):
         )
 
 
-class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
+class Tensor[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
     """A tensor is simply a dictionary function with a composite key. It may have additional methods for tensor-specific
     operations, but for now it is just a subclass of DictionaryAttributeFunction with a different key type.
     """
@@ -606,8 +607,8 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
 
     def __add__(self, other):
         """Add another tensor to this tensor. This is a simple element-wise addition, i.e., we add the values of the
-        two tensors for each key and return a new tensor with the same keys and the added values. We assume that
-        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
+        two tensors for each key and return a new tensor with the same foreign_objects and the added values. We assume that
+        the two tensors have the same foreign_objects and dimensions, but we do not check this for simplicity.
         """
         assert (
             self.dimensions == other.dimensions
@@ -619,8 +620,8 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
 
     def __sub__(self, other):
         """Subtract another tensor from this tensor. This is a simple element-wise subtraction, i.e., we subtract the values of the
-        two tensors for each key and return a new tensor with the same keys and the subtracted values. We assume that
-        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
+        two tensors for each key and return a new tensor with the same foreign_objects and the subtracted values. We assume that
+        the two tensors have the same foreign_objects and dimensions, but we do not check this for simplicity.
         """
         assert (
             self.dimensions == other.dimensions
@@ -632,8 +633,8 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeKey, Value]):
 
     def __mul__(self, other):
         """Multiply this tensor with another tensor. This is a simple element-wise multiplication, i.e., we multiply the values of the
-        two tensors for each key and return a new tensor with the same keys and the multiplied values. We assume that
-        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
+        two tensors for each key and return a new tensor with the same foreign_objects and the multiplied values. We assume that
+        the two tensors have the same foreign_objects and dimensions, but we do not check this for simplicity.
         """
         assert (
             self.dimensions == other.dimensions

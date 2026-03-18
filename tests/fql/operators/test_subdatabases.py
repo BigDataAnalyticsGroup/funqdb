@@ -85,7 +85,7 @@ def test_subdatabase_two_RFs_with_join_index():
     users_keys = {item.key for item in reduced_DBF.users}
     customers_keys = {item.key for item in reduced_DBF.customers}
 
-    # create the cross product of all user keys and customer keys:
+    # create the cross product of all user foreign_objects and customer foreign_objects:
     cross_product_keys = {
         (u_key, c_key) for u_key in users_keys for c_key in customers_keys
     }

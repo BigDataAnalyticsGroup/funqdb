@@ -1,7 +1,7 @@
 ### To Do List
 
-- [x] restructure group-by, partitioning, and aggregation operators
-- [ ] unit test for group_by_aggregate, clean-up and unify tests for grouping and aggregation
+
+- [x] unit test for group_by_aggregate, clean-up and unify tests for grouping and aggregation
 - [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__
 - [ ] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
   computing new attributes based on the existing ones, e.g. by applying a function to them
@@ -57,6 +57,7 @@
 
 ### DONE
  
+- [x] restructure group-by, partitioning, and aggregation operators
 - [x] FIX: filter values vs filter items vs filter keys
 - [x] fix reverse fks
 - [x] simpler additional filter syntax on attribute functions where()

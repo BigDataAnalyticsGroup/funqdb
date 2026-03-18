@@ -25,7 +25,7 @@ from fdm.attribute_functions import (
     TF,
     RF,
     DBF,
-    CompositeKey,
+    CompositeForeignObject,
     RSF,
 )
 from fql.operators.filters import filter_items
@@ -217,13 +217,21 @@ def test_relationship_function():
     assert len(meetings) == 0
     # note that as we are assigning instances, we do not require an extra check like in the relational model that
     # the foreign value "exists"
-    meetings[CompositeKey([users[1], customers[1]])] = TF({"date": "2024-01-01"})
-    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "2025-01-01"})
-    meetings[CompositeKey([users[2], customers[3]])] = TF({"date": "2026-01-01"})
+    meetings[CompositeForeignObject([users[1], customers[1]])] = TF(
+        {"date": "2024-01-01"}
+    )
+    meetings[CompositeForeignObject([users[2], customers[1]])] = TF(
+        {"date": "2025-01-01"}
+    )
+    meetings[CompositeForeignObject([users[2], customers[3]])] = TF(
+        {"date": "2026-01-01"}
+    )
     assert len(meetings) == 3
 
     # overwrites the previous meeting between user 2 and customer 1:
-    meetings[CompositeKey([users[2], customers[1]])] = TF({"date": "202-01-01"})
+    meetings[CompositeForeignObject([users[2], customers[1]])] = TF(
+        {"date": "202-01-01"}
+    )
     assert len(meetings) == 3
 
     # lookup meetings for user 1:
@@ -247,7 +255,7 @@ def test_key_constraint():
     # This is implicitly and automatically given as the dictionary attribute function will not allow this!
     # In contrast, in the relational model this has to be tested explicitly; in FDM this is automatically guaranteed
     # for all attribute functions like TFs, RFs, DBFs, etc.!
-    # In addition, also for the results from FQL operators, duplicate keys cannot occur. This is again in sharp
+    # In addition, also for the results from FQL operators, duplicate foreign_objects cannot occur. This is again in sharp
     # contrast to SQL where this confusion may happen.
 
     assert True

@@ -9,7 +9,7 @@ from fql.util import Item
 
 
 class group_by_aggregate(Operator[RF, RF]):
-    """Group an input RF by the equality of the given keys (the values mapped to by those keys) and aggregate the
+    """Group an input RF by the equality of the given foreign_objects (the values mapped to by those foreign_objects) and aggregate the
     groups using the specified aggregation functions."""
 
     def __init__(self, *aggregate_keys, **aggregates):
@@ -18,7 +18,7 @@ class group_by_aggregate(Operator[RF, RF]):
 
     def __call__(self, input_function: RF) -> RF:
         # partition the input RF into a DBF with one RF per partition:
-        group_by_result: DBF = group_by(self.aggregate_keys)(input_function)
+        group_by_result: DBF = group_by(*self.aggregate_keys)(input_function)
 
         aggregation_result = transform_items[DBF, RF](
             transformation_function=lambda item: Item(
@@ -34,8 +34,8 @@ class group_by_aggregate(Operator[RF, RF]):
 class partition_by_aggregate(Operator[RF, RF]):
     """Group an input RF by a grouping function and aggregate the groups using an aggregation function."""
 
-    # TODO: generic input and putput AFs: this operator can also be used to partition an entire database and aggregate
-    #  the partitions
+    # TODO: generic input and output AFs: this operator can also be used to partition an entire database and aggregate
+    # those partitions
 
     def __init__(
         self,
@@ -47,8 +47,6 @@ class partition_by_aggregate(Operator[RF, RF]):
 
     def __call__(self, input_function: RF) -> RF:
 
-        # TODO: maybe keep one function which calls transform with a lambda
-        # and another one calling aggregate() and expecting aggregation functions?
         return transform_items[DBF, RF](
             transformation_function=self.aggregation_function,
             output_factory=lambda _: RF(),

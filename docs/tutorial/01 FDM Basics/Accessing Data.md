@@ -82,7 +82,7 @@ respectively.
 
 ```python
 person_key: Key
-for person_key in persons.keys():
+for person_key in persons.foreign_objects():
     print(person_key)
 ```
 

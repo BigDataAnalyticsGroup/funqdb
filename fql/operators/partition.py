@@ -1,6 +1,6 @@
 from typing import Callable, Any
 
-from fdm.attribute_functions import RF, DBF
+from fdm.attribute_functions import RF, DBF, CompositeForeignObject
 from fql.operators.APIs import Operator
 from fql.util import Item
 
@@ -42,15 +42,24 @@ class partition(Operator[RF, DBF]):
 
 
 class group_by(partition):
-    """Partitions an input RF into a DBF based on the equality of the given keys (the values mapped to by those keys).
+    """Partitions an input RF into a DBF based on the equality of the given foreign_objects (the values mapped to by those foreign_objects).
     Thus, this operator simulates the traditional group-by in relational algebra and SQL. The partitioning function is
-    automatically derived from the specified grouping keys (attributes)."""
+    automatically derived from the specified grouping foreign_objects (attributes)."""
 
     # TODO: generic type: this operator can also partition an entire database...
 
     def __init__(self, *aggregate_keys):
+
+        assert (
+            len(aggregate_keys) > 0
+        ), "At least one grouping key must be specified for group_by!"
+
         super().__init__(
-            # convert the grouping function to a partitioning function that returns a tuple of the grouping keys for
+            # convert the grouping function to a partitioning function that returns a tuple of the grouping foreign_objects for
             # the specified attributes:
-            lambda item: tuple(item.value[attribute] for attribute in aggregate_keys)
+            lambda item: (
+                tuple(item.value[attribute] for attribute in aggregate_keys)
+                if len(aggregate_keys) > 1
+                else item.value[aggregate_keys[0]]
+            ),
         )
