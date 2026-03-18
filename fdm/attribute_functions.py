@@ -509,6 +509,8 @@ class DictionaryAttributeFunction[Key, Value](
             self
         )()  # create result instance of the same type as self
 
+        # TODO: delegate to FQL operator
+
         assert predicate is None or callable(predicate)
         assert kwargs is None or dict
 
