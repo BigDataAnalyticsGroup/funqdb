@@ -25,6 +25,7 @@ from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
+from fql.operators.transforms import transform_items
 from fql.predicates.constraints import AttributeFunctionConstraint
 from fql.util import (
     Item,
@@ -532,7 +533,7 @@ class DictionaryAttributeFunction[Key, Value](
 
         return result
 
-    def project(self, *keys) -> "DictionaryAttributeFunction":
+    def project(self, *keys) -> "AttributeFunction":
         """Project the values of this DictionaryAttributeFunction based on the given keys.
         @param keys: the keys to project to, i.e., the keys of the items to include in the result.
 
@@ -544,7 +545,8 @@ class DictionaryAttributeFunction[Key, Value](
 
         assert len(keys) >= 1, "At least one key must be provided for projection."
 
-        # TODO: make operator , via transform values
+        # TODO: make operator, via new transform_values operator?
+        # what about inserting multiple items into an AF?
         def project(input_DAF: DictionaryAttributeFunction, keys):
             output_DAF: DictionaryAttributeFunction = type(input_DAF)()
             item: Item

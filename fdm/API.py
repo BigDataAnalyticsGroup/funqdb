@@ -226,14 +226,14 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         return self.where(predicate, **kwargs)
 
     @abstractmethod
-    def project(self, *keys) -> "DictionaryAttributeFunction":
+    def project(self, *keys) -> "AttributeFunction":
         """Project the AttributeFunction to the specified keys.
         @param keys: The keys to project to.
         @return: A new AttributeFunction instance containing only the specified keys.
         """
         ...
 
-    def π(self, *keys) -> "DictionaryAttributeFunction":
+    def π(self, *keys) -> "AttributeFunction":
         """Rel algebra style naming for project."""
         return self.project(*keys)
 
