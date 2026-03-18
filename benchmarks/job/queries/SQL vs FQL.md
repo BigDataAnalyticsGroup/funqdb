@@ -45,9 +45,9 @@ result: RF = aggregate(
         DBF(
             {
                 "chn": char_name,
-                "ci": cast_info.where(note__like="(producer)"),
+                "ci": cast_info.where(note__like="%(producer)%"),
                 "cn": company_name.where(country_code="[us]"),
-                "t": title.where(production_year > 1990),
+                "t": title.where(production_year__gt=1990),
             }
         )
     ),
