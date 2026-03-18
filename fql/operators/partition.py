@@ -1,7 +1,6 @@
 from typing import Callable, Any
 
-from fdm.attribute_functions import RF, DBF
-from fdm.util import CompositeForeignObject
+from fdm.attribute_functions import RF, DBF, CompositeForeignObject
 from fql.operators.APIs import Operator
 from fql.util import Item
 

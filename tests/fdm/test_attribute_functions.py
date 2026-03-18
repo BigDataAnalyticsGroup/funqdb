@@ -26,8 +26,8 @@ from fdm.attribute_functions import (
     RF,
     DBF,
     RSF,
+    CompositeForeignObject,
 )
-from fdm.util import CompositeForeignObject
 from fql.operators.filters import filter_items
 from fql.util import (
     Item,
