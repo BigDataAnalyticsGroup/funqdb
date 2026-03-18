@@ -24,7 +24,7 @@ import random
 from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
-from fdm.util import Observable, Observer
+from fdm.util import Observable, Observer, CompositeForeignObject
 from fql.predicates.constraints import AttributeFunctionConstraint
 from fql.util import (
     Item,
@@ -533,39 +533,6 @@ class SDBF[Key](DictionaryAttributeFunction[Key, DBF]):
     """A dictionary-based attribute function that behaves like a set of databases."""
 
     ...
-
-
-class CompositeForeignObject:
-    """A composite foreign object represents a relationship between multiple AFs. This replaces the traditional
-    composite key in a relational database."""
-
-    def __init__(self, foreign_objects: list[AttributeFunction]):
-        self.foreign_objects: list[AttributeFunction] = foreign_objects
-
-    def __hash__(self):
-        """The hash of the MKey is based on the UUIDs of the user and customer, as those are immutable and unique
-        identifiers for the respective TFs. This allows us to use MKey instances as foreign_objects in a dictionary (or RF) to
-        represent relationships between users and customers."""
-        return hash(tuple([k.uuid for k in self.foreign_objects]))
-
-    def __eq__(self, other_foreign_objects: list[AttributeFunction]):
-        """Two MKey instances are considered equal if they have the same user and customer UUIDs. This ensures that
-        the relationship is correctly identified based on the involved TFs, regardless of whether the same MKey
-        instance is used or different instances with the same user and customer are created.
-        """
-        return self.foreign_objects == other_foreign_objects
-
-    def __contains__(self, foreign_object: AttributeFunction):
-        """Check if a given AttributeFunction is part of the CompositeForeignObject."""
-        return foreign_object in self.foreign_objects
-
-    def subkey(self, index: int) -> AttributeFunction:
-        """Get the subkey at the given index."""
-        return self.foreign_objects[index]
-
-    def __len__(self) -> int:
-        """Get the number of subkeys in the CompositeForeignObject."""
-        return len(self.foreign_objects)
 
 
 class RSF[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
