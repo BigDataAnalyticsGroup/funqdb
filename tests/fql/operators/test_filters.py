@@ -68,6 +68,20 @@ def test_filter_items_where_clause():
         assert filtered_user_names == {"Horst", "Tom"}
 
 
+def test_project_clause():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    users_projected: RF = users.project("name", "department")
+
+    assert type(users_projected) == RF
+    assert len(users_projected) == 3
+    assert users_projected != users  # different instance
+    for value in users_projected.values():
+        assert "department" in value
+        assert "name" in value
+        assert "yob" not in value
+
+
 def test_filter_items_complement():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users

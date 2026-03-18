@@ -226,6 +226,18 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         return self.where(predicate, **kwargs)
 
     @abstractmethod
+    def project(self, *keys) -> "DictionaryAttributeFunction":
+        """Project the AttributeFunction to the specified keys.
+        @param keys: The keys to project to.
+        @return: A new AttributeFunction instance containing only the specified keys.
+        """
+        ...
+
+    def π(self, *keys) -> "DictionaryAttributeFunction":
+        """Rel algebra style naming for project."""
+        return self.project(*keys)
+
+    @abstractmethod
     def random_item(self) -> Any:
         """Get a random item from the AttributeFunction.
         @return: A random item.

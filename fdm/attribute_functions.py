@@ -532,6 +532,36 @@ class DictionaryAttributeFunction[Key, Value](
 
         return result
 
+    def project(self, *keys) -> "DictionaryAttributeFunction":
+        """Project the values of this DictionaryAttributeFunction based on the given keys.
+        @param keys: the keys to project to, i.e., the keys of the items to include in the result.
+
+        @return: A new DictionaryAttributeFunction instance containing only the keys specified.
+        """
+        result: DictionaryAttributeFunction = type(
+            self
+        )()  # create result instance of the same type as self
+
+        assert len(keys) >= 1, "At least one key must be provided for projection."
+
+        # TODO: make operator , via transform values
+        def project(input_DAF: DictionaryAttributeFunction, keys):
+            output_DAF: DictionaryAttributeFunction = type(input_DAF)()
+            item: Item
+            for item in input_DAF:
+                # if key exists, add it to the projection result:
+                if item.key in keys:
+                    output_DAF[item.key] = item.value
+            return output_DAF
+
+        outer_item: Item
+        # loop over entries of self:
+        for outer_item in self:
+            # if key exists, add it to the projection result:
+            result[outer_item.key] = project(outer_item.value, keys)
+
+        return result
+
     def random_item(self) -> Any:
         """Get a random item from the AttributeFunction.
         @return: A random item.
