@@ -29,7 +29,7 @@ from store.store import Store
 
 
 class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConstraint):
-    """A schema is an attribute function that defines the expected foreign_objects and their types for items in a relation."""
+    """A schema is an attribute function that defines the expected keys and their types for items in a relation."""
 
     def __init__(
         self,
@@ -40,7 +40,7 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
         store: Store = None,
     ):
         """Initialize a Schema with the given data and properties.
-        @param data: A dictionary mapping foreign_objects to their expected types.
+        @param data: A dictionary mapping keys to their expected types.
         @param frozen: Whether the schema is frozen (i.e., cannot be modified).
         @param observe_items: Whether to observe items for changes (not implemented).
         @param lineage: A list of strings representing the lineage of this schema (not implemented).
@@ -60,7 +60,7 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
         """Evaluates whether the given attribute_function fulfills the schema."""
         assert isinstance(attribute_function, AttributeFunction)
 
-        # check if all foreign_objects in the schema are present in the attribute function and their types are compatible
+        # check if all keys in the schema are present in the attribute function and their types are compatible
         for item in attribute_function:
             if item.key not in self:
                 return False

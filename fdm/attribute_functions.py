@@ -183,7 +183,7 @@ class DictionaryAttributeFunction[Key, Value](
         return self.__dict__["frozen"]
 
     def __getitem__(self, key: Key) -> Any:
-        """Customize item access. This must be used for non-str-type foreign_objects.
+        """Customize item access. This must be used for non-str-type keys.
         TODO: discuss whether we really want to have this
         Supports __-syntax for accessing sub-items of values, e.g., if we have an item with key "department" and value
         being a TF with an item with key "name", we can access the name of the department with "department__name".
@@ -271,7 +271,7 @@ class DictionaryAttributeFunction[Key, Value](
         )
 
     def __setitem__(self, key: Key, value: Value):
-        """Customize item assignment. This must be used for non-str-type foreign_objects.
+        """Customize item assignment. This must be used for non-str-type keys.
         @param key: The key of the item being assigned.
         @param value: The value to assign to the item.
         """
@@ -305,7 +305,7 @@ class DictionaryAttributeFunction[Key, Value](
         self.notify_observers(item, ChangeEvent.UPDATE)
 
     def __delitem__(self, key):
-        """Customize item deletion. This must be used for non-str-type foreign_objects."""
+        """Customize item deletion. This must be used for non-str-type keys."""
         if self.__dict__["frozen"]:
             raise ReadOnlyError(
                 f"Delete attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
@@ -343,10 +343,10 @@ class DictionaryAttributeFunction[Key, Value](
         return map(mapper, self.__dict__["data"].items())
 
     def keys(self) -> Generator:
-        """Get the foreign_objects of the AttributeFunction.
-        @return: An iterable of the foreign_objects.
+        """Get the keys of the AttributeFunction.
+        @return: An iterable of the keys.
         """
-        return iter(self.__dict__["data"].foreign_objects())
+        return iter(self.__dict__["data"].keys())
 
     def values(self):
         """Get the values of the AttributeFunction.
@@ -607,8 +607,8 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
 
     def __add__(self, other):
         """Add another tensor to this tensor. This is a simple element-wise addition, i.e., we add the values of the
-        two tensors for each key and return a new tensor with the same foreign_objects and the added values. We assume that
-        the two tensors have the same foreign_objects and dimensions, but we do not check this for simplicity.
+        two tensors for each key and return a new tensor with the same keys and the added values. We assume that
+        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
         """
         assert (
             self.dimensions == other.dimensions
@@ -620,8 +620,8 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
 
     def __sub__(self, other):
         """Subtract another tensor from this tensor. This is a simple element-wise subtraction, i.e., we subtract the values of the
-        two tensors for each key and return a new tensor with the same foreign_objects and the subtracted values. We assume that
-        the two tensors have the same foreign_objects and dimensions, but we do not check this for simplicity.
+        two tensors for each key and return a new tensor with the same keys and the subtracted values. We assume that
+        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
         """
         assert (
             self.dimensions == other.dimensions
@@ -633,8 +633,8 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
 
     def __mul__(self, other):
         """Multiply this tensor with another tensor. This is a simple element-wise multiplication, i.e., we multiply the values of the
-        two tensors for each key and return a new tensor with the same foreign_objects and the multiplied values. We assume that
-        the two tensors have the same foreign_objects and dimensions, but we do not check this for simplicity.
+        two tensors for each key and return a new tensor with the same keys and the multiplied values. We assume that
+        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
         """
         assert (
             self.dimensions == other.dimensions

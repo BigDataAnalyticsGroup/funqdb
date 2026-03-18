@@ -9,7 +9,7 @@ from fql.util import Item
 
 
 class group_by_aggregate(Operator[RF, RF]):
-    """Group an input RF by the equality of the given foreign_objects (the values mapped to by those foreign_objects) and aggregate the
+    """Group an input RF by the equality of the given keys (the values mapped to by those keys) and aggregate the
     groups using the specified aggregation functions."""
 
     def __init__(self, *aggregate_keys, **aggregates):

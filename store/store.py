@@ -45,7 +45,7 @@ class Store:
         # looking at the source code of sqlitedict, maybe it is better to have one table for all items?
         # or one table per AttributeFunction type
         # one table for everything for now:
-        # note; in SQLiteDict, foreign_objects must be strings/text
+        # note; in SQLiteDict, keys must be strings/text
         # https://github.com/piskvorky/sqlitedict/blob/96e81621fd6ab094efdd86e70fd57efe9d40ca12/sqlitedict.py#L228
         self.sqlite_dict: SqliteDict = SqliteDict(
             self.file_name, tablename=attribute_function_space, autocommit=True
@@ -64,7 +64,7 @@ class Store:
         @return: The AttributeFunction associated with the given ID.
         """
         if fid not in self.attribute_function_buffer:
-            self.load(fid)  # store uses str foreign_objects
+            self.load(fid)  # store uses str keys
 
         return self.attribute_function_buffer[fid]
 

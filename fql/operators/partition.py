@@ -42,9 +42,9 @@ class partition(Operator[RF, DBF]):
 
 
 class group_by(partition):
-    """Partitions an input RF into a DBF based on the equality of the given foreign_objects (the values mapped to by those foreign_objects).
+    """Partitions an input RF into a DBF based on the equality of the given keys (the values mapped to by those keys).
     Thus, this operator simulates the traditional group-by in relational algebra and SQL. The partitioning function is
-    automatically derived from the specified grouping foreign_objects (attributes)."""
+    automatically derived from the specified grouping keys (attributes)."""
 
     # TODO: generic type: this operator can also partition an entire database...
 
@@ -55,7 +55,7 @@ class group_by(partition):
         ), "At least one grouping key must be specified for group_by!"
 
         super().__init__(
-            # convert the grouping function to a partitioning function that returns a tuple of the grouping foreign_objects for
+            # convert the grouping function to a partitioning function that returns a tuple of the grouping keys for
             # the specified attributes:
             lambda item: (
                 tuple(item.value[attribute] for attribute in aggregate_keys)

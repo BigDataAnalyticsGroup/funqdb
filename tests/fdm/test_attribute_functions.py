@@ -255,7 +255,7 @@ def test_key_constraint():
     # This is implicitly and automatically given as the dictionary attribute function will not allow this!
     # In contrast, in the relational model this has to be tested explicitly; in FDM this is automatically guaranteed
     # for all attribute functions like TFs, RFs, DBFs, etc.!
-    # In addition, also for the results from FQL operators, duplicate foreign_objects cannot occur. This is again in sharp
+    # In addition, also for the results from FQL operators, duplicate keys cannot occur. This is again in sharp
     # contrast to SQL where this confusion may happen.
 
     assert True
