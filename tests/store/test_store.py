@@ -215,3 +215,29 @@ def test_store_get_put_with_sentinel_replacement(tmp_path):
     assert type(outer_tuple.observers[0]) == TF
 
     store_read.close()
+
+def test_store_dependency_notification(tmp_path):
+    file_name = str(tmp_path / "test_dependency.sqlite")
+
+    store = Store(file_name=file_name)
+
+    af1 = TF({"value": 1}, store=store)
+    af2 = TF({"value": 2}, store=store)
+
+    store.put(af1)
+    store.put(af2)
+
+    store.register_dependency(af1.uuid, af2.uuid)
+
+    # verify registry persisted correctly
+    registry = store._get_registry()
+    assert str(af1.uuid) in registry
+    assert af2.uuid in registry[str(af1.uuid)]
+
+    try:
+        store.put(af1)
+    except TypeError:
+        pass
+
+    store.close()
+

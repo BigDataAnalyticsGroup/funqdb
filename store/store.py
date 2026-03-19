@@ -51,6 +51,12 @@ class Store:
             self.file_name, tablename=attribute_function_space, autocommit=True
         )
 
+        # dependency registry (persistent)
+        self._registry_key = "__dependency_registry__"
+
+        if self._registry_key not in self.sqlite_dict:
+            self.sqlite_dict[self._registry_key] = {}
+
         # register to be called at exit:
         atexit.register(self.close)
 
@@ -77,6 +83,8 @@ class Store:
         self.sqlite_dict.commit()
         self.attribute_function_buffer[af.uuid] = af
 
+        self._notify(af.uuid)
+
     def load(self, fid: int) -> None:
         """Load an fid from the persistent store into the buffer.
         @param item_id: The ID of the item to load.
@@ -91,8 +99,47 @@ class Store:
         except KeyError as e:
             raise KeyError(f"ID '{fid}' not found in the store.") from e
 
+    def _get_registry(self):
+        return self.sqlite_dict[self._registry_key]
+
+    def register_dependency(self, key: int, af_id: int):
+        registry = self._get_registry()
+
+        key = str(key)
+
+        if key not in registry:
+            registry[key] = []
+
+        if af_id not in registry[key]:
+            registry[key].append(af_id)
+
+        # IMPORTANT: reassign so SqliteDict persists it
+        self.sqlite_dict[self._registry_key] = registry
+        self.sqlite_dict.commit()
+
+    def _notify(self, key: int):
+        registry = self._get_registry()
+        key = str(key)
+
+        if key not in registry:
+            return
+
+        for dependent_id in registry[key]:
+            dependent_af = self.get(dependent_id)
+
+            # trigger recomputation / update
+            if hasattr(dependent_af, "update"):
+                dependent_af.update()
+
     def __len__(self) -> int:
         """Return the number of items in the store.
         @return: The number of items in the store.
         """
-        return len(self.sqlite_dict)
+        size = len(self.sqlite_dict)
+
+        if self._registry_key in self.sqlite_dict:
+            size -= 1
+
+        return size
+
+
