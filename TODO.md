@@ -7,20 +7,19 @@
 - [ ] union
 - [ ] intersect
 - [ ] rename
-- [ ] minus/difference/except (synonyms)
-- [ ] window functions, partition by
+- [ ] minus/difference/except
+- [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
-- [ ] order by
 
 ## Medium prio:
-- [ ] some schema visualization, i.e. through .references(), graphviz, vue.js?
+- [ ] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
 - [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
   called from where()
 - [ ] transactions
-- [ ] ordering (does not make sense conceptually on a function, but of course we could create a sorted items stream of
+- [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items stream of
   the contents of an AF)
 - [ ] top-k queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a transform
   operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
