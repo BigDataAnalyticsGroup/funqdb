@@ -1,15 +1,18 @@
-### To Do List
+## To Do List
 
-- [x] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
-  computing new attributes based on the existing ones, e.g. by applying a function to them
-- [x] maybe a special projection method for AFs: project() and 𝜋()
+## High prio:
+- [ ] double-check observer semantic in the presence ov .where() and .project(). I think observers are removed, but
+  should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy constructor.
 - [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__
-- [ ] unions
+- [ ] union
 - [ ] intersect
 - [ ] rename
 - [ ] minus/difference/except (synonyms)
-- [ ] window functions
+- [ ] window functions, partition by
 - [ ] subqueries
+- [ ] order by
+
+## Medium prio:
 - [ ] some schema visualization, i.e. through .references(), graphviz, vue.js?
 - [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
@@ -27,6 +30,7 @@
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
   from the store
 
+## Low prio
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 - [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be done with
@@ -35,16 +39,11 @@
 - [ ] façades in other languages
 - [ ] backends in other languages, e.g. Rust, C++, etc.
 - [ ] other non-flat data like tensors
-- [ ] double-check observer semantic in the presence ov .where() and .project(). I think observers are removed, but
-  should not.
 
-### Other tasks
+# Other thoughts and ideas: prio unclear
 
-- [x] relationship functions
 - [ ] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
   item X through relationship function Y
-- [x] n:m relationships
-- [x] add support for composite primary keys, low prio
 - [ ] operator: output a plan, how?
     - [ ] as everything is functions and the input to an operator is not another operator
       -> explain must traverse through the call chain including attribute functions!
@@ -65,6 +64,12 @@
 
 ### DONE
 
+- [x] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
+  computing new attributes based on the existing ones, e.g. by applying a function to them
+- [x] maybe a special projection method for AFs: project() and 𝜋()
+- [x] n:m relationships
+- [x] add support for composite primary keys, low prio
+- [x] relationship functions
 - [x] unit test for group_by_aggregate, clean-up and unify tests for grouping and aggregation
 - [x] restructure group-by, partitioning, and aggregation operators
 - [x] FIX: filter values vs filter items vs filter keys
