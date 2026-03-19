@@ -1,8 +1,7 @@
 ## To Do List
 
 ## High prio:
-- [ ] double-check observer semantic in the presence ov .where() and .project(). I think observers are removed, but
-  should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy constructor.
+
 - [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__
 - [ ] union
 - [ ] intersect
@@ -12,6 +11,10 @@
 - [ ] subqueries
 
 ## Medium prio:
+
+- [ ] double-check observer semantic in the presence ov .where() and .project(). I think observers are removed, but
+  should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
+  constructor (DONE, but breaks some tests when used in where()).
 - [ ] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
 - [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
@@ -19,17 +22,20 @@
 - [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
   called from where()
 - [ ] transactions
-- [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items stream of
+- [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
+  stream of
   the contents of an AF)
-- [ ] top-k queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a transform
+- [ ] top-k queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
+  transform
   operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
-- [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md) 
+- [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
   from the store
 
 ## Low prio
+
 - [ ] provide operators working on a DB/store, i.e. by pushing down selections and projections, BSc-Thesis?
 - [ ] allow pipelines to switch between in-memory and DB-backed AEs
 - [ ] unpickling untrusted data is not secure and may lead to code execution vulnerabilities, so this must be done with

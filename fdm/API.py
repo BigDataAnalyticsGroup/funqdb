@@ -73,12 +73,16 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
     # uuid module to generate unique identifiers.
     global_uuid: int = 0
 
-    def __init__(self):
-        super().__init__()
+    def _assign_uuid(self):
+        """Assign a unique UUID to this instance."""
         self.__dict__["_uuid"] = AttributeFunction.global_uuid
 
         # increase the global UUID counter for the next instance:
         AttributeFunction.global_uuid += 1
+
+    def __init__(self):
+        super().__init__()
+        self._assign_uuid()
 
     def __getattr__(self, name: str) -> Value:
         """Make the object callable through .-syntax.
