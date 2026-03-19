@@ -3,10 +3,12 @@
 ## High prio:
 
 - [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__
-- [ ] union
-- [ ] intersect
+- [x] union
+- [x] intersect
+- [x] minus/difference/except (except not possible due to name clash with reserved keyword)
+- [ ] we need set operators where we can define the identity of items to be used for the set operation; this
+is also broken in relational algebra and SQL, let's fix that
 - [ ] rename
-- [ ] minus/difference/except
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
 
