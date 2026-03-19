@@ -2,15 +2,24 @@
 
 ## High prio:
 
-- [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__
+- [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__: in general both
+  syntaxes should be possible
 - [x] union
 - [x] intersect
-- [x] minus/difference/except (except not possible due to name clash with reserved keyword)
+- [x] minus/difference/except ("except" not possible due to name clash with reserved Python keyword)
+- [ ] sync docu and tutorial for new operators
+- [ ] sync docu and tutorial for `where()` and `project()`
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
-is also broken in relational algebra and SQL, let's fix that
-- [ ] rename
+  is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
+  different input AFs? Or would that be a separate rename step?
+- [ ] rename: rename keys of an AF, e.g. rename the key "name" to "first_name", etc.; really required? could als be a
+  method of AFs
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
+- [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
+  called from where()
+- [ ] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
+  transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
 
 ## Medium prio:
 
@@ -21,15 +30,10 @@ is also broken in relational algebra and SQL, let's fix that
 - [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
 - [ ] foreign object constraints through the store (similar problem as observers)
-- [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
-  called from where()
 - [ ] transactions
 - [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
   stream of
   the contents of an AF)
-- [ ] top-k queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
-  transform
-  operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
 - [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
 - [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
