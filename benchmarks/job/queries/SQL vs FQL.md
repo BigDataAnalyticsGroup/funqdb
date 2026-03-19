@@ -12,16 +12,11 @@ SQL </td> <td> FQL (syntax in progress)</td>
 ```SQL
 SELECT MIN(chn.name) AS character,
        MIN(t.title) AS movie_with_american_producer
-FROM char_name AS chn,
-     cast_info AS ci,
-     company_name AS cn,
-     company_type AS ct,
-     movie_companies AS mc,
-     role_type AS rt,
-     title AS t
+FROM char_name AS chn, cast_info AS ci, company_name AS cn, company_type AS ct, movie_companies AS mc, role_type AS rt, title AS t
 WHERE ci.note LIKE '%(producer)%'
   AND cn.country_code = '[us]'
-  AND t.production_year > 1990
+  AND t.production_year
+    > 1990
   AND t.id = mc.movie_id
   AND t.id = ci.movie_id
   AND ci.movie_id = mc.movie_id
@@ -72,8 +67,7 @@ programming languages.
    is in the FROM-clause, its
    filters in the WHERE clause  (problem: <a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">
    split-attention</a>)
-3. **wrong conceptual order**: the order of the statements does not correspond to the conceptual execution order
-   places.
+3. **wrong conceptual order**: the order of the statements does not correspond to the conceptual execution order.
 4. **repeated the database structure**: some tables that are neither filtered nor used in the aggregates are repeated in
    the query even though they are part of the database schema
 5. **separate query and programming language**: SQL is a separate query language that has to be learned and mastered in
@@ -92,8 +86,8 @@ programming languages.
 2. **in-place filters**: sargable filters (i.e. filters on input relations) are directly notate with the relation and
    not in two separate places  (<a href="https://onlinelibrary.wiley.com/doi/10.1207/s15516709cog1202_4">spatial
    contiguity</a>)
-3. **correct conceptual order**: the order of the statement corresponds to the conceptual execution order
-   places, just read inside-out: first the relations with their filters, then the join, then the aggregation; inside an
+3. **correct conceptual order**: the order of the statement corresponds to the conceptual execution order, just read
+   inside-out: first the relations with their filters, then the join, then the aggregation; inside an
    operator simply read from top to bottom.
 4. **no repetition of database structure**: tables that are neither filtered nor used in the aggregates do not have to
    be repeated in the query as they are part of the database schema anyway and will be used for query processing as

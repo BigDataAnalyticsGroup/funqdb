@@ -4,7 +4,7 @@
 
 ## Core Ideas:
 1. purely functional (key/value) data model
-2. same modeling concept at all levels, no matter whether we are looking at “tuples“, “relations“, or “databases“, ...
+2. same modeling concept at all levels, no matter whether we are looking at “tuples“, “relations“, or “databases“, etc.
 3. all operators are unary: input is a function, output is a function
 4. query language is a façade and part of the embedding programming language
 5. no SQL injection
