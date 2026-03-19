@@ -11,7 +11,7 @@
 6. same power for updates as for reading
 7. easily extensible
 8. the notion of an "index" is built into the data model
-9. no problems with NULL problems: no NULL values in data, no three-valued logic
+9. no problems with NULL: no NULL values in data, no three-valued logic
    
 **None** of this is true for SQL.
 
