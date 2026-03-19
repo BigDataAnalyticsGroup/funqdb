@@ -6,12 +6,13 @@
   syntaxes should be possible
 - [x] union
 - [x] intersect
-- [x] minus/difference/except ("except" not possible due to name clash with reserved Python keyword)
-- [ ] sync docu and tutorial for new operators
-- [ ] sync docu and tutorial for `where()` and `project()`
+- [x] minus/difference/except on AF's keys ("except" not possible due to name clash with reserved Python keyword)
+- [x] minus/difference/except on AF's values to simulate RA/SQL
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
+- [ ] sync docu and tutorial for new operators
+- [ ] sync docu and tutorial for `where()` and `project()`
 - [ ] rename: rename keys of an AF, e.g. rename the key "name" to "first_name", etc.; really required? could als be a
   method of AFs
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
