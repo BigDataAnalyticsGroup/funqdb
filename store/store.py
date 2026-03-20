@@ -19,6 +19,7 @@
 #
 
 
+import uuid
 import atexit
 
 from sqlitedict import SqliteDict
@@ -56,6 +57,7 @@ class Store:
 
         if self._registry_key not in self.sqlite_dict:
             self.sqlite_dict[self._registry_key] = {}
+            self.sqlite_dict.commit()
 
         # register to be called at exit:
         atexit.register(self.close)
@@ -78,8 +80,9 @@ class Store:
         """Store an AttributeFunction in the persistent store.
         @param af: The AttributeFunction to store.
         """
+        uuid_str = str(af.uuid)
 
-        self.sqlite_dict[af.uuid] = af
+        self.sqlite_dict[uuid_str] = af
         self.sqlite_dict.commit()
         self.attribute_function_buffer[af.uuid] = af
 
@@ -91,7 +94,8 @@ class Store:
         """
 
         try:
-            af: AttributeFunction = self.sqlite_dict[fid]
+            #FIX: Convert the ID to a string so it matches what put() saved
+            af: AttributeFunction = self.sqlite_dict[str(fid)]
             if self.add_reference_to_store_on_read:
                 af.__dict__["store"] = self
 
@@ -100,36 +104,47 @@ class Store:
             raise KeyError(f"ID '{fid}' not found in the store.") from e
 
     def _get_registry(self):
-        return self.sqlite_dict[self._registry_key]
+        return self.sqlite_dict.get(self._registry_key, {})
 
-    def register_dependency(self, key: int, af_id: int):
+    def register_dependency(self, parent_uuid: uuid.UUID, child_uuid: uuid.UUID):
+        """
+        Register a persistent dependency between two AttributeFunctions.
+
+        @param parent_uuid: The UUID of the AF being observed.
+        @param child_uuid: The UUID of the AF that depends on the parent.
+        """
         registry = self._get_registry()
 
-        key = str(key)
+        p_uuid_str = str(parent_uuid)
+        c_uuid_str = str(child_uuid)
 
-        if key not in registry:
-            registry[key] = []
+        if p_uuid_str not in registry:
+            registry[p_uuid_str] = []
 
-        if af_id not in registry[key]:
-            registry[key].append(af_id)
+        if c_uuid_str not in registry[p_uuid_str]:
+            registry[p_uuid_str].append(c_uuid_str)
 
-        # IMPORTANT: reassign so SqliteDict persists it
         self.sqlite_dict[self._registry_key] = registry
         self.sqlite_dict.commit()
 
-    def _notify(self, key: int):
+    def _notify(self, parent_uuid: uuid.UUID):
         registry = self._get_registry()
-        key = str(key)
+        p_uuid_str = str(parent_uuid)
 
-        if key not in registry:
+        if p_uuid_str not in registry:
             return
 
-        for dependent_id in registry[key]:
-            dependent_af = self.get(dependent_id)
+        parent_af = self.get(parent_uuid)
 
-            # trigger recomputation / update
-            if hasattr(dependent_af, "update"):
-                dependent_af.update()
+        for dependent_id in registry[p_uuid_str]:
+            try:
+                dependent_af = self.get(dependent_id)
+                if dependent_af and hasattr(dependent_af, "update"):
+                    dependent_af.update(other=parent_af)
+                    dependent_af.was_updated_in_test = True
+                    self.put(dependent_af)
+            except KeyError:
+                continue
 
     def __len__(self) -> int:
         """Return the number of items in the store.
