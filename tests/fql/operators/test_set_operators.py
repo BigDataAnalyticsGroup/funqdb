@@ -18,7 +18,15 @@
 #
 #
 from fdm.attribute_functions import DBF, RF
-from fql.operators.set_operations import union, intersect, minus, V, Ʌ, difference
+from fql.operators.set_operations import (
+    union,
+    intersect,
+    minus,
+    V,
+    Ʌ,
+    difference,
+    cogroup,
+)
 from tests.lib import _create_testdata
 
 
@@ -28,7 +36,7 @@ def test_union():
     customers: RF = db.customers
     users_keys = set(users.keys())
     customers_keys = set(customers.keys())
-    # not that the factory does not add a schema, therefore we can union the two RFs without any issues, even though
+    # note that the factory does not add a schema, therefore we can union the two RFs without any issues, even though
     # they have different schemas:
 
     for i in range(2):
@@ -52,8 +60,8 @@ def test_intersect():
     customers: RF = db.customers
     users_keys = set(users.keys())
     customers_keys = set(customers.keys())
-    # not that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even though
-    # they have different schemas:
+    # note that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even
+    # though they have different schemas:
 
     for i in range(2):
         result: RF | None = None
@@ -72,8 +80,8 @@ def test_minus():
     customers: RF = db.customers
     users_keys = set(users.keys())
     customers_keys = set(customers.keys())
-    # not that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even though
-    # they have different schemas:
+    # note that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even
+    # though they have different schemas:
     for i in range(2):
         result: RF | None = None
         if i == 0:
@@ -88,10 +96,30 @@ def test_minus():
     customers.unfreeze()
     del customers[3]
     customers_keys = set(customers.keys())
-    # not that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even though
-    # they have different schemas:
+    # note that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even
+    # though they have different schemas:
     result: RF = minus(
         lambda _: RF(),
     )(users, customers)
     assert set(result.keys()) == users_keys.difference(customers_keys)
     assert len(result) == 1
+
+
+def test_cogroup():
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    customers: RF = db.customers
+
+    result: RF = cogroup(
+        lambda _: DBF(),  # one factory for the output of the cogroup operator: DBF mapping from keys to nested AFs
+        lambda _: RF(),  # one factory for the nested AFs in the output: RFs mapping from the input AF's uuid to the input AF's value for that key
+    )(users, customers)
+
+    assert len(result) == 5
+    assert type(result) is DBF
+    assert set(result.keys()) == {1, 2, 3, 4, 5}
+    assert len(result[1]) == 2
+    assert len(result[2]) == 2
+    assert len(result[3]) == 2
+    assert len(result[4]) == 1
+    assert len(result[5]) == 1

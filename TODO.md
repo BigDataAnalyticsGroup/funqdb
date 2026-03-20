@@ -8,6 +8,7 @@
 - [x] intersect
 - [x] minus/difference/except on AF's keys ("except" not possible due to name clash with reserved Python keyword)
 - [x] minus/difference/except on AF's values to simulate RA/SQL
+- [x] co-group operator
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
