@@ -26,7 +26,6 @@ from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
-from fql.operators.transforms import transform_items
 from fql.predicates.constraints import AttributeFunctionConstraint
 from fql.util import (
     Item,

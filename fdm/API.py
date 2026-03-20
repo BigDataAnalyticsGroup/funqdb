@@ -80,6 +80,11 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         # increase the global UUID counter for the next instance:
         AttributeFunction.global_uuid += 1
 
+    @property
+    def _uuid(self) -> int:
+        """Return the UUID of this instance."""
+        return self.__dict__["_uuid"]
+
     def __init__(self):
         super().__init__()
         self._assign_uuid()
