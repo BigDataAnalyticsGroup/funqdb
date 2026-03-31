@@ -142,7 +142,7 @@ def test_store_get_put_no_sentinel_replacement(tmp_path):
     # and that outer_tuple does not get modified as a side effect of pickling
     observer: TF = TF({"name": "Alice", "nested": inner_tuple})
     outer_tuple.add_observer(observer)
-    store.put(outer_tuple)
+    store.register(outer_tuple)
     store.close()
 
     store_read: Store = Store(file_name=file_name, add_reference_to_store_on_read=False)
@@ -185,8 +185,8 @@ def test_store_get_put_with_sentinel_replacement(tmp_path):
     # and that outer_tuple does not get modified as a side effect of pickling
     observer: TF = TF({"name": "Alice", "nested": inner_tuple}, store=store)
     outer_tuple.add_observer(observer)
-    store.put(inner_tuple)
-    store.put(outer_tuple)
+    store.register(inner_tuple)
+    store.register(outer_tuple)
     assert len(store) == 2
     store.close()
 
