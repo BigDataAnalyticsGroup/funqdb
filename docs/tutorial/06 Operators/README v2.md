@@ -3,10 +3,10 @@
 In this section, we will explain FQL operators.
 
 As each operator works on a generic attribute function (AF), each explanation first describes the principal idea of an
-operator. Then we explain important use-cases using tupel functions (TF), relation functions (RF), database functions (
-DBF), and sets of databases functions (SDBF).
+operator. Then we explain important use-cases using tuple functions (TF), relation functions (RF), database functions
+(DBF), and sets of databases functions (SDBF).
 
-## Filters
+## Filter
 
 ### Generic Form: AF -> AF
 
@@ -73,7 +73,54 @@ restricted to that specific database.
 
 In contrast, in FQL, we may select **multiple** databases and phrase queries across those databases.
 
+# Set Operations
+
+## partition
+
+### Generic Form: AF -> AF
+
+```output: AF = partition(input: AF)```
+
+Partitions the items contained in the ```input``` AF and returns a new ```output``` AF, typically of a higher order,
+mapping to the different partitions.
+
+#### TF -> RF
+
+> Split tuples into sub-tuples.
+
+
+```output: RF = partition(input: TF)```
+
+Partitions the items (e.g. key/value-mappings) mapped to in the ```input``` TF.
+
+*For instance*, this could be used to vertically partition tuples (not the containing relations).
+
+#### RF -> DBF
+
+> Split relation into sub-relations (aka shards, partitions, groups, subsets, ... you name it).
+
+
+```output: DBF = partition(input: RF)```
+
+Partitions the items (e.g. key/TF-mappings) mapped to in the ```input``` RF.
+
+*For instance*, this could be used for classical grouping and any form of horizontal partitioning (like in distributed
+sorting, distributed databases, distributed query processing, vertical partitioning).
+
+#### DBF -> SDBF
+
+> Split databases into sub-databases.
+
+
+```output: SDBF = partition(input: DBF)```
+
+Partitions the items (e.g. key/RF-mappings) mapped to in the ```input``` DBF.
+
+*For instance*, this could be used to split a database with multiple tenants into separate databases per tenant.
+
 ## Transforms
+
+DISCUSS: Inherent to a function call anyway, do we need a separate operator?
 
 ## Grouping and Partitioning
 
