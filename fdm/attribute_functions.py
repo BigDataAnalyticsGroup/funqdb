@@ -21,11 +21,11 @@
 
 import inspect
 import random
+from copy import copy
 from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
-from fql.operators.transforms import transform_items
 from fql.predicates.constraints import AttributeFunctionConstraint
 from fql.util import (
     Item,
@@ -102,6 +102,14 @@ class DictionaryAttributeFunction[Key, Value](
                     value.add_observer(self)
 
         super().__init__()
+
+    def copy(self) -> "DictionaryAttributeFunction":
+        """Create a copy of this AttributeFunction with a new UUID, i.e. this functions as a copy constructor for
+        creating a new AttributeFunction based on an existing one, but with a new identity.
+        """
+        new_copy: DictionaryAttributeFunction = copy(self)
+        new_copy._assign_uuid()
+        return new_copy
 
     def add_attribute_function_constraint(
         self, constraint: AttributeFunctionConstraint
@@ -508,6 +516,11 @@ class DictionaryAttributeFunction[Key, Value](
         result: DictionaryAttributeFunction = type(
             self
         )()  # create result instance of the same type as self
+
+        # TODO: shouldn't this be a copy constructor instead?
+        # the following triggers errors in some unit tests,
+        # result: DictionaryAttributeFunction = self.copy()
+        # result.unfreeze()
 
         # TODO: delegate to FQL operator
 

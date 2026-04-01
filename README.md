@@ -4,14 +4,15 @@
 
 ## Core Ideas:
 1. purely functional (key/value) data model
-2. same modeling concept at all levels, no matter whether we are looking at “tuples“, “relations“, or “databases“, ...
+2. same modeling concept at all levels, no matter whether we are looking at “tuples“, “relations“, or “databases“, "sets of databases", etc.
 3. all operators are unary: input is a function, output is a function
 4. query language is a façade and part of the embedding programming language
 5. no SQL injection
-6. same power for updates as for reading
-7. easily extensible
-8. the notion of an "index" is built into the data model
-9. no problems with NULL problems: no NULL values in data, no three-valued logic
+6. no shoehorning of groups, partitions, grouping sets, cube, outer joins, etc. into a single output relation
+7. no problems with NULL: no NULL values in data, no three-valued logic
+8. same power for updates as for reading
+9. easily extensible
+10. the notion of an "index" is built into the data model
    
 **None** of this is true for SQL.
 

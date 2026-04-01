@@ -28,7 +28,10 @@ from fdm.API import AttributeFunction
 
 
 class Store:
-    """A SQLLite-backed AttributeFunction-store"""
+    """A SQLLite-backed AttributeFunction-store. Placeholder for a native key/value-store.
+
+    TODO: replace by non-SQL backend
+    """
 
     def __init__(
         self,
@@ -66,19 +69,20 @@ class Store:
         """Close the underlying SQLite dict."""
         self.sqlite_dict.close()
 
-    def get(self, fid: int) -> AttributeFunction:
+    def get(self, afid: int) -> AttributeFunction:
         """Retrieve an AttributeFunction by its ID.
-        @param fid: The ID of the AttributeFunction to retrieve.
+        @param afid: The ID of the AttributeFunction to retrieve.
         @return: The AttributeFunction associated with the given ID.
         """
-        if fid not in self.attribute_function_buffer:
-            self.load(fid)  # store uses str keys
+        if afid not in self.attribute_function_buffer:
+            self.load(afid)  # store uses str keys
 
-        return self.attribute_function_buffer[fid]
+        return self.attribute_function_buffer[afid]
 
-    def put(self, af: AttributeFunction):
-        """Store an AttributeFunction in the persistent store.
-        @param af: The AttributeFunction to store.
+    def register(self, af: AttributeFunction):
+        """Registers an AttributeFunction in the persistent store such that it will be considered by the store
+        (i.e. persisted).
+        @param af: The AttributeFunction instance to register.
         """
         uuid_str: str = str(af.uuid)
 
@@ -86,22 +90,12 @@ class Store:
         self.sqlite_dict.commit()
         self.attribute_function_buffer[af.uuid] = af
 
-        self._notify(af.uuid)
-
-    def load(self, fid: int) -> None:
-        """Load an fid from the persistent store into the buffer.
-        @param item_id: The ID of the item to load.
-        """
-
-        try:
-            #FIX: Convert the ID to a string so it matches what put() saved
-            af: AttributeFunction = self.sqlite_dict[str(fid)]
             if self.add_reference_to_store_on_read:
                 af.__dict__["store"] = self
 
-            self.attribute_function_buffer[fid] = af
+            self.attribute_function_buffer[afid] = af
         except KeyError as e:
-            raise KeyError(f"ID '{fid}' not found in the store.") from e
+            raise KeyError(f"ID '{afid}' not found in the store.") from e
 
     def _get_registry(self) -> dict[str, list[str]]:
         return self.sqlite_dict.get(self._registry_key, {})
