@@ -80,7 +80,7 @@ class Store:
         """Store an AttributeFunction in the persistent store.
         @param af: The AttributeFunction to store.
         """
-        uuid_str = str(af.uuid)
+        uuid_str: str = str(af.uuid)
 
         self.sqlite_dict[uuid_str] = af
         self.sqlite_dict.commit()
@@ -103,7 +103,7 @@ class Store:
         except KeyError as e:
             raise KeyError(f"ID '{fid}' not found in the store.") from e
 
-    def _get_registry(self):
+    def _get_registry(self) -> dict[str, list[str]]:
         return self.sqlite_dict.get(self._registry_key, {})
 
     def register_dependency(self, parent_uuid: uuid.UUID, child_uuid: uuid.UUID):
@@ -113,10 +113,10 @@ class Store:
         @param parent_uuid: The UUID of the AF being observed.
         @param child_uuid: The UUID of the AF that depends on the parent.
         """
-        registry = self._get_registry()
+        registry: dict[str, list[str]] = self._get_registry()
 
-        p_uuid_str = str(parent_uuid)
-        c_uuid_str = str(child_uuid)
+        p_uuid_str: str = str(parent_uuid)
+        c_uuid_str: str = str(child_uuid)
 
         if p_uuid_str not in registry:
             registry[p_uuid_str] = []
@@ -134,11 +134,12 @@ class Store:
         if p_uuid_str not in registry:
             return
 
-        parent_af = self.get(parent_uuid)
+        parent_af: AttributeFunction = self.get(parent_uuid)
 
+        dependent_id: str
         for dependent_id in registry[p_uuid_str]:
             try:
-                dependent_af = self.get(dependent_id)
+                dependent_af: AttributeFunction = self.get(dependent_id)
                 if dependent_af and hasattr(dependent_af, "update"):
                     dependent_af.update(other=parent_af)
                     dependent_af.was_updated_in_test = True

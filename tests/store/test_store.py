@@ -29,7 +29,16 @@ from store.store import Store
 WAS_UPDATED = False
 
 def global_update_mock(self, other=None, *args, **kwargs):
-    """Picklable global mock that accepts the 'other' argument."""
+    """
+    Picklable global mock that accepts the 'other' argument.
+    This function is required because the Store triggers update() internally
+    when notifying dependent AttributeFunctions. The test itself cannot directly
+    observe this call, so this mock sets the global flag WAS_UPDATED to True
+    when invoked.
+
+    The function is defined at module level to ensure it is picklable, as
+    AttributeFunctions may be serialized when stored.
+    """
     global WAS_UPDATED
     WAS_UPDATED = True
 
@@ -225,12 +234,12 @@ def test_store_get_put_with_sentinel_replacement(tmp_path):
 
 def test_store_dependency_notification(tmp_path):
     """
-    Test persistent dependency mechanism in Store.
-
+    Test that updates propagate through the Store via subscriptions,
+    using the persistent dependency mechanism transparently.
     This test covers:
-    1. Registering a dependency between two AttributeFunctions (AFs)
-    2. Verifying that the dependency registry is persisted
-    3. Verifying that updating the parent AF triggers the child's update method
+    1. Creating AttributeFunctions (AFs) with dependencies
+    2. Verifying that updating a parent AF triggers the child's update method
+    3. Ensuring that update propagation works across store persistence
     """
     global WAS_UPDATED
     WAS_UPDATED = False
@@ -247,8 +256,6 @@ def test_store_dependency_notification(tmp_path):
 
     store.put(child_af)
     store.put(parent_af) 
-
-    store.put(parent_af)
 
     assert WAS_UPDATED is True 
 
