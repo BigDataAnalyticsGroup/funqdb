@@ -1,4 +1,4 @@
-## union
+## Union
 
 This is the inverse of the [partition](partition.md) operator.
 

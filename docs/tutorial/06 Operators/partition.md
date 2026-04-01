@@ -1,5 +1,5 @@
 
-## partition
+## Partition
 
 This is the inverse of the [union](union.md) operator.
 

@@ -1,4 +1,4 @@
-## subset (aka top-k)
+## Subset (aka top-k)
 
 ### Generic Form: AF → AF
 
@@ -51,7 +51,7 @@ Computes a subset of the items (e.g. key/TF-mappings) mapped to in the ```input`
 top-k operator in extended relational algebra or simulating the same thing in SQL using ORDER BY and LIMIT.
 
 Note that for k=1, this operation is equivalent to a classical min or max-aggregation (but not mean, avg, median, count
-as they compute a new value that does not have to exist in the input RF).
+as they compute a new value that does not have to exist in the input RF, see [aggregate](aggregate.md)).
 
 *For instance*, this could be used to compute the subset of tuples of a given relation, i.e. 'give me
 the k-smallest tuples based on the condition specified'.
