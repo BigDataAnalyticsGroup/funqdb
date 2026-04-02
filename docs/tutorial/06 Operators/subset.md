@@ -44,7 +44,6 @@ tuple w.r.t. the condition specified'.
 
 > Select the tuples to work on based on a global condition.
 
-
 ```output: RF = subset(input: RF)```
 
 Computes a subset of the items (e.g. key/TF-mappings) mapped to in the ```input``` RF. Semantically equivalent to a
@@ -71,9 +70,9 @@ me the k-smallest relations based on the condition specified'.
 
 > Select the databases to work on based on a global condition.
 
-```output: SDBF = filter(input: SDBF)```
+```output: SDBF = subset(input: SDBF)```
 
-Filters the items (e.g. key/DBF-mappings) mapped to in the ```input``` SDBF.
+Computes a subset of the items (e.g. key/DBF-mappings) mapped to in the ```input``` SDBF.
 
 *For instance*, this could be used to compute the subset of databases of a given set of databases,
 i.e. 'give me the k-smallest databases based on the condition specified'.

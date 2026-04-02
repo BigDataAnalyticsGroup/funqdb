@@ -1,4 +1,3 @@
-
 ## Partition
 
 This is the inverse of the [union](union.md) operator.
@@ -9,7 +8,7 @@ This is the inverse of the [union](union.md) operator.
 
 Partitions the items contained in the ```input``` AF and returns a new ```output``` AF, typically of a higher order,
 mapping to the different partitions.
-                                                    
+
 ### Parameters/Filters
 
 The user has to specify how partitions should be formed. This can be done based on keys, values, or any combination of both.
@@ -18,11 +17,11 @@ The user has to specify how partitions should be formed. This can be done based 
 
 TODO
 
+### Special cases
 
 #### TF → RF
 
 > Split tuples into sub-tuples.
-
 
 ```output: RF = partition(input: TF)```
 
@@ -37,22 +36,23 @@ schema representation.
 > Split relation into sub-relations (aka shards, blocks, horizontal and/or vertical partitions, groups, subsets, ... you
 > name it).
 
-
 ```output: DBF = partition(input: RF)```
 
 Partitions the items (e.g. key/TF-mappings) mapped to in the ```input``` RF.
 
 *For instance*, this could be used for classical grouping and any form of horizontal partitioning (like in distributed
-sorting, distributed databases, distributed query processing, vertical partitioning).
+sorting, distributed databases, distributed query processing, vertical partitioning). Semantically closest to the
+GROUP BY clause in SQL, but more general: in FQL, partitions may overlap (replication) and may be formed on arbitrary
+conditions, not just equality on key columns.
 
 #### DBF → SDBF
 
 > Split databases into sub-databases.
-
 
 ```output: SDBF = partition(input: DBF)```
 
 Partitions the items (e.g. key/RF-mappings) mapped to in the ```input``` DBF.
 
 *For instance*, this could be used to split a database with multiple tenants into separate databases per tenant.
-
+Another example: partitioning a database by geographic region, where each resulting SDBF entry contains only the
+relations relevant to that region.

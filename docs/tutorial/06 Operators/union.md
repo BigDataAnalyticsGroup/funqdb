@@ -18,9 +18,11 @@ defined based on keys, values, or any combination of both.
 
 TODO
 
+### Special cases
+
 #### RF → TF
 
-> union tuples into a super-tuple.
+> Union tuples into a super-tuple.
 
 ```output: RF = union(input: TF)```
 
@@ -34,22 +36,22 @@ representation.
 
 > Union relations into super-relations.
 
-
 ```output: RF = union(input: DBF)```
 
 Unions the items (e.g. key/RF-mappings) mapped to in the ```input``` DBF.
 
 *For instance*, this could be used for representing shards (aka blocks, horizontal and/or vertical partitions,
-groups, subsets, ... you name it) in a single RF.
+groups, subsets, ... you name it) in a single RF. Semantically closest to UNION ALL in SQL, but more general: in FQL,
+the input relations may have different schemas, and duplicate handling is specified explicitly rather than implicitly.
 
 #### SDBF → DBF
 
 > Union databases into super-databases.
 
-
 ```output: DBF = union(input: SDBF)```
 
-Union the items (e.g. key/DBF-mappings) mapped to in the ```input``` SDBF.
+Unions the items (e.g. key/DBF-mappings) mapped to in the ```input``` SDBF.
 
-*For instance*, this could be used to representing shard-databases in a single DBF.
+*For instance*, this could be used to merge shard-databases into a single DBF. Another example: combining multiple
+database snapshots (e.g. from different points in time or different data sources) into one unified database.
 
