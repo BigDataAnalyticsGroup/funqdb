@@ -39,16 +39,16 @@ pytest:
     - poetry run coverage run -m pytest
     # Generate coverage reports
     - coverage html --fail-under=80
-    - cp -r htmlcov htmlcov-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA
+    - cp -r htmlcov htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
     - coverage json --fail-under=80
-    - cp coverage.json coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.json
+    - cp coverage.json coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
   interruptible: true
   artifacts:
     # Take whole HTML folder and the json report
-    name: "coverage-report-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA"
+    name: "coverage-report-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
     paths:
-      - htmlcov-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA/*
-      - coverage-$CI_COMMIT_REF_NAME-$CI_COMMIT_SHORT_SHA.json
+      - htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA/*
+      - coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
     expire_in: 1 week
 
 
