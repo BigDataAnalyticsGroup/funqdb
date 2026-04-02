@@ -38,28 +38,34 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
+        create_lineage=False,
     ):
-        """Initialize the filter_values operator.
+        """Initialize the filter_items operator.
+        @param input_function: The input attribute function to filter.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be kept, False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
+        @param create_lineage: If True, create lineage information (not yet implemented).
         """
 
+        self.input_function = input_function
         self.filter_predicate = filter_predicate
         self.output_factory = output_factory
+        self.create_lineage = create_lineage
 
     def explain(self) -> str:
         """Explains the filter."""
         return f"filter_items operator with predicate {self.filter_predicate}."
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction, create_lineage=False
-    ) -> OUTPUT_AttributeFunction | str:
+    def _compute(self) -> OUTPUT_AttributeFunction:
 
-        if create_lineage:
+        if self.create_lineage:
             raise NotImplementedError()
 
+        input_function = self._resolve_input(self.input_function)
         assert input_function is not None
 
         # get the filtered items:
@@ -83,18 +89,6 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         output_function.freeze()
         return output_function
 
-        # TODO: re-enable lineage
-        # else:  # execute on db:
-        #    # create lineage without executing anything
-        #    output_function: OUTPUT_AttributeFunction = self.output_factory(None)
-        #    output_function.__dict__[
-        #        "lineage"
-        #    ] += input_function.get_lineage()  # inherit lineage
-        #    output_function.add_lineage(
-        #        f"FILTER_ITEMS({inspect.getsource(self.filter_predicate).strip()})"
-        #    )
-        #    return output_function
-
 
 class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
@@ -107,10 +101,12 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        super().__init__(lambda i: filter_predicate(i.value), output_factory)
+        super().__init__(input_function, filter_predicate=lambda i: filter_predicate(i.value), output_factory=output_factory)
 
     def explain(self) -> str:
         """Explains the filter."""
@@ -128,10 +124,12 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        super().__init__(lambda i: filter_predicate(i.key), output_factory)
+        super().__init__(input_function, filter_predicate=lambda i: filter_predicate(i.key), output_factory=output_factory)
 
     def explain(self) -> str:
         """Explains the filter."""
@@ -145,15 +143,18 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         """Initialize the filter_items_scan_complement operator.
+        @param input_function: The input attribute function to filter.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be filtered out,
         False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
-        super().__init__(lambda x: not filter_predicate, output_factory)
+        super().__init__(input_function, filter_predicate=lambda x: not filter_predicate, output_factory=output_factory)
 
     def explain(self) -> str:
         """Explains the filter."""

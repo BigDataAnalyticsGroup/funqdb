@@ -33,16 +33,17 @@ def test_filter_items():
     for i in range(2):
         if i == 0:
             # with output factory parameter:
-            filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+            users_filtered: RF = filter_items[RF, RF](
+                users,
                 filter_predicate=lambda i: i.value.department.name == "Dev",
                 output_factory=lambda _: RF(),
-            )
+            ).result
         else:
             # without output factory parameter:
-            filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+            users_filtered: RF = filter_items[RF, RF](
+                users,
                 filter_predicate=lambda i: i.value.department.name == "Dev",
-            )
-        users_filtered: RF = filter_RF(users)
+            ).result
         assert type(users_filtered) == RF
         assert len(users_filtered) == 2
         for item in users_filtered:
@@ -164,10 +165,10 @@ def test_filter_items_complement():
         user: TF = item.value
         return user.department.name != "Dev"
 
-    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+    users_filtered: RF = filter_items[RF, RF](
+        users,
         filter_predicate=filter_predicate_complement,
-    )
-    users_filtered: RF = filter_RF(users)
+    ).result
     assert type(users_filtered) == RF
     assert len(users_filtered) == 1
     for item in users_filtered:
@@ -182,16 +183,17 @@ def test_filter_values():
     for i in range(2):
         if i == 0:
             # with output factory parameter:
-            filter_RF: Operator[RF, RF] = filter_values[RF, RF](
+            users_filtered: RF = filter_values[RF, RF](
+                users,
                 filter_predicate=lambda v: v.department.name == "Dev",
                 output_factory=lambda _: RF(),
-            )
+            ).result
         else:
             # without output factory parameter:
-            filter_RF: Operator[RF, RF] = filter_values[RF, RF](
+            users_filtered: RF = filter_values[RF, RF](
+                users,
                 filter_predicate=lambda v: v.department.name == "Dev",
-            )
-        users_filtered: RF = filter_RF(users)
+            ).result
         assert type(users_filtered) == RF
         assert len(users_filtered) == 2
         for item in users_filtered:
@@ -206,16 +208,17 @@ def test_filter_keys():
     for i in range(2):
         if i == 0:
             # with output factory parameter:
-            filter_RF: Operator[RF, RF] = filter_keys[RF, RF](
+            departments_filtered: RF = filter_keys[RF, RF](
+                departments,
                 filter_predicate=lambda k: k == "d1",
                 output_factory=lambda _: RF(),
-            )
+            ).result
         else:
             # without output factory parameter:
-            filter_RF: Operator[RF, RF] = filter_keys[RF, RF](
+            departments_filtered: RF = filter_keys[RF, RF](
+                departments,
                 filter_predicate=lambda k: k == "d1",
-            )
-        departments_filtered: RF = filter_RF(departments)
+            ).result
         assert type(departments_filtered) == RF
         assert len(departments_filtered) == 1
         for item in departments_filtered:
@@ -271,12 +274,18 @@ def test_filter_items_reused_and_chained():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+    filter_kw = dict(
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
     )
-    users_filtered: RF = filter_RF(filter_RF(users))  # apply filter instance twice
-    filter_RF(filter_RF(users)).explain()
+    users_filtered: RF = filter_items[RF, RF](
+        filter_items[RF, RF](users, **filter_kw).result,
+        **filter_kw,
+    ).result  # apply filter twice by chaining
+    filter_items[RF, RF](
+        filter_items[RF, RF](users, **filter_kw).result,
+        **filter_kw,
+    ).result.explain()
 
     assert type(users_filtered) == RF
     assert len(users_filtered) == 2
@@ -292,17 +301,18 @@ def _test_filter_explain():
     users: RF = db.users
     print(users.get_lineage())
 
-    filter_RF: Operator[RF, RF] = filter_items[RF, RF](
+    ret1: RF = filter_items[RF, RF](
+        users,
         filter_predicate=lambda item: item.value.department.name == "Dev",
         output_factory=lambda _: RF(),
-    )
-    filter_RF2: Operator[RF, RF] = filter_items[RF, RF](
+        create_lineage=True,
+    ).result
+    ret2: RF = filter_items[RF, RF](
+        ret1,
         filter_predicate=lambda item: item.value.department.name == "bla",
         output_factory=lambda _: RF(),
-    )
-
-    ret1: RF = filter_RF(users, create_lineage=True)
-    ret2: RF = filter_RF2(ret1, create_lineage=True)
+        create_lineage=True,
+    ).result
     # print("ret2 lineage:")
     lineage: list[str] = ret2.get_lineage()
     # for i, lin in enumerate(lineage, 1):

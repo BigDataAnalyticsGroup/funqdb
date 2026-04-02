@@ -166,9 +166,11 @@ def _create_test_data_scalable(
 
 
 def _users_customers_DBF(frozen: bool = True) -> DBF:
-    return filter_keys(lambda key: key in ["users", "customers"], lambda _: DBF())(
-        _create_testdata(frozen=frozen)
-    )
+    return filter_keys(
+        _create_testdata(frozen=frozen),
+        filter_predicate=lambda key: key in ["users", "customers"],
+        output_factory=lambda _: DBF(),
+    ).result
 
 
 def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
@@ -187,6 +189,8 @@ def _subset_highly_filtered_DBF(frozen: bool = True) -> DBF:
 
 
 def _subset_DBF(whitelist: set[str], frozen: bool = True, observe_items=False) -> DBF:
-    return filter_keys(lambda key: key in whitelist, lambda _: DBF())(
-        _create_testdata(frozen=frozen, observe_items=observe_items)
-    )
+    return filter_keys(
+        _create_testdata(frozen=frozen, observe_items=observe_items),
+        filter_predicate=lambda key: key in whitelist,
+        output_factory=lambda _: DBF(),
+    ).result

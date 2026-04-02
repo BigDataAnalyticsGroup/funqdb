@@ -235,15 +235,19 @@ def test_relationship_function():
     assert len(meetings) == 3
 
     # lookup meetings for user 1:
-    res: RF = filter_items(lambda i: i.key.subkey(0) == users[1], lambda _: RF())(
-        meetings
-    )
+    res: RF = filter_items(
+        meetings,
+        filter_predicate=lambda i: i.key.subkey(0) == users[1],
+        output_factory=lambda _: RF(),
+    ).result
     assert len(res) == 1
 
     # lookup meetings for user 2:
-    res: RF = filter_items(lambda i: i.key.subkey(0) == users[2], lambda _: RF())(
-        meetings
-    )
+    res: RF = filter_items(
+        meetings,
+        filter_predicate=lambda i: i.key.subkey(0) == users[2],
+        output_factory=lambda _: RF(),
+    ).result
     assert len(res) == 2
 
     # same through the more convenient syntax:

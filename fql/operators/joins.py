@@ -44,27 +44,30 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         join_predicate: Callable[..., bool],
         left: str | None = None,
         right: str | None = None,
     ):
+        self.input_function = input_function
         self.join_predicate = join_predicate
         self.left = left
         self.right = right
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction
-    ) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_function = self._resolve_input(self.input_function)
         # brute force nested loop to start with,
         # TODO: optimize later to use standard DB subdatabase algorithms
         # TODO: implement typical join operators exploiting special predicates
         reduced_DBF: DBF = subdatabase[DBF, DBF](
-            lambda item_left, item_right: item_left.value.name == item_right.value.name,
-            self.left,
-            self.right,
+            input_function,
+            join_predicate=lambda item_left, item_right: item_left.value.name == item_right.value.name,
+            left=self.left,
+            right=self.right,
             create_join_index=True,
             keep_values_in_join_index=True,
-        )(input_function)
+        ).result
 
         join_index: RF = reduced_DBF.join_index
         result_RF: RF = RF(frozen=False)
@@ -99,19 +102,21 @@ class equi_join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         left_identifier: str | None = None,
         right_identifier: str | None = None,
         left: str | None = None,
         right: str | None = None,
     ):
+        self.input_function = input_function
         self.left_identifier = left_identifier
         self.right_identifier = right_identifier
         self.left = left
         self.right = right
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction
-    ) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_function = self._resolve_input(self.input_function)
         result_RF: RF = RF(frozen=False)
 
         hash_map = {}

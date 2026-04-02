@@ -25,10 +25,11 @@ from tests.lib import _users_customers_DBF
 
 def test_flattening_join_two_RFs():
     joined: RF = join[DBF, RF](
-        lambda item_left, item_right: item_left.value.name == item_right.value.name,
-        "users",
-        "customers",
-    )(_users_customers_DBF())
+        _users_customers_DBF(),
+        join_predicate=lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        left="users",
+        right="customers",
+    ).result
     assert type(joined) == RF
     assert len(joined) == 3  # three matching pairs in the join result
     # print()
@@ -40,11 +41,12 @@ def test_flattening_join_two_RFs():
 
 def test_flattening_equi_join_two_RFs():
     joined: RF = equi_join[DBF, RF](
-        "name",
-        "name",
-        "users",
-        "customers",
-    )(_users_customers_DBF())
+        _users_customers_DBF(),
+        left_identifier="name",
+        right_identifier="name",
+        left="users",
+        right="customers",
+    ).result
     # assert type(joined) == RF
     # assert len(joined) == 3  # three matching pairs in the join result
     # print()

@@ -26,7 +26,7 @@ def test_project():
     db: DBF = _create_testdata(frozen=False)
     customers: RF = db.customers
 
-    customers_projected: RF = project("name")(customers)
+    customers_projected: RF = project(customers, "name").result
 
     # lens should match, in contrast to relational algebra, duplicate elimination and hence a smaller len of the output
     # cannot happen

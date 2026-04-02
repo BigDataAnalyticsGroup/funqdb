@@ -28,10 +28,13 @@ from fql.util import Item
 class union[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """Union n>=2 attribute functions based on the AF's keys."""
+    """Union n>=2 attribute functions based on the AF's keys.
+    Input is a single DBF containing the relations to union."""
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
         warn_about_duplicate_keys: bool = True,
     ):
@@ -39,19 +42,22 @@ class union[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             output_factory is not None
         ), "An output factory must be provided for the generic union operator."
 
+        self.input_function = input_function
         self.output_factory = output_factory
         self.warn_about_duplicate_keys = warn_about_duplicate_keys
 
-    def __call__(self, *args) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_dbf = self._resolve_input(self.input_function)
 
         assert (
-            len(args) >= 2
+            len(input_dbf) >= 2
         ), "At least two input attribute functions must be provided for the union operator."
 
         # get result instance:
         output_function: OUTPUT_AttributeFunction = self.output_factory(None)
 
-        for input_function in args:
+        for relation in input_dbf:
+            input_function = relation.value
             # add all items from the input function to the output function (overwriting existing items with the same key):
             item: Item
             for item in input_function:
@@ -90,10 +96,13 @@ class cogroup[
 ):
     """Co-group n>=2 attribute functions based on the AF's keys. This can naturally be extended to a classical join
     operation if the grouping keys can be customized to reflect the attributes used in an equi join predicate.
+    Input is a single DBF containing the relations to co-group.
     """
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         output_factory: Callable[..., OUTPUT_AttributeFunction],
         output_factory_nested: Callable[..., OUTPUT_AttributeFunction_Nested],
     ):
@@ -105,21 +114,24 @@ class cogroup[
             output_factory_nested is not None
         ), "An output factory must be provided for the nested AFs in the output."
 
+        self.input_function = input_function
         self.output_factory = output_factory
         self.output_factory_nested = output_factory_nested
 
-    def __call__(self, *args) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_dbf = self._resolve_input(self.input_function)
 
-        # TODO: revisit this assert as len(args)==1 corresponds to the standard grouping
+        # TODO: revisit this assert as len(input_dbf)==1 corresponds to the standard grouping
         assert (
-            len(args) >= 2
+            len(input_dbf) >= 2
         ), "At least two input attribute functions must be provided for the cogroup operator."
 
         # get result instance:
         output_function: OUTPUT_AttributeFunction = self.output_factory(None)
 
         input_function: AttributeFunction
-        for input_function in args:
+        for relation in input_dbf:
+            input_function = relation.value
             # add a key/value mapping from the input function's key to a nested AF
             # that nested AF has a key/value-mapping from the input function's uudid to the input function's value for
             # that key
@@ -136,29 +148,35 @@ class cogroup[
 class intersect[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """Intersect n>=2 attribute functions based on the AF's keys."""
+    """Intersect n>=2 attribute functions based on the AF's keys.
+    Input is a single DBF containing the relations to intersect."""
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         assert (
             output_factory is not None
         ), "An output factory must be provided for the generic intersect operator."
 
+        self.input_function = input_function
         self.output_factory = output_factory
 
-    def __call__(self, *args) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_dbf = self._resolve_input(self.input_function)
 
         assert (
-            len(args) >= 2
+            len(input_dbf) >= 2
         ), "At least two input attribute functions must be provided for the intersect operator."
 
         # get result instance:
         output_function: OUTPUT_AttributeFunction = self.output_factory(None)
 
         first: bool = True
-        for input_function in args:
+        for relation in input_dbf:
+            input_function = relation.value
             # add all items from the input function to the output function (overwriting existing items with the same key):
             if first:
                 # first af treated:
@@ -192,29 +210,35 @@ class Ʌ[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 class minus[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """minus n>=2 attribute functions based on the AF's keys."""
+    """minus n>=2 attribute functions based on the AF's keys.
+    Input is a single DBF containing the relations to subtract."""
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         assert (
             output_factory is not None
         ), "An output factory must be provided for the generic minus operator."
 
+        self.input_function = input_function
         self.output_factory = output_factory
 
-    def __call__(self, *args) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_dbf = self._resolve_input(self.input_function)
 
         assert (
-            len(args) >= 2
+            len(input_dbf) >= 2
         ), "At least two input attribute functions must be provided for the minus operator."
 
         # get result instance:
         output_function: OUTPUT_AttributeFunction = self.output_factory(None)
 
         first: bool = True
-        for input_function in args:
+        for relation in input_dbf:
+            input_function = relation.value
             # add all items from the input function to the output function (overwriting existing items with the same key):
             if first:
                 # first af treated:

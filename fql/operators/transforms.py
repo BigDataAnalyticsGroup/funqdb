@@ -34,16 +34,12 @@ class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 ):
     """An operator that transforms an input instance to an output instance."""
 
-    def __init__(self, transformation_function: Callable[..., Any]):
+    def __init__(self, input_function: INPUT_AttributeFunction, *, transformation_function: Callable[..., Any]):
+        self.input_function = input_function
         self.transformation_function = transformation_function
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction
-    ) -> OUTPUT_AttributeFunction:
-        """Make the object callable.
-        @return: The result of the call.
-        """
-        return self.transformation_function(input_function)
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        return self.transformation_function(self._resolve_input(self.input_function))
 
 
 class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -54,20 +50,24 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         transformation_function: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         """Initialize the transform_items operator.
+        @param input_function: The input attribute function to transform.
         @param transformation_function: A function that takes an Item and returns a transformed Item or None
         @param output_factory: If set, this factory function will be used to create the output instance.
         """
 
+        self.input_function = input_function
         self.mapping_function = transformation_function
         self.output_factory = output_factory
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction
-    ) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_function = self._resolve_input(self.input_function)
+
         # get the mapped items:
         mapped_items: Iterable[Item] = map(self.mapping_function, input_function)
 

@@ -19,10 +19,10 @@ def test_partitioning_and_group_by_composed_partitioning_key():
         partitions: DBF | None = None
         if i == 0:
             # generic partitioning based on a partitioning function:
-            partitions = partition(lambda i: (i.value.name, i.value.company))(customers)
+            partitions = partition(customers, partitioning_function=lambda i: (i.value.name, i.value.company)).result
         else:
             # explicit group by building partitions based on equality of multiple attributes:
-            partitions = group_by("name", "company")(customers)
+            partitions = group_by(customers, "name", "company").result
         assert len(partitions) == 4
         assert type(partitions) == DBF
 
@@ -49,18 +49,19 @@ def test_partition_by_aggregate_stepwise():
 
     # partition the users RF into a DBF with one RF per partition: one with name Tom and one not named Tom:
     # basically projects to the grouping key:
-    partitions = partition(lambda i: "Tom" if i.value.name == "Tom" else "not Tom")(
-        users
-    )
+    partitions = partition(
+        users, partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom"
+    ).result
 
     # take partitions (a DBF of RFs) and return one RF with one aggregated TF per partition:
     # TODO: introduce a separate nest()-operation for this?
     aggregates = transform_items[DBF, RF](
+        partitions,
         transformation_function=lambda item: Item(
-            item.key, aggregate(min=Min("yob"), max=Max("yob"))(item.value)
+            item.key, aggregate(item.value, min=Min("yob"), max=Max("yob")).result
         ),
         output_factory=lambda _: RF(),
-    )(partitions)
+    ).result
 
     assert len(aggregates) == 2
     assert "Tom" in aggregates
@@ -78,18 +79,20 @@ def test_partition_by_aggregate_single_operator():
         aggregates: RF | None = None
         if i == 0:
             aggregates = partition_by_aggregate(
+                rel,
                 partitioning_function=lambda i: (
                     "Tom" if i.value.name == "Tom" else "not Tom"
                 ),
                 aggregation_function=lambda i: Item(
                     key=i.key, value=TF({"count": len(i.value)})
                 ),
-            )(rel)
+            ).result
         else:
             aggregates = partition_by_aggregate(
-                lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
-                lambda i: Item(key=i.key, value=TF({"count": len(i.value)})),
-            )(rel)
+                rel,
+                partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
+                aggregation_function=lambda i: Item(key=i.key, value=TF({"count": len(i.value)})),
+            ).result
 
         assert len(aggregates) == 2
         assert type(aggregates) == RF
@@ -110,9 +113,10 @@ def test_group_by_aggregate_single_operator():
         aggregates: RF | None = None
         if True:
             aggregates = group_by_aggregate(
+                rel,
                 "name",
                 count=Count("name"),
-            )(rel)
+            ).result
 
         assert len(aggregates) == 4
         assert type(aggregates) == RF
