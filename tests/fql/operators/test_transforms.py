@@ -33,7 +33,9 @@ def test_transform_instance():
     """map input RF to output RF using identity mapping function."""
     db: DBF = _create_testdata()
     users: RF = db.users
-    users_mapped: RF = transform[RF, RF](users, transformation_function=lambda el: el).result
+    users_mapped: RF = transform[RF, RF](
+        users, transformation_function=lambda el: el
+    ).result
     assert type(users_mapped) == RF
     assert users == users_mapped
 

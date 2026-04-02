@@ -26,7 +26,8 @@ from tests.lib import _users_customers_DBF
 def test_flattening_join_two_RFs():
     joined: RF = join[DBF, RF](
         _users_customers_DBF(),
-        join_predicate=lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        join_predicate=lambda item_left, item_right: item_left.value.name
+        == item_right.value.name,
         left="users",
         right="customers",
     ).result

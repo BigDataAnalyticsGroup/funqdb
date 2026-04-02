@@ -49,7 +49,8 @@ def test_subdatabase_two_RFs():
     # same thing again, but with lambda join predicate:
     reduced_DBF: DBF = subdatabase[DBF, DBF](
         db_filtered,
-        join_predicate=lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        join_predicate=lambda item_left, item_right: item_left.value.name
+        == item_right.value.name,
         left="users",
         right="customers",
     ).result
@@ -68,7 +69,8 @@ def test_subdatabase_two_RFs_with_join_index():
 
     reduced_DBF: DBF = subdatabase[DBF, DBF](
         _users_customers_DBF(),
-        join_predicate=lambda item_left, item_right: item_left.value.name == item_right.value.name,
+        join_predicate=lambda item_left, item_right: item_left.value.name
+        == item_right.value.name,
         left="users",
         right="customers",
         create_join_index=True,

@@ -19,7 +19,10 @@ def test_partitioning_and_group_by_composed_partitioning_key():
         partitions: DBF | None = None
         if i == 0:
             # generic partitioning based on a partitioning function:
-            partitions = partition(customers, partitioning_function=lambda i: (i.value.name, i.value.company)).result
+            partitions = partition(
+                customers,
+                partitioning_function=lambda i: (i.value.name, i.value.company),
+            ).result
         else:
             # explicit group by building partitions based on equality of multiple attributes:
             partitions = group_by(customers, "name", "company").result
@@ -50,7 +53,8 @@ def test_partition_by_aggregate_stepwise():
     # partition the users RF into a DBF with one RF per partition: one with name Tom and one not named Tom:
     # basically projects to the grouping key:
     partitions = partition(
-        users, partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom"
+        users,
+        partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
     ).result
 
     # take partitions (a DBF of RFs) and return one RF with one aggregated TF per partition:
@@ -90,8 +94,12 @@ def test_partition_by_aggregate_single_operator():
         else:
             aggregates = partition_by_aggregate(
                 rel,
-                partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
-                aggregation_function=lambda i: Item(key=i.key, value=TF({"count": len(i.value)})),
+                partitioning_function=lambda i: (
+                    "Tom" if i.value.name == "Tom" else "not Tom"
+                ),
+                aggregation_function=lambda i: Item(
+                    key=i.key, value=TF({"count": len(i.value)})
+                ),
             ).result
 
         assert len(aggregates) == 2

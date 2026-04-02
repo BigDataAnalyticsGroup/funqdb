@@ -106,7 +106,11 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        super().__init__(input_function, filter_predicate=lambda i: filter_predicate(i.value), output_factory=output_factory)
+        super().__init__(
+            input_function,
+            filter_predicate=lambda i: filter_predicate(i.value),
+            output_factory=output_factory,
+        )
 
     def explain(self) -> str:
         """Explains the filter."""
@@ -129,7 +133,11 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        super().__init__(input_function, filter_predicate=lambda i: filter_predicate(i.key), output_factory=output_factory)
+        super().__init__(
+            input_function,
+            filter_predicate=lambda i: filter_predicate(i.key),
+            output_factory=output_factory,
+        )
 
     def explain(self) -> str:
         """Explains the filter."""
@@ -154,7 +162,11 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
-        super().__init__(input_function, filter_predicate=lambda x: not filter_predicate, output_factory=output_factory)
+        super().__init__(
+            input_function,
+            filter_predicate=lambda x: not filter_predicate,
+            output_factory=output_factory,
+        )
 
     def explain(self) -> str:
         """Explains the filter."""

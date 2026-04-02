@@ -44,9 +44,17 @@ def test_union():
     for i in range(2):
         result: RF | None = None
         if i == 0:
-            result = union(input_dbf, output_factory=lambda _: RF(), warn_about_duplicate_keys=False).result
+            result = union(
+                input_dbf,
+                output_factory=lambda _: RF(),
+                warn_about_duplicate_keys=False,
+            ).result
         else:
-            result = V(input_dbf, output_factory=lambda _: RF(), warn_about_duplicate_keys=False).result
+            result = V(
+                input_dbf,
+                output_factory=lambda _: RF(),
+                warn_about_duplicate_keys=False,
+            ).result
 
         assert set(result.keys()) == users_keys.union(customers_keys)
         assert len(result) == 5

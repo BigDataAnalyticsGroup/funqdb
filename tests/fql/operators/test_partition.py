@@ -9,7 +9,8 @@ def test_partitioning():
 
     # partition the users relation into two RFs: those name Tom and those not named Tom:
     partitions = partition(
-        customers, partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom"
+        customers,
+        partitioning_function=lambda i: "Tom" if i.value.name == "Tom" else "not Tom",
     ).result
     assert len(partitions) == 2
     assert type(partitions) == DBF

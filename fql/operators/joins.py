@@ -62,7 +62,8 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         # TODO: implement typical join operators exploiting special predicates
         reduced_DBF: DBF = subdatabase[DBF, DBF](
             input_function,
-            join_predicate=lambda item_left, item_right: item_left.value.name == item_right.value.name,
+            join_predicate=lambda item_left, item_right: item_left.value.name
+            == item_right.value.name,
             left=self.left,
             right=self.right,
             create_join_index=True,

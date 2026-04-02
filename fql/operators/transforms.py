@@ -34,7 +34,12 @@ class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 ):
     """An operator that transforms an input instance to an output instance."""
 
-    def __init__(self, input_function: INPUT_AttributeFunction, *, transformation_function: Callable[..., Any]):
+    def __init__(
+        self,
+        input_function: INPUT_AttributeFunction,
+        *,
+        transformation_function: Callable[..., Any],
+    ):
         self.input_function = input_function
         self.transformation_function = transformation_function
 
