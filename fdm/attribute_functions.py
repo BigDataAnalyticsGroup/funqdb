@@ -502,6 +502,42 @@ class DictionaryAttributeFunction[Key, Value](
         TODO: Custom unpickling logic to restore observers."""
         self.__dict__.update(state)
 
+    # Django ORM-style lookup operators for use in where() kwargs.
+    # If the last __-segment of a kwarg key matches a key in this dict,
+    # it is treated as a lookup operator; otherwise the entire key is
+    # treated as a field path with an implicit "exact" lookup.
+    _LOOKUPS: dict[str, Callable] = {
+        "exact": lambda attr, val: attr == val,
+        "lt": lambda attr, val: attr < val,
+        "lte": lambda attr, val: attr <= val,
+        "gt": lambda attr, val: attr > val,
+        "gte": lambda attr, val: attr >= val,
+        "in": lambda attr, val: attr in val,
+        "contains": lambda attr, val: val in attr,
+        "icontains": lambda attr, val: val.lower() in attr.lower(),
+        "startswith": lambda attr, val: attr.startswith(val),
+        "endswith": lambda attr, val: attr.endswith(val),
+        "isnull": lambda attr, val: (attr is None) == val,
+        "range": lambda attr, val: val[0] <= attr <= val[1],
+    }
+
+    @staticmethod
+    def _parse_lookup(key: str) -> tuple[str, str]:
+        """Parse a kwarg key into (field_path, lookup_name).
+        If the last __-segment is a known lookup, split it off;
+        otherwise treat the whole key as a field path with implicit 'exact'.
+        Examples:
+            'name'              -> ('name', 'exact')
+            'department__name'  -> ('department__name', 'exact')   # traversal only
+            'salary__gte'       -> ('salary', 'gte')               # lookup
+            'department__name__gte' -> ('department__name', 'gte') # traversal + lookup
+        """
+        if "__" in key:
+            field_path, last_segment = key.rsplit("__", 1)
+            if last_segment in DictionaryAttributeFunction._LOOKUPS:
+                return field_path, last_segment
+        return key, "exact"
+
     def where(
         self, predicate: Callable[..., Any] = None, **kwargs
     ) -> "DictionaryAttributeFunction":
@@ -509,7 +545,9 @@ class DictionaryAttributeFunction[Key, Value](
         @param predicate: A callable defined on the values of this attribute function and returns True if the item
         should be included in the result, False otherwise.
         @param kwargs: Keyword arguments for filtering conditions, phrased directly against the value of this attribute
-        function.
+        function. Supports Django ORM-style lookups: field__lt, field__lte, field__gt, field__gte, field__in,
+        field__contains, field__icontains, field__startswith, field__endswith, field__isnull, field__range.
+        Plain field=value is equivalent to field__exact=value.
 
         @return: A new DictionaryAttributeFunction instance containing only the items that satisfy the filtering conditions.
         """
@@ -534,12 +572,12 @@ class DictionaryAttributeFunction[Key, Value](
             if predicate is not None and not predicate(item):
                 continue
 
-            # if kwargs conditions exist, evaluate them:
+            # if kwargs conditions exist, evaluate them (Django ORM-style conjunct):
             match: bool = True
             for key, value in kwargs.items():
-                # all conditions passed are considered part of a conjunct (just like in Django ORM),
-                # i.e., all must be satisfied for the item to be included in the result function:
-                if not (hasattr(item.value, key) and getattr(item.value, key) == value):
+                field_path, lookup_name = self._parse_lookup(key)
+                lookup_fn = self._LOOKUPS[lookup_name]
+                if not (hasattr(item.value, field_path) and lookup_fn(getattr(item.value, field_path), value)):
                     match = False
                     break
 

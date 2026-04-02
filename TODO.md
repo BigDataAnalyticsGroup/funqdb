@@ -4,11 +4,6 @@
 
 - [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__: in general both
   syntaxes should be possible
-- [x] union
-- [x] intersect
-- [x] minus/difference/except on AF's keys ("except" not possible due to name clash with reserved Python keyword)
-- [x] minus/difference/except on AF's values to simulate RA/SQL
-- [x] co-group operator
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
@@ -18,8 +13,6 @@
   method of AFs
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
-- [ ] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
-  called from where()
 - [ ] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
   transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
 
@@ -76,7 +69,13 @@
 ---
 
 ### DONE
-
+- [x] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
+  called from where()
+- [x] union
+- [x] intersect
+- [x] minus/difference/except on AF's keys ("except" not possible due to name clash with reserved Python keyword)
+- [x] minus/difference/except on AF's values to simulate RA/SQL
+- [x] co-group operator
 - [x] maybe a projection operator for AFs that allows to specify the output schema, e.g. by renaming attributes, or even
   computing new attributes based on the existing ones, e.g. by applying a function to them
 - [x] maybe a special projection method for AFs: project() and 𝜋()
