@@ -577,7 +577,10 @@ class DictionaryAttributeFunction[Key, Value](
             for key, value in kwargs.items():
                 field_path, lookup_name = self._parse_lookup(key)
                 lookup_fn = self._LOOKUPS[lookup_name]
-                if not (hasattr(item.value, field_path) and lookup_fn(getattr(item.value, field_path), value)):
+                if not (
+                    hasattr(item.value, field_path)
+                    and lookup_fn(getattr(item.value, field_path), value)
+                ):
                     match = False
                     break
 
