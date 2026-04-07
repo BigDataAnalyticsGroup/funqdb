@@ -1,7 +1,6 @@
 #!/bin/sh
 set -e
 git fetch origin
-ls
 CI_DEFAULT_BRANCH_SHORT_SHA="$(git rev-parse --short=8 origin/$CI_DEFAULT_BRANCH)" # We need the short SHA char (which has 8 characters)
 MAIN_FILE=coverage-$CI_DEFAULT_BRANCH-$CI_DEFAULT_BRANCH_SHORT_SHA.json
 MR_FILE=coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
@@ -22,4 +21,4 @@ else
   exit 1 # Should hot happen!
 fi
 
-python3 coverage/check_coverage.py $MAIN_FILE $MR_FILE
+python3 check_coverage.py $MAIN_FILE $MR_FILE
