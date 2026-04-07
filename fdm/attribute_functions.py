@@ -622,20 +622,37 @@ class DictionaryAttributeFunction[Key, Value](
 
     def rename(self, **kwargs) -> "DictionaryAttributeFunction":
         """Rename keys in the values of this DictionaryAttributeFunction.
-        @param kwargs: Mapping of old_key=new_key pairs, e.g. rename(name="first_name").
+        Analogous to the rename operator ρ in relational algebra.
+
+        The kwargs map old key names to new key names. Keys not mentioned in kwargs are kept as-is.
+        Returns a new AF of the same type — the original is not modified.
+
+        This operates one level deep: it renames keys inside each *value* of self, not the keys of
+        self itself. For example, on an RF it renames attributes inside each TF, not the tuple keys.
+
+        Example:
+            users.rename(name="first_name", yob="birth_year")
+            # Before: RF({1: TF({"name": "Alice", "yob": 1990}), ...})
+            # After:  RF({1: TF({"first_name": "Alice", "birth_year": 1990}), ...})
+
+        @param kwargs: old_key=new_key pairs, e.g. rename(name="first_name").
         @return: A new DictionaryAttributeFunction where each value has its keys renamed accordingly.
         """
         assert len(kwargs) >= 1, "At least one rename mapping must be provided."
 
+        # create a new AF of the same type (e.g. RF → RF):
         result: DictionaryAttributeFunction = type(self)()
 
         outer_item: Item
         for outer_item in self:
+            # create a new value AF of the same type as the original value (e.g. TF → TF):
             renamed: DictionaryAttributeFunction = type(outer_item.value)()
             inner_item: Item
             for inner_item in outer_item.value:
+                # apply the rename mapping; fall back to the original key if not in kwargs:
                 new_key = kwargs.get(inner_item.key, inner_item.key)
                 renamed[new_key] = inner_item.value
+            # preserve the outer key (e.g. the tuple ID in an RF):
             result[outer_item.key] = renamed
 
         return result
