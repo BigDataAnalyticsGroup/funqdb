@@ -247,6 +247,18 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         return self.project(*keys)
 
     @abstractmethod
+    def rename(self, **kwargs) -> "AttributeFunction":
+        """Rename keys in the values of this AttributeFunction.
+        @param kwargs: Mapping of old_key=new_key pairs, e.g. rename(name="first_name").
+        @return: A new AttributeFunction with renamed keys in each value.
+        """
+        ...
+
+    def ρ(self, **kwargs) -> "AttributeFunction":
+        """Rel algebra style naming for rename."""
+        return self.rename(**kwargs)
+
+    @abstractmethod
     def random_item(self) -> Any:
         """Get a random item from the AttributeFunction.
         @return: A random item.
