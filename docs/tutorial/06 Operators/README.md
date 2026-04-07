@@ -51,6 +51,19 @@ The ```__```-syntax serves double duty: it resolves **nested attributes** (```de
 (```yob__gte``` means ```yob >= value```). Available lookups: ```exact```, ```lt```, ```lte```, ```gt```,
 ```gte```, ```in```, ```contains```, ```icontains```, ```startswith```, ```endswith```, ```isnull```, ```range```.
 
+## Convenience API: project()
+
+Attribute functions also provide a ```project()``` method for inline projection without explicitly constructing an
+operator:
+
+```python
+# project to specific attributes:
+users.project("name", "department")
+```
+
+This returns a new AF where each value is reduced to only the specified keys. Attributes not present in a value
+are simply omitted (no error). The relational algebra alias ```π()``` is equivalent to ```project()```.
+
 ## Generic Operators vs Specialized Operators
 
 Most FQL operators are **generic**: they work on any level of the AF type hierarchy (TF, RF, DBF, SDBF) with the
@@ -73,6 +86,7 @@ operators which operate exclusively on DBFs (DBF → DBF).
 | Operator | Form | Description |
 |:---------|:-----|:------------|
 | [filter](filter.md) | AF → AF | Select items matching a local predicate |
+| [project](project.md) | AF → AF | Retain only specified attributes per value |
 | [subset](subset.md) | AF → AF | Select items matching a global condition (top-k) |
 | [partition](partition.md) | AF → AF↑ | Split into partitions (inverse of union) |
 | [union](union.md) | AF → AF↓ | Merge partitions (inverse of partition) |
