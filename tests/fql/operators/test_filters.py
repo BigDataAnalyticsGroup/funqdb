@@ -90,6 +90,37 @@ def test_project_clause():
         assert "yob" not in value
 
 
+def test_rename():
+    """Verify that rename() renames keys in each value of the AF."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    users_renamed: RF = users.rename(name="first_name", yob="birth_year")
+
+    assert type(users_renamed) == RF
+    assert len(users_renamed) == 3
+    for value in users_renamed.values():
+        assert "first_name" in value
+        assert "birth_year" in value
+        assert "department" in value
+        assert "name" not in value
+        assert "yob" not in value
+
+    assert users_renamed[1].first_name == "Horst"
+    assert users_renamed[1].birth_year == 1972
+
+
+def test_rename_alias():
+    """Verify that ρ() is an alias for rename()."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    users_renamed: RF = users.ρ(name="first_name")
+
+    assert len(users_renamed) == 3
+    for value in users_renamed.values():
+        assert "first_name" in value
+        assert "name" not in value
+
+
 def test_where_clause_lookups():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users

@@ -620,6 +620,26 @@ class DictionaryAttributeFunction[Key, Value](
 
         return result
 
+    def rename(self, **kwargs) -> "DictionaryAttributeFunction":
+        """Rename keys in the values of this DictionaryAttributeFunction.
+        @param kwargs: Mapping of old_key=new_key pairs, e.g. rename(name="first_name").
+        @return: A new DictionaryAttributeFunction where each value has its keys renamed accordingly.
+        """
+        assert len(kwargs) >= 1, "At least one rename mapping must be provided."
+
+        result: DictionaryAttributeFunction = type(self)()
+
+        outer_item: Item
+        for outer_item in self:
+            renamed: DictionaryAttributeFunction = type(outer_item.value)()
+            inner_item: Item
+            for inner_item in outer_item.value:
+                new_key = kwargs.get(inner_item.key, inner_item.key)
+                renamed[new_key] = inner_item.value
+            result[outer_item.key] = renamed
+
+        return result
+
     def random_item(self) -> Any:
         """Get a random item from the AttributeFunction.
         @return: A random item.
