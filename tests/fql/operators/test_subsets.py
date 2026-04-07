@@ -174,9 +174,7 @@ def test_subset_explain():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    op_topk: subset = subset(
-        users, ranking_key=lambda item: item.value.yob, k=3
-    )
+    op_topk: subset = subset(users, ranking_key=lambda item: item.value.yob, k=3)
     assert "top-3" in op_topk.explain()
     assert "smallest" in op_topk.explain()
 

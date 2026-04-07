@@ -258,9 +258,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Rel algebra style naming for rename."""
         return self.rename(**kwargs)
 
-    def top(
-        self, k: int, key: Callable[..., Any]
-    ) -> "AttributeFunction":
+    def top(self, k: int, key: Callable[..., Any]) -> "AttributeFunction":
         """Return the k items with the smallest key values (top-k ascending).
         @param k: Number of items to keep.
         @param key: A function mapping an Item to a comparable value for ranking.
@@ -270,9 +268,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
 
         return subset(self, ranking_key=key, k=k).result
 
-    def bottom(
-        self, k: int, key: Callable[..., Any]
-    ) -> "AttributeFunction":
+    def bottom(self, k: int, key: Callable[..., Any]) -> "AttributeFunction":
         """Return the k items with the largest key values (top-k descending).
         @param k: Number of items to keep.
         @param key: A function mapping an Item to a comparable value for ranking.

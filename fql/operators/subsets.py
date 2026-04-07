@@ -51,9 +51,7 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         ranking_key: Callable[[Item], Any] = None,
         k: int = None,
         reverse: bool = False,
-        subset_predicate: Callable[
-            ..., "OUTPUT_AttributeFunction"
-        ] = None,
+        subset_predicate: Callable[..., "OUTPUT_AttributeFunction"] = None,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         """Initialize the subset operator.
