@@ -185,14 +185,16 @@ class intersect[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                 for item in input_function:
                     output_function[item.key] = item.value
             else:
-                # second and subsequent afs treated: only keep items that are in the output function, but do not add new items:
-                item: Item
-                for item in output_function:
-                    if item.key not in input_function:
-                        del output_function[item.key]
+                # second and subsequent afs treated: only keep items whose key also appears in the current AF.
+                # collect keys to delete first to avoid modifying the dict during iteration:
+                keys_to_delete: list = [
+                    item.key
+                    for item in output_function
+                    if item.key not in input_function
+                ]
+                for key in keys_to_delete:
+                    del output_function[key]
 
-                # LOL: this means that the output function will only contain keys that are in all input functions, but
-                # the values will be from the first input function, which is a bit weird
         return output_function
 
 
