@@ -652,72 +652,112 @@ class DictionaryAttributeFunction[Key, Value](
         return random.choice(list(self))
 
 
+# --- AF Type Hierarchy ---
+#
+# The following classes form the core type hierarchy of the Functional Data Model (FDM).
+# Each level nests the level below as its values, creating a uniform recursive structure:
+#
+#   SDBF  →  DBF  →  RF  →  TF  →  scalar values
+#
+# Every level is a DictionaryAttributeFunction, meaning the same operations (where, project,
+# rename, filter, etc.) work uniformly at any level. This is a key difference to the relational
+# model where tuples, relations, and databases are distinct concepts with different operations.
+#
+# In addition, RSF (Relationship Function) models N:M relationships using CompositeForeignObjects
+# as keys, and Tensor extends DAF with multi-dimensional composite keys and element-wise arithmetic.
+
+
 class TF[Key, Value](DictionaryAttributeFunction[Key, Value]):
-    """A dictionary-based attribute function that behaves like a tuple."""
+    """A tuple function: maps attribute names to scalar values.
+    Analogous to a single row/tuple in the relational model, but as a first-class function.
+    Example: TF({"name": "Alice", "yob": 1990, "department": <another AF>})
+    """
 
     ...
 
 
 class RF[Key](DictionaryAttributeFunction[Key, TF]):
-    """A dictionary-based attribute function that behaves like a relation."""
+    """A relation function: maps keys (e.g. surrogate IDs) to TFs.
+    Analogous to a table/relation in the relational model.
+    Example: RF({1: TF({"name": "Alice", ...}), 2: TF({"name": "Bob", ...})})
+    """
 
     ...
 
 
 class DBF[Key](DictionaryAttributeFunction[Key, RF]):
-    """A dictionary-based attribute function that behaves like a database."""
+    """A database function: maps relation names to RFs.
+    Analogous to a database/schema in the relational model.
+    Example: DBF({"users": RF({...}), "departments": RF({...})})
+    """
 
     ...
 
 
 class SDBF[Key](DictionaryAttributeFunction[Key, DBF]):
-    """A dictionary-based attribute function that behaves like a set of databases."""
+    """A set-of-databases function: maps database names to DBFs.
+    Has no direct analogue in the relational model — enables cross-database queries
+    that are not possible (or at least very awkward) in SQL.
+    """
 
     ...
 
 
 class RSF[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
-    """A dictionary-based attribute function that behaves like a relationship."""
+    """A relationship function: models N:M relationships between AFs.
+    Uses CompositeForeignObject as keys to represent multi-way associations.
+    Each key is a composite of references to the participating AFs,
+    and the value holds the relationship's own attributes (e.g. a date).
+
+    Example: meetings[CompositeForeignObject([user1, customer1])] = TF({"date": "2025-01-01"})
+    """
 
     def related_values(
         self, subkey_index: int, subkey: AttributeFunction
     ) -> Iterable[AttributeFunction]:
-        """Get the related values for a given subkey value at a given subkey index."""
+        """Get all related AFs at a given subkey position that are paired with a specific AF.
+        @param subkey_index: Which position in the composite key to return (0-based).
+        @param subkey: The AF to match against at that same position.
+        @return: An iterable of AFs from the matched composite keys at position subkey_index.
+
+        Example: meetings.related_values(1, user1) returns all customers that have a meeting with user1.
+        """
 
         return map(
-            lambda item: item.key.subkey(
-                subkey_index
-            ),  # extract the related subkey value at the given index from the composite key of the item
+            # extract the related subkey value at the given index from the composite key:
+            lambda item: item.key.subkey(subkey_index),
             filter(
-                lambda item: item.key.subkey(subkey_index)
-                == subkey,  # filter items based on the subkey value at the given index
-                self,  # iterate on all items of this attribute function
+                # keep only items where the composite key matches the given subkey at the given index:
+                lambda item: item.key.subkey(subkey_index) == subkey,
+                self,
             ),
         )
 
 
 class Tensor[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
-    """A tensor is simply a dictionary function with a composite key. It may have additional methods for tensor-specific
-    operations, but for now it is just a subclass of DictionaryAttributeFunction with a different key type.
+    """A tensor: a multi-dimensional AF with composite keys representing coordinates.
+    Supports element-wise arithmetic (+, -, *) and is parameterized by its dimensions.
+
+    Note: dimensions are stored via __setattr__ which places them in the data dict alongside
+    actual tensor entries. This means keys() includes "dimensions" — a known limitation.
     """
 
     def __init__(self, dimensions: list[int]):
-        """Initialize the TensorKey with the given dimensions.
-        @param dimensions: A list of int representing the number of elements of each dimension of the tensor.
+        """Initialize the Tensor with the given dimensions.
+        @param dimensions: Shape of the tensor, e.g. [3, 4] for a 3x4 matrix.
         """
         super().__init__()
         assert len(dimensions) > 0, "Tensor must have at least one dimension."
         self.dimensions = dimensions
 
-    def rank(self):
-        """Get the rank of the tensor, which is the number of dimensions."""
+    def rank(self) -> int:
+        """Get the rank (number of dimensions) of this tensor.
+        A vector has rank 1, a matrix rank 2, etc.
+        """
         return len(self.dimensions)
 
-    def __add__(self, other):
-        """Add another tensor to this tensor. This is a simple element-wise addition, i.e., we add the values of the
-        two tensors for each key and return a new tensor with the same keys and the added values. We assume that
-        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
-        """
+    def __add__(self, other: "Tensor") -> "Tensor":
+        """Element-wise addition. Returns a new Tensor with the summed values."""
         assert (
             self.dimensions == other.dimensions
         ), "Cannot add tensors with different dimensions."
@@ -726,37 +766,27 @@ class Tensor[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
             result[key] = self[key] + other[key]
         return result
 
-    def __sub__(self, other):
-        """Subtract another tensor from this tensor. This is a simple element-wise subtraction, i.e., we subtract the values of the
-        two tensors for each key and return a new tensor with the same keys and the subtracted values. We assume that
-        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
-        """
+    def __sub__(self, other: "Tensor") -> "Tensor":
+        """Element-wise subtraction. Returns a new Tensor with the differences."""
         assert (
             self.dimensions == other.dimensions
-        ), "Cannot add tensors with different dimensions."
+        ), "Cannot subtract tensors with different dimensions."
         result = Tensor(self.dimensions)
         for key in self.keys():
             result[key] = self[key] - other[key]
         return result
 
-    def __mul__(self, other):
-        """Multiply this tensor with another tensor. This is a simple element-wise multiplication, i.e., we multiply the values of the
-        two tensors for each key and return a new tensor with the same keys and the multiplied values. We assume that
-        the two tensors have the same keys and dimensions, but we do not check this for simplicity.
-        """
+    def __mul__(self, other: "Tensor") -> "Tensor":
+        """Element-wise multiplication (Hadamard product). Returns a new Tensor."""
         assert (
             self.dimensions == other.dimensions
-        ), "Cannot add tensors with different dimensions."
+        ), "Cannot multiply tensors with different dimensions."
         result = Tensor(self.dimensions)
         for key in self.keys():
             result[key] = self[key] * other[key]
         return result
 
-    def __matmul__(self, other):
-        """Perform matrix multiplication between this tensor and another tensor. This is a simple implementation of
-        matrix multiplication, where we multiply the values of the two tensors according to the rules of matrix
-        multiplication and return a new tensor with the resulting values. We assume that the two tensors have
-        compatible dimensions for matrix multiplication, but we do not check this for simplicity.
-        """
+    def __matmul__(self, other: "Tensor") -> "Tensor":
+        """Matrix multiplication (not yet implemented)."""
 
         raise NotImplementedError
