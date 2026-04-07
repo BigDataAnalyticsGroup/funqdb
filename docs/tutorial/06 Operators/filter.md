@@ -14,11 +14,45 @@ whereas subset uses a global condition that depends on all items present in the 
 
 #### lambdas
 
-TODO
+Filters accept a lambda predicate that is evaluated per item. Depending on the filter variant, the predicate
+receives different arguments:
+
+```python
+# filter_items: predicate receives an Item (key + value)
+filter_items(users, filter_predicate=lambda i: i.value.department.name == "Dev")
+
+# filter_values: predicate receives only the value
+filter_values(users, filter_predicate=lambda v: v.department.name == "Dev")
+
+# filter_keys: predicate receives only the key
+filter_keys(db, filter_predicate=lambda k: k in ["users", "departments"])
+```
+
+All three variants return a new AF of the same type containing only the qualifying items.
 
 #### where-clauses
 
-TODO
+The convenience method ```where()``` on attribute functions supports two styles of predicates:
+
+**Lambda predicate** — full control, receives an ```Item```:
+```python
+users.where(lambda i: i.value.department.name == "Dev")
+```
+
+**Keyword arguments** — Django ORM-style, evaluated as a conjunct (all must match):
+```python
+users.where(department__name="Dev")
+users.where(yob__gte=1980, yob__lte=2000)
+```
+
+The ```__```-syntax resolves **nested attributes** (```department__name``` traverses ```department.name```).
+When the last segment is a known lookup operator, it applies a **comparison** instead of traversal.
+Available lookups: ```exact```, ```lt```, ```lte```, ```gt```, ```gte```, ```in```, ```contains```,
+```icontains```, ```startswith```, ```endswith```, ```isnull```, ```range```.
+
+Plain ```field=value``` is equivalent to ```field__exact=value```.
+
+The relational algebra alias ```𝛔()``` is equivalent to ```where()```.
 
 ### Special cases
 

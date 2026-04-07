@@ -2,8 +2,7 @@
 
 ## High prio:
 
-- [ ] allow all FQL operators to be called via the constructor directly or via the additional __call__: in general both
-  syntaxes should be possible
+
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
@@ -69,6 +68,8 @@
 ---
 
 ### DONE
+- [x] allow all FQL operators to be called via the constructor directly or via the additional __call__: in general both
+  syntaxes should be possible
 - [x] other "__"-syntax for filters, e.g. in-equality, <, <=, etc. where() maybe better in a filter operator being
   called from where()
 - [x] union
