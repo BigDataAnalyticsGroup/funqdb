@@ -21,7 +21,7 @@
 import pytest
 
 from fdm.attribute_functions import DBF, RF
-from tests.lib import _create_test_data_scalable
+from tests.lib import _create_test_data_scalable, _create_testdata
 
 
 def test_create_data_scalable():
@@ -42,3 +42,26 @@ def test_create_data_scalable():
             assert type(db.users) == RF
             assert len(db.departments) == num_departments
             assert len(db.users) == num_users
+
+
+def test_create_testdata_with_schemas():
+    """Verify that _create_testdata works with add_schemas=True, adding Schema constraints."""
+    db: DBF = _create_testdata(frozen=False, add_schemas=True)
+    assert type(db) == DBF
+    assert len(db) == 3
+    assert len(db.users) == 3
+    assert len(db.departments) == 2
+    assert len(db.customers) == 5
+
+
+def test_create_test_data_scalable_with_schemas():
+    """Verify that _create_test_data_scalable works with add_schemas=True."""
+    db: DBF = _create_test_data_scalable(
+        frozen=False,
+        add_schemas=True,
+        num_departments=5,
+        num_users=10,
+    )
+    assert type(db) == DBF
+    assert len(db.departments) == 5
+    assert len(db.users) == 10
