@@ -281,7 +281,9 @@ def test_composite_foreign_object_contains_and_len():
 
 def test_copy():
     """Verify that copy() creates a new DAF with a distinct UUID but identical data."""
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={"a": 1, "b": 2})
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={"a": 1, "b": 2}
+    )
     original_uuid: int = daf.uuid
     daf_copy: DictionaryAttributeFunction = daf.copy()
 
@@ -294,7 +296,9 @@ def test_frozen_add_remove_attribute_function_constraint():
     """Verify that adding or removing an AF-constraint on a frozen DAF raises ReadOnlyError."""
     from fql.predicates.constraints import max_count
 
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={"a": 1}, frozen=True
+    )
     c: max_count = max_count(10)
 
     with pytest.raises(ReadOnlyError):
@@ -308,7 +312,9 @@ def test_frozen_remove_values_constraint():
     """Verify that removing a values-constraint on a frozen DAF raises ReadOnlyError."""
     from fql.predicates.constraints import max_count
 
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={"a": 1}, frozen=True
+    )
     c: max_count = max_count(10)
 
     with pytest.raises(ReadOnlyError):
@@ -317,7 +323,9 @@ def test_frozen_remove_values_constraint():
 
 def test_frozen_add_remove_observer():
     """Verify that adding or removing an observer on a frozen DAF raises ReadOnlyError."""
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={"a": 1}, frozen=True
+    )
 
     with pytest.raises(ReadOnlyError):
         daf.add_observer(daf)
@@ -353,7 +361,9 @@ def test_constraint_violation_rollback_new_key():
 
 def test_frozen_delitem():
     """Verify that deleting an item from a frozen DAF raises ReadOnlyError."""
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={"a": 1}, frozen=True
+    )
 
     with pytest.raises(ReadOnlyError):
         del daf["a"]
@@ -370,7 +380,9 @@ def test_delitem_nonexistent():
 def test_print_and_str(capsys):
     """Verify print() in flat/non-flat mode and __str__ for nested and plain values."""
     inner: TF = TF({"x": 1})
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={"nested": inner, "plain": 42})
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={"nested": inner, "plain": 42}
+    )
 
     daf.print(flat=False)
     captured = capsys.readouterr()
@@ -396,7 +408,9 @@ def test_repr():
 
 def test_get_lineage_and_add_lineage():
     """Verify get_lineage() returns the lineage and add_lineage() appends to it."""
-    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(data={}, lineage=["origin"])
+    daf: DictionaryAttributeFunction = DictionaryAttributeFunction(
+        data={}, lineage=["origin"]
+    )
     assert daf.get_lineage() == ["origin"]
 
     daf.add_lineage("step1")
