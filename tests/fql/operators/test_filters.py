@@ -19,9 +19,16 @@
 #
 
 
+import pytest
+
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.APIs import Operator
-from fql.operators.filters import filter_values, filter_items, filter_keys
+from fql.operators.filters import (
+    filter_values,
+    filter_items,
+    filter_keys,
+    filter_items_scan_complement,
+)
 from fql.util import Item
 from tests.lib import _create_testdata, _subset_DBF, _subset_highly_filtered_DBF
 
@@ -317,3 +324,68 @@ def _test_filter_explain():
     lineage: list[str] = ret2.get_lineage()
     # for i, lin in enumerate(lineage, 1):
     #    print(f"{i}.\t->", lin)
+
+
+def test_filter_items_explain():
+    """Verify that explain() returns a descriptive string for filter_items."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    op: filter_items = filter_items[RF, RF](
+        users,
+        filter_predicate=lambda i: True,
+        output_factory=lambda _: RF(),
+    )
+    explanation: str = op.explain()
+    assert "filter_items" in explanation
+
+
+def test_filter_values_explain():
+    """Verify that explain() returns a descriptive string for filter_values."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    op: filter_values = filter_values[RF, RF](
+        users,
+        filter_predicate=lambda v: True,
+        output_factory=lambda _: RF(),
+    )
+    explanation: str = op.explain()
+    assert "filter_values" in explanation
+
+
+def test_filter_keys_explain():
+    """Verify that explain() returns a descriptive string for filter_keys."""
+    db: DBF = _create_testdata(frozen=True)
+    departments: RF = db.departments
+    op: filter_keys = filter_keys[RF, RF](
+        departments,
+        filter_predicate=lambda k: True,
+        output_factory=lambda _: RF(),
+    )
+    explanation: str = op.explain()
+    assert "filter_keys" in explanation
+
+
+def test_filter_items_create_lineage_not_implemented():
+    """Verify that create_lineage=True raises NotImplementedError."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    with pytest.raises(NotImplementedError):
+        filter_items[RF, RF](
+            users,
+            filter_predicate=lambda i: True,
+            output_factory=lambda _: RF(),
+            create_lineage=True,
+        ).result
+
+
+def test_filter_items_scan_complement():
+    """Verify that filter_items_scan_complement can be instantiated and its explain() works."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+    op: filter_items_scan_complement = filter_items_scan_complement[RF, RF](
+        users,
+        filter_predicate=lambda i: i.value.department.name == "Dev",
+        output_factory=lambda _: RF(),
+    )
+    explanation: str = op.explain()
+    assert "filter_items_scan_complement" in explanation
