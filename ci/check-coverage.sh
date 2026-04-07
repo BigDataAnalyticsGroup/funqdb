@@ -21,4 +21,4 @@ else
   exit 1 # Should hot happen!
 fi
 
-python3 check_coverage.py $MAIN_FILE $MR_FILE
+python3 ci/check_coverage.py $MAIN_FILE $MR_FILE
