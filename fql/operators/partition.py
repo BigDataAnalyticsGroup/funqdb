@@ -31,6 +31,7 @@ class partition(Operator[RF, DBF]):
 
     #TODO: generic type: this operator can also partition an entire database...
 
+    @param input_function: The input RF to partition.
     @param partitioning_function: A function that takes an Item and returns the partition key for that item.
     @param output_factory: If set, this factory function will be used to create the output DBF instance. If not set,
     a new DBF instance will be created.
@@ -38,14 +39,20 @@ class partition(Operator[RF, DBF]):
 
     def __init__(
         self,
+        input_function: RF,
+        *,
         partitioning_function: Callable[[Item], Any],
         output_factory: Callable[..., DBF] = None,
     ):
+        self.input_function = input_function
         self.partitioning_function = partitioning_function
         if output_factory is None:
             self.output_factory = lambda _: DBF(frozen=False)
+        else:
+            self.output_factory = output_factory
 
-    def __call__(self, input_function: RF) -> DBF:
+    def _compute(self) -> DBF:
+        input_function = self._resolve_input(self.input_function)
         output_function: DBF = self.output_factory(None)
         item: Item
         for item in input_function:
@@ -69,16 +76,17 @@ class group_by(partition):
 
     # TODO: generic type: this operator can also partition an entire database...
 
-    def __init__(self, *aggregate_keys):
+    def __init__(self, input_function: RF, *aggregate_keys):
 
         assert (
             len(aggregate_keys) > 0
         ), "At least one grouping key must be specified for group_by!"
 
         super().__init__(
+            input_function,
             # convert the grouping function to a partitioning function that returns a tuple of the grouping keys for
             # the specified attributes:
-            lambda item: (
+            partitioning_function=lambda item: (
                 tuple(item.value[attribute] for attribute in aggregate_keys)
                 if len(aggregate_keys) > 1
                 else item.value[aggregate_keys[0]]

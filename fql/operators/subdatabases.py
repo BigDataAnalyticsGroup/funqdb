@@ -40,21 +40,23 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
+        input_function: INPUT_AttributeFunction,
+        *,
         join_predicate: Callable[..., Any],
         left: str | None = None,
         right: str | None = None,
         create_join_index: bool = False,
         keep_values_in_join_index: bool = False,
     ):
+        self.input_function = input_function
         self.join_predicate = join_predicate
         self.left = left
         self.right = right
         self.create_join_index = create_join_index
         self.keep_values_in_join_index = keep_values_in_join_index
 
-    def __call__(
-        self, input_function: INPUT_AttributeFunction
-    ) -> OUTPUT_AttributeFunction:
+    def _compute(self) -> OUTPUT_AttributeFunction:
+        input_function = self._resolve_input(self.input_function)
         # brute force nested loop to start with,
         # TODO: optimize later to use standard DB subdatabase algorithms
         # TODO: implement typical join operators exploiting special predicates
@@ -105,13 +107,17 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         # add reduced relations, delegated to filter_values operator:
         # left relation:
         output_DBF[self.left] = filter_items[RF, RF](
-            lambda i: i.key in left_qualifying_items, lambda _: RF(frozen=False)
-        )(left_RF)
+            left_RF,
+            filter_predicate=lambda i: i.key in left_qualifying_items,
+            output_factory=lambda _: RF(frozen=False),
+        ).result
 
         # right relation:
         output_DBF[self.right] = filter_items[RF, RF](
-            lambda i: i.key in right_qualifying_items, lambda _: RF(frozen=False)
-        )(right_RF)
+            right_RF,
+            filter_predicate=lambda i: i.key in right_qualifying_items,
+            output_factory=lambda _: RF(frozen=False),
+        ).result
 
         # join index:
         if self.create_join_index:

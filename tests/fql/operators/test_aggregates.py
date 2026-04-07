@@ -47,6 +47,7 @@ def test_aggregate_operator():
         aggregated: TF | None = None
         if i == 0:
             aggregated = aggregate(
+                rel,
                 min=Min("yob"),
                 max=Max("yob"),
                 count=Count("yob"),
@@ -54,10 +55,11 @@ def test_aggregate_operator():
                 avg=Avg("yob"),
                 mean=Mean("yob"),
                 median=Median("yob"),
-            )(rel)
+            ).result
         else:
             # with relational algebra inspired syntax:
             aggregated = 𝜞(
+                rel,
                 min=Min("yob"),
                 max=Max("yob"),
                 count=Count("yob"),
@@ -65,7 +67,7 @@ def test_aggregate_operator():
                 avg=Avg("yob"),
                 mean=Mean("yob"),
                 median=Median("yob"),
-            )(rel)
+            ).result
 
         assert type(aggregated) is TF
         assert len(aggregated) == 7

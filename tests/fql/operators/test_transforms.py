@@ -21,7 +21,6 @@
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
-from fql.operators.APIs import Operator
 from fql.operators.transforms import (
     transform_items,
     transform,
@@ -34,8 +33,9 @@ def test_transform_instance():
     """map input RF to output RF using identity mapping function."""
     db: DBF = _create_testdata()
     users: RF = db.users
-    map_RF: Operator[RF, RF] = transform[RF, RF](transformation_function=lambda el: el)
-    users_mapped: RF = map_RF(users)
+    users_mapped: RF = transform[RF, RF](
+        users, transformation_function=lambda el: el
+    ).result
     assert type(users_mapped) == RF
     assert users == users_mapped
 
@@ -62,21 +62,20 @@ def test_transform_items():
     users: RF = db.users
 
     # transform the values in the users relation (note: this will modify the original RF in the db)
-    transform_RF: Operator[RF, RF] = transform_items[RF, RF](
-        transformation_function=transformation_function_modifying,
-        output_factory=lambda _: RF(),
-    )
-
     # must fail as the input RF is frozen and the transformation_function tries to modify it:
     with pytest.raises(ReadOnlyError):
-        transform_RF(users)
+        transform_items[RF, RF](
+            users,
+            transformation_function=transformation_function_modifying,
+            output_factory=lambda _: RF(),
+        ).result
 
     # redefine the transformation_function to not modify the input RF in place, but return a modified copy instead:
-    transform_RF = transform_items[RF, RF](
-        transformation_function=transformation_function_non_modifying,
-    )
     with pytest.raises(ReadOnlyError):
-        transform_RF(users)
+        transform_items[RF, RF](
+            users,
+            transformation_function=transformation_function_non_modifying,
+        ).result
 
 
 def test_transform_items_new_output_instance():
@@ -85,11 +84,11 @@ def test_transform_items_new_output_instance():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    transform_RF: Operator[RF, RF] = transform_items[RF, RF](
+    users_transformed: RF = transform_items[RF, RF](
+        users,
         transformation_function=transformation_function_non_modifying,
         output_factory=lambda _: RF(),
-    )
-    users_transformed: RF = transform_RF(users)
+    ).result
     assert type(users_transformed) == RF
 
     users_names = {user.value.name for user in users}

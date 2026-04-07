@@ -31,11 +31,13 @@ class project[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     a null value.
     """
 
-    def __init__(self, *attributes):
+    def __init__(self, input_function, *attributes):
         """Initialize the project operator with the given set of attributes to project to.
+        @param input_function: The input attribute function to project.
         @param attributes: The set of attributes to project to.
         """
         super().__init__(
+            input_function,
             # redirect the transformation function to the projection function:
-            lambda input_function: input_function.project(attributes)
+            transformation_function=lambda af: af.project(attributes),
         )

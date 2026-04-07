@@ -40,22 +40,20 @@ def test_subdatabase_two_RFs():
 
     # longer typed version:
     # reduced_DB: Operator[DBF, DBF] = subdatabase[DBF, DBF](
+    #    db_filtered,
     #    join_predicate=join_predicate,
     #    left="users",
     #    right="customers",
-    # )(db_filtered)
-
-    # same thing again, but the short way of writing without type hints:
-    # reduced_DBF: DBF = subdatabase[DBF, DBF](
-    #    join_predicate, "users", "customers"
-    # )(db_filtered)
+    # ).result
 
     # same thing again, but with lambda join predicate:
     reduced_DBF: DBF = subdatabase[DBF, DBF](
-        lambda item_left, item_right: item_left.value.name == item_right.value.name,
-        "users",
-        "customers",
-    )(db_filtered)
+        db_filtered,
+        join_predicate=lambda item_left, item_right: item_left.value.name
+        == item_right.value.name,
+        left="users",
+        right="customers",
+    ).result
 
     assert len(reduced_DBF.users) == 2  # Horst and John only
     users_names: set[str] = {user.value.name for user in reduced_DBF.users}
@@ -70,11 +68,13 @@ def test_subdatabase_two_RFs():
 def test_subdatabase_two_RFs_with_join_index():
 
     reduced_DBF: DBF = subdatabase[DBF, DBF](
-        lambda item_left, item_right: item_left.value.name == item_right.value.name,
-        "users",
-        "customers",
+        _users_customers_DBF(),
+        join_predicate=lambda item_left, item_right: item_left.value.name
+        == item_right.value.name,
+        left="users",
+        right="customers",
         create_join_index=True,
-    )(_users_customers_DBF())
+    ).result
     join_index: RF = reduced_DBF.join_index
     assert join_index is not None
     assert type(join_index) == RF

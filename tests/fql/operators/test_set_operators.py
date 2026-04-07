@@ -39,16 +39,22 @@ def test_union():
     # note that the factory does not add a schema, therefore we can union the two RFs without any issues, even though
     # they have different schemas:
 
+    input_dbf = DBF({"users": users, "customers": customers})
+
     for i in range(2):
         result: RF | None = None
         if i == 0:
-            result = union(lambda _: RF(), warn_about_duplicate_keys=False)(
-                users, customers
-            )
+            result = union(
+                input_dbf,
+                output_factory=lambda _: RF(),
+                warn_about_duplicate_keys=False,
+            ).result
         else:
-            result = V(lambda _: RF(), warn_about_duplicate_keys=False)(
-                users, customers
-            )
+            result = V(
+                input_dbf,
+                output_factory=lambda _: RF(),
+                warn_about_duplicate_keys=False,
+            ).result
 
         assert set(result.keys()) == users_keys.union(customers_keys)
         assert len(result) == 5
@@ -63,12 +69,14 @@ def test_intersect():
     # note that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even
     # though they have different schemas:
 
+    input_dbf = DBF({"users": users, "customers": customers})
+
     for i in range(2):
         result: RF | None = None
         if i == 0:
-            result = intersect(lambda _: RF())(users, customers)
+            result = intersect(input_dbf, output_factory=lambda _: RF()).result
         else:
-            result = Ʌ(lambda _: RF())(users, customers)
+            result = Ʌ(input_dbf, output_factory=lambda _: RF()).result
 
         assert set(result.keys()) == users_keys.intersection(customers_keys)
         assert len(result) == 3
@@ -82,12 +90,15 @@ def test_minus():
     customers_keys = set(customers.keys())
     # note that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even
     # though they have different schemas:
+
+    input_dbf = DBF({"users": users, "customers": customers})
+
     for i in range(2):
         result: RF | None = None
         if i == 0:
-            result = minus(lambda _: RF())(users, customers)
+            result = minus(input_dbf, output_factory=lambda _: RF()).result
         else:
-            result = difference(lambda _: RF())(users, customers)
+            result = difference(input_dbf, output_factory=lambda _: RF()).result
 
         assert set(result.keys()) == users_keys.difference(customers_keys)
         assert len(result) == 0
@@ -98,9 +109,8 @@ def test_minus():
     customers_keys = set(customers.keys())
     # note that the factory does not add a schema, therefore we can intersect the two RFs without any issues, even
     # though they have different schemas:
-    result: RF = minus(
-        lambda _: RF(),
-    )(users, customers)
+    input_dbf2 = DBF({"users": users, "customers": customers})
+    result: RF = minus(input_dbf2, output_factory=lambda _: RF()).result
     assert set(result.keys()) == users_keys.difference(customers_keys)
     assert len(result) == 1
 
@@ -110,10 +120,13 @@ def test_cogroup():
     users: RF = db.users
     customers: RF = db.customers
 
+    input_dbf = DBF({"users": users, "customers": customers})
+
     result: RF = cogroup(
-        lambda _: DBF(),  # one factory for the output of the cogroup operator: DBF mapping from keys to nested AFs
-        lambda _: RF(),  # one factory for the nested AFs in the output: RFs mapping from the input AF's uuid to the input AF's value for that key
-    )(users, customers)
+        input_dbf,
+        output_factory=lambda _: DBF(),  # one factory for the output of the cogroup operator: DBF mapping from keys to nested AFs
+        output_factory_nested=lambda _: RF(),  # one factory for the nested AFs in the output: RFs mapping from the input AF's uuid to the input AF's value for that key
+    ).result
 
     assert len(result) == 5
     assert type(result) is DBF

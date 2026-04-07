@@ -88,10 +88,12 @@ class Mean(Avg):
 class aggregate(Operator[RF, TF]):
     """Aggregate an input RF using the specified aggregation functions."""
 
-    def __init__(self, **aggregates):
+    def __init__(self, input_function: RF, **aggregates):
+        self.input_function = input_function
         self.aggregates = aggregates
 
-    def __call__(self, input_function: RF) -> TF:
+    def _compute(self) -> TF:
+        input_function = self._resolve_input(self.input_function)
         output_function = TF(frozen=False)
         for key, value in self.aggregates.items():
             output_function[key] = value(input_function)
