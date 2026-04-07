@@ -258,6 +258,30 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Rel algebra style naming for rename."""
         return self.rename(**kwargs)
 
+    def top(
+        self, k: int, key: Callable[..., Any]
+    ) -> "AttributeFunction":
+        """Return the k items with the smallest key values (top-k ascending).
+        @param k: Number of items to keep.
+        @param key: A function mapping an Item to a comparable value for ranking.
+        @return: A new AttributeFunction containing the k smallest items.
+        """
+        from fql.operators.subsets import subset
+
+        return subset(self, ranking_key=key, k=k).result
+
+    def bottom(
+        self, k: int, key: Callable[..., Any]
+    ) -> "AttributeFunction":
+        """Return the k items with the largest key values (top-k descending).
+        @param k: Number of items to keep.
+        @param key: A function mapping an Item to a comparable value for ranking.
+        @return: A new AttributeFunction containing the k largest items.
+        """
+        from fql.operators.subsets import subset
+
+        return subset(self, ranking_key=key, k=k, reverse=True).result
+
     @abstractmethod
     def random_item(self) -> Any:
         """Get a random item from the AttributeFunction.
