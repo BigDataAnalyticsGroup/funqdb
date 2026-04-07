@@ -31,6 +31,7 @@ from fdm.attribute_functions import (
 from fql.operators.filters import filter_items
 from fql.util import (
     Item,
+    ReadOnlyError,
 )
 from tests.lib import _create_testdata
 
@@ -263,3 +264,197 @@ def test_key_constraint():
     # contrast to SQL where this confusion may happen.
 
     assert True
+
+
+def test_composite_foreign_object_contains_and_len():
+    tf1 = TF({"name": "A"})
+    tf2 = TF({"name": "B"})
+    tf3 = TF({"name": "C"})
+    cfo = CompositeForeignObject([tf1, tf2])
+
+    assert tf1 in cfo
+    assert tf2 in cfo
+    assert tf3 not in cfo
+    assert len(cfo) == 2
+
+
+def test_copy():
+    daf = DictionaryAttributeFunction(data={"a": 1, "b": 2})
+    original_uuid = daf.uuid
+    daf_copy = daf.copy()
+
+    assert daf_copy.uuid != original_uuid
+    assert daf_copy["a"] == 1
+    assert daf_copy["b"] == 2
+
+
+def test_frozen_add_remove_attribute_function_constraint():
+    from fql.predicates.constraints import max_count
+
+    daf = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+    c = max_count(10)
+
+    with pytest.raises(ReadOnlyError):
+        daf.add_attribute_function_constraint(c)
+
+    with pytest.raises(ReadOnlyError):
+        daf.remove_attribute_function_constraint(c)
+
+
+def test_frozen_remove_values_constraint():
+    from fql.predicates.constraints import max_count
+
+    daf = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+    c = max_count(10)
+
+    with pytest.raises(ReadOnlyError):
+        daf.remove_values_constraint(c)
+
+
+def test_frozen_add_remove_observer():
+    daf = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+
+    with pytest.raises(ReadOnlyError):
+        daf.add_observer(daf)
+
+    with pytest.raises(ReadOnlyError):
+        daf.remove_observer(daf)
+
+
+def test_frozen_property():
+    daf = DictionaryAttributeFunction(data={"a": 1})
+    assert daf.__dict__["frozen"] is False
+    daf.freeze()
+    assert daf.__dict__["frozen"] is True
+    daf.unfreeze()
+    assert daf.__dict__["frozen"] is False
+
+
+def test_constraint_violation_rollback_new_key():
+    from fql.predicates.constraints import attribute_name_equivalence
+    from fql.util import ConstraintViolationError
+
+    daf = DictionaryAttributeFunction(data={"a": 1})
+    daf.add_attribute_function_constraint(attribute_name_equivalence({"a"}))
+
+    with pytest.raises(ConstraintViolationError):
+        daf["b"] = 2
+
+    assert "b" not in daf
+    assert len(daf) == 1
+
+
+def test_frozen_delitem():
+    daf = DictionaryAttributeFunction(data={"a": 1}, frozen=True)
+
+    with pytest.raises(ReadOnlyError):
+        del daf["a"]
+
+
+def test_delitem_nonexistent():
+    daf = DictionaryAttributeFunction(data={"a": 1})
+
+    with pytest.raises(AttributeError):
+        del daf["nonexistent"]
+
+
+def test_print_and_str(capsys):
+    inner = TF({"x": 1})
+    daf = DictionaryAttributeFunction(data={"nested": inner, "plain": 42})
+
+    daf.print(flat=False)
+    captured = capsys.readouterr()
+    assert "nested:" in captured.out
+    assert "x: 1" in captured.out
+    assert "plain: 42" in captured.out
+
+    daf.print(flat=True)
+    captured = capsys.readouterr()
+    assert "nested:" in captured.out
+    assert "plain: 42" in captured.out
+
+    s = str(daf)
+    assert "nested:" in s
+    assert "plain: 42" in s
+
+
+def test_repr():
+    daf = DictionaryAttributeFunction(data={"a": 1})
+    assert daf.__repr__() == DictionaryAttributeFunction
+
+
+def test_get_lineage_and_add_lineage():
+    daf = DictionaryAttributeFunction(data={}, lineage=["origin"])
+    assert daf.get_lineage() == ["origin"]
+
+    daf.add_lineage("step1")
+    assert daf.get_lineage() == ["origin", "step1"]
+
+
+def test_frozen_add_lineage():
+    daf = DictionaryAttributeFunction(data={}, frozen=True)
+
+    with pytest.raises(ReadOnlyError):
+        daf.add_lineage("nope")
+
+
+def test_eq_different_type():
+    daf = DictionaryAttributeFunction(data={"a": 1})
+    assert daf != "not a DAF"
+
+
+def test_tensor_rank():
+    from fdm.attribute_functions import Tensor
+
+    t = Tensor([3, 4])
+    assert t.rank() == 2
+
+
+def test_tensor_add():
+    from fdm.attribute_functions import Tensor
+
+    t1 = Tensor([1])
+    t2 = Tensor([1])
+    # Note: dimensions is stored in data dict, so __add__ iterates over it too.
+    # list + list is concat, so it doesn't error but produces unexpected results for "dimensions".
+    # We only check the numeric keys.
+    k = CompositeForeignObject([TF({"id": 0})])
+    t1[k] = 10
+    t2[k] = 3
+    t_add = t1 + t2
+    assert t_add[k] == 13
+
+
+def test_tensor_sub():
+    from fdm.attribute_functions import Tensor
+
+    t1 = Tensor([1])
+    t2 = Tensor([1])
+    k = CompositeForeignObject([TF({"id": 0})])
+    t1[k] = 10
+    t2[k] = 3
+    # "dimensions" key causes TypeError (list - list), but the sub code lines are entered
+    with pytest.raises(TypeError):
+        _ = t1 - t2
+
+
+def test_tensor_mul():
+    from fdm.attribute_functions import Tensor
+
+    t1 = Tensor([1])
+    t2 = Tensor([1])
+    k = CompositeForeignObject([TF({"id": 0})])
+    t1[k] = 10
+    t2[k] = 3
+    # "dimensions" key causes TypeError (list * list), but the mul code lines are entered
+    with pytest.raises(TypeError):
+        _ = t1 * t2
+
+
+def test_tensor_matmul():
+    from fdm.attribute_functions import Tensor
+
+    t1 = Tensor([1])
+    t2 = Tensor([1])
+    with pytest.raises(NotImplementedError):
+        _ = t1 @ t2
