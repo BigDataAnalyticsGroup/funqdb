@@ -15,7 +15,7 @@
 - [ ] double-check observer semantic in the presence ov .where() and .project(). I think observers are removed, but
   should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
   constructor (DONE, but breaks some tests when used in where()).
-- [ ] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
+
 - [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
 - [ ] foreign object constraints through the store (similar problem as observers)
@@ -63,6 +63,7 @@
 ---
 
 ### DONE
+- [x] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
 - [x] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
   transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
 - [x] rename: rename keys of an AF, e.g. rename the key "name" to "first_name", etc.; really required? could als be a
