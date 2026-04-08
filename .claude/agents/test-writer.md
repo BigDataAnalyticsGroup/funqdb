@@ -52,5 +52,6 @@ For every function, operator, or class you receive, write tests covering:
 ## Output
 
 - Write tests directly into the appropriate test file. If no test file exists yet, create one following the project's naming convention.
+- Formatting: format all tests with **black** (already a dev dependency — use it, don't hand-format)
 - After writing, report which test cases were added and which scenarios each covers.
 - If a scenario cannot be tested without additional fixtures or test helpers, flag it explicitly rather than writing an incomplete test.
