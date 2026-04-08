@@ -43,6 +43,7 @@ These come from `CONTRIBUTING.md` and the existing code — please respect them:
 5. **AGPL-3.0 license header** on new source files (see existing files for the exact
    header text).
 6. Prefer editing existing files over creating new ones; prefer small, focused changes.
+7. add/update the documentation/tutorial when changing/adding code
 
 ## Things to be careful about
 - **Don't "fix" things that look SQL-ish by making them more SQL-ish.** The whole

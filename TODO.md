@@ -6,7 +6,7 @@
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
-- [ ] sync docu and tutorial for new operators
+
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
 
@@ -63,6 +63,7 @@
 ---
 
 ### DONE
+- [ ] sync docu and tutorial for new operators
 - [x] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
 - [x] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
   transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
