@@ -7,11 +7,8 @@
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
 - [ ] sync docu and tutorial for new operators
-
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
-- [ ] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
-  transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
 
 ## Medium prio:
 
@@ -66,6 +63,8 @@
 ---
 
 ### DONE
+- [x] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
+  transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements
 - [x] rename: rename keys of an AF, e.g. rename the key "name" to "first_name", etc.; really required? could als be a
   method of AFs
 - [x] sync docu and tutorial for `where()` and `project()`
