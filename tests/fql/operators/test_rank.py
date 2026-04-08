@@ -18,11 +18,13 @@
 #
 #
 
+import collections.abc
+
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF, RSF, CompositeForeignObject
 from fql.operators.filters import filter_keys
-from fql.operators.rank import rank_by
+from fql.operators.rank import rank_by, items_sorted_by
 from fql.operators.subsets import subset
 from fql.util import Item
 from tests.lib import _create_testdata
@@ -379,3 +381,231 @@ def test_rank_by_with_explicit_rf_output_factory() -> None:
     assert type(ranked) is RF
     assert len(ranked) == 3
     assert ranked[0].name == "Horst"
+
+
+# ---------------------------------------------------------------------------
+# items_sorted_by tests
+# ---------------------------------------------------------------------------
+
+
+def test_items_sorted_by_ascending() -> None:
+    """items_sorted_by yields the original Items of `users` in ascending
+    yob order (Horst, Tom, John), with the ORIGINAL input keys (1, 2, 3)
+    preserved — this is the defining contrast to rank_by."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    result = items_sorted_by(users, key=lambda item: item.value.yob)
+    items: list[Item] = list(result)
+
+    assert len(items) == 3
+    # Order follows yob ascending (1972, 1983, 2003):
+    assert items[0].value.name == "Horst"
+    assert items[1].value.name == "Tom"
+    assert items[2].value.name == "John"
+
+    # Original keys (1, 2, 3) are preserved — unlike rank_by which would
+    # replace them with 0, 1, 2:
+    assert items[0].key == 1
+    assert items[1].key == 2
+    assert items[2].key == 3
+
+    # And each yielded object is a proper Item instance:
+    for item in items:
+        assert isinstance(item, Item)
+
+
+def test_items_sorted_by_descending() -> None:
+    """With reverse=True the items come out in descending yob order."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    items: list[Item] = list(
+        items_sorted_by(users, key=lambda item: item.value.yob, reverse=True)
+    )
+
+    assert [item.value.name for item in items] == ["John", "Tom", "Horst"]
+    # Original keys still preserved:
+    assert [item.key for item in items] == [3, 2, 1]
+
+
+def test_items_sorted_by_returns_iterator() -> None:
+    """The return value is a genuine Iterator (not a list, not an AF).
+    Consuming it with next() yields items one by one and eventually
+    raises StopIteration."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    result = items_sorted_by(users, key=lambda item: item.value.yob)
+
+    # Crucial type contract: it's an Iterator, not a list or an AF:
+    assert isinstance(result, collections.abc.Iterator)
+    assert not isinstance(result, list)
+    assert not isinstance(result, RF)
+
+    # Step through manually to document the one-item-at-a-time protocol:
+    first: Item = next(result)
+    assert first.value.name == "Horst"
+    second: Item = next(result)
+    assert second.value.name == "Tom"
+    third: Item = next(result)
+    assert third.value.name == "John"
+
+    with pytest.raises(StopIteration):
+        next(result)
+
+
+def test_items_sorted_by_is_single_pass() -> None:
+    """The returned iterator is single-pass: once exhausted, iterating it
+    again yields nothing. Documents the 'presentation sink' intent — a
+    caller who needs to re-iterate should wrap the call in list(...)."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    result = items_sorted_by(users, key=lambda item: item.value.yob)
+
+    first_pass: list[Item] = list(result)
+    assert len(first_pass) == 3
+
+    # Second pass on the same (now-exhausted) iterator yields nothing:
+    second_pass: list[Item] = list(result)
+    assert second_pass == []
+
+
+def test_items_sorted_by_empty_input() -> None:
+    """Sorting the items of an empty RF yields an empty iterator."""
+    empty: RF = RF({})
+    result = items_sorted_by(empty, key=lambda item: 0)
+
+    assert list(result) == []
+
+
+def test_items_sorted_by_single_item() -> None:
+    """A single-item input yields exactly one item, with its original key
+    and value preserved."""
+    single: RF = RF({"only": TF({"name": "Alone", "n": 7})})
+
+    items: list[Item] = list(items_sorted_by(single, key=lambda item: item.value.n))
+
+    assert len(items) == 1
+    assert items[0].key == "only"
+    assert items[0].value.name == "Alone"
+    assert items[0].value.n == 7
+
+
+def test_items_sorted_by_stable_ties() -> None:
+    """Tie-breaking is stable: for items with equal sort key, the input's
+    iteration order is preserved. We insert 'a', 'b', 'c' where 'a' and
+    'c' share a sort key, and expect 'a' before 'c' on output."""
+    # Insertion order: a (k=1), b (k=2), c (k=1).
+    data: RF = RF(
+        {
+            "a": TF({"label": "a", "k": 1}),
+            "b": TF({"label": "b", "k": 2}),
+            "c": TF({"label": "c", "k": 1}),
+        }
+    )
+
+    items: list[Item] = list(items_sorted_by(data, key=lambda item: item.value.k))
+
+    # Ascending by k; 'a' and 'c' are tied at k=1, and 'a' came first in
+    # the input, so it must come first in the output too:
+    assert [item.value.label for item in items] == ["a", "c", "b"]
+    assert [item.key for item in items] == ["a", "c", "b"]
+
+
+def test_items_sorted_by_does_not_mutate_input() -> None:
+    """items_sorted_by must leave its input AF untouched — same keys,
+    same values, same iteration order before and after."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    keys_before: list = [item.key for item in users]
+    names_before: list[str] = [item.value.name for item in users]
+
+    # Fully consume the iterator to be sure any side effects would fire:
+    _ = list(items_sorted_by(users, key=lambda item: item.value.yob))
+
+    keys_after: list = [item.key for item in users]
+    names_after: list[str] = [item.value.name for item in users]
+
+    assert keys_before == keys_after
+    assert names_before == names_after
+
+
+def test_items_sorted_by_preserves_original_keys() -> None:
+    """Explicit contrast to rank_by: with string input keys 'a', 'b', 'c',
+    the yielded items carry those exact string keys — no integer ranks
+    are substituted in."""
+    data: RF = RF(
+        {
+            "a": TF({"score": 30}),
+            "b": TF({"score": 10}),
+            "c": TF({"score": 20}),
+        }
+    )
+
+    items: list[Item] = list(items_sorted_by(data, key=lambda item: item.value.score))
+
+    # Sorted ascending by score: b (10), c (20), a (30).
+    assert [item.key for item in items] == ["b", "c", "a"]
+    # And the keys are the original strings, not integers:
+    for item in items:
+        assert isinstance(item.key, str)
+
+
+def test_items_sorted_by_rejects_none_key() -> None:
+    """key=None must raise TypeError eagerly (on the call itself, before
+    any iteration happens) and the message must mention 'callable'."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    with pytest.raises(TypeError, match="callable"):
+        items_sorted_by(users, key=None)
+
+
+def test_items_sorted_by_rejects_non_callable_key() -> None:
+    """key=42 must raise TypeError on the call itself, NOT deferred until
+    the caller starts iterating. This distinguishes a direct
+    iter(sorted(...)) implementation from a generator-based one."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    # Deliberately do NOT iterate the result — the error must fire here:
+    with pytest.raises(TypeError, match="callable"):
+        items_sorted_by(users, key=42)
+
+
+def test_items_sorted_by_propagates_sorted_typeerror() -> None:
+    """If `key` returns mutually non-comparable values, the TypeError
+    raised by Python's sorted() must propagate. Because items_sorted_by
+    calls sorted() eagerly inside the function body before returning the
+    iterator, this error fires on the call, not on the first next()."""
+    # Two items whose values are TFs. TF does not define __lt__, so
+    # sorted() will raise TypeError when it tries to compare them.
+    data: RF = RF(
+        {
+            1: TF({"x": 1}),
+            2: TF({"x": 2}),
+        }
+    )
+
+    # The error fires on the call itself (eager sorted inside the body):
+    with pytest.raises(TypeError):
+        items_sorted_by(data, key=lambda item: item.value)
+
+
+def test_items_sorted_by_after_rank_by() -> None:
+    """Sanity check composition: items_sorted_by can consume an RF that
+    itself came out of rank_by. Sorting a ranked RF by its (natural-
+    number) key should yield the items in rank order."""
+    db: DBF = _create_testdata(frozen=True)
+    users: RF = db.users
+
+    ranked: RF = rank_by(users, ranking_key=lambda item: item.value.yob).result
+
+    items: list[Item] = list(items_sorted_by(ranked, key=lambda item: item.key))
+
+    # rank_by puts Horst at rank 0, Tom at 1, John at 2:
+    assert [item.key for item in items] == [0, 1, 2]
+    assert [item.value.name for item in items] == ["Horst", "Tom", "John"]
