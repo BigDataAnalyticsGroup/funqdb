@@ -27,7 +27,6 @@ from fql.operators.subsets import subset
 from fql.util import Item
 from tests.lib import _create_testdata
 
-
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
@@ -346,9 +345,7 @@ def test_rank_by_rsf_input_yields_rf_output() -> None:
     rsf: RSF = RSF({key1: TF({"w": 10}), key2: TF({"w": 20})})
 
     # Rank descending by the scalar 'w' inside each relationship's value:
-    ranked = rank_by(
-        rsf, ranking_key=lambda item: item.value.w, reverse=True
-    ).result
+    ranked = rank_by(rsf, ranking_key=lambda item: item.value.w, reverse=True).result
 
     # The whole point of the fix: output is an RF, not an RSF.
     assert type(ranked) is RF
