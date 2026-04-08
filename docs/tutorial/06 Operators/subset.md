@@ -1,5 +1,15 @@
 ## Subset (aka top-k)
 
+> **See also: [`rank_by`](rank.md).** The `subset` operator's declarative
+> top-k mode (`subset(ranking_key=…, k=…)`) is one of the canonical
+> motivating cases for ordering. The newer [`rank_by`](rank.md) operator
+> generalizes it: any top-k expressed via `subset(ranking_key=…, k=k)`
+> can equivalently be expressed as `rank_by(...) | filter_keys(k < k_max)`.
+> Both stay in the codebase — `subset` for the declarative one-shot form,
+> `rank_by` when you want a ranked AF that you can compose further (e.g.
+> for pagination, median, percentile lookups). See [rank.md](rank.md) for
+> the FDM-faithful framing.
+
 ### Generic Form: AF → AF
 
 ```output: AF = subset(input: AF)```
