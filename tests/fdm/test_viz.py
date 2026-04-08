@@ -35,7 +35,6 @@ from fdm.schema import Schema
 from fdm.viz import _collect_graph, to_html
 from tests.lib import _create_testdata
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
