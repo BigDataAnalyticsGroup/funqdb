@@ -88,6 +88,8 @@ operators which operate exclusively on DBFs (DBF → DBF).
 | [filter](filter.md) | AF → AF | Select items matching a local predicate |
 | [project](project.md) | AF → AF | Retain only specified attributes per value |
 | [subset](subset.md) | AF → AF | Select items matching a global condition (top-k) |
+| [rank_by](rank.md) | AF → AF | FDM-faithful ORDER BY: produces a new AF with `ℕ`-key domain |
+| [items_sorted_by](rank.md#items_sorted_by-af--iteratoritem) | AF → Iterator[Item] | Terminal sink for ordered consumption (presentation only) |
 | [partition](partition.md) | AF → AF↑ | Split into partitions (inverse of union) |
 | [union](union.md) | AF → AF↓ | Merge partitions (inverse of partition) |
 | [aggregate](aggregate.md) | AF → AF↓ | Compute aggregates (inverse of disaggregate) |

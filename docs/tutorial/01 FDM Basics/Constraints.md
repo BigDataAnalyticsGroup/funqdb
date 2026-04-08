@@ -59,3 +59,10 @@ users: RF = db.users
 departments: RF = db.departments
 users.references("department", departments) # adds a foreign value constraint
 ```
+
+> **Tip.** Once you have a `DBF` with foreign value references and/or
+> schemas attached, you can render the entire schema as an interactive
+> HTML page with [`fdm.viz.to_html`](Visualization.md) or the
+> [`funqdb-viz`](Visualization.md#from-the-shell-funqdb-viz) shell
+> script. Relations become nodes; `.references()`-edges become labelled
+> arrows.
