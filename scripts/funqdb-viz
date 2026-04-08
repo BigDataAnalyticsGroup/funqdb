@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+#
+#    This is funqDB, a query processing library and system built around FDM and FQL.
+#
+#    Copyright (C) 2026 Prof. Dr. Jens Dittrich, Saarland University
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#
+"""funqdb-viz — render a funqDB ``DBF`` defined in a Python file as HTML.
+
+Usage::
+
+    scripts/funqdb-viz <input.py> <output.html>
+
+The input file is executed as a normal Python script. After execution the
+script's module namespace is searched for a :class:`fdm.attribute_functions.DBF`
+instance:
+
+1. If a module-level variable named ``db`` exists and is a ``DBF``, it is
+   used.
+2. Otherwise, if exactly one ``DBF`` instance exists at module level, it is
+   used.
+3. Otherwise the command fails with a descriptive error.
+
+The directory containing the input file is prepended to ``sys.path`` so
+that the script can ``import`` neighbouring modules.
+"""
+
+import argparse
+import runpy
+import sys
+from pathlib import Path
+
+# Make the funqDB package importable when this script is run directly from
+# a checkout (i.e. without ``poetry run``).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from fdm.attribute_functions import DBF  # noqa: E402
+from fdm.viz import to_html  # noqa: E402
+
+
+def _find_dbf(namespace: dict) -> DBF:
+    """Locate a :class:`DBF` in the given module namespace.
+
+    Prefers a variable explicitly named ``db``; falls back to the unique
+    ``DBF`` instance at module level. Raises ``SystemExit`` with a helpful
+    message if zero or multiple candidates are found.
+    """
+    explicit = namespace.get("db")
+    if isinstance(explicit, DBF):
+        return explicit
+
+    candidates = {
+        name: value
+        for name, value in namespace.items()
+        if isinstance(value, DBF) and not name.startswith("_")
+    }
+    if len(candidates) == 1:
+        return next(iter(candidates.values()))
+    if not candidates:
+        sys.exit(
+            "error: no DBF instance found in the input file. "
+            "Define a module-level variable (recommended name: 'db')."
+        )
+    sys.exit(
+        "error: multiple DBF instances found at module level "
+        f"({', '.join(sorted(candidates))}). "
+        "Name the one you want to render 'db'."
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="funqdb-viz",
+        description="Render a funqDB DBF defined in a Python file as an interactive HTML page.",
+    )
+    parser.add_argument(
+        "input", type=Path, help="Path to a Python file that defines a DBF."
+    )
+    parser.add_argument("output", type=Path, help="Path to the HTML file to write.")
+    args = parser.parse_args(argv)
+
+    if not args.input.is_file():
+        sys.exit(f"error: input file not found: {args.input}")
+
+    # Make the input file's directory importable so neighbouring modules
+    # work as the user would expect when running ``python input.py`` directly.
+    sys.path.insert(0, str(args.input.resolve().parent))
+
+    namespace = runpy.run_path(str(args.input), run_name="__funqdb_viz__")
+    db = _find_dbf(namespace)
+
+    args.output.write_text(to_html(db))
+    print(f"wrote {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
