@@ -17,6 +17,12 @@ coverage = { extras = ["toml"], version = "7.10.6" }
 faker = "^40.8.0"
 toolz = "^1.1.0"
 
+[tool.pytest.ini_options]
+markers = [
+    "needs_review_new: AI-generated test — entire method must be reviewed by a human before merge",
+    "needs_review_modified: AI-modified test — check '# -- begin/end AI-modified --' sections before merge",
+]
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

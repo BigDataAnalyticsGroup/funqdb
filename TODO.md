@@ -16,7 +16,15 @@
   should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
   constructor (DONE, but breaks some tests when used in where()).
 
-- [ ] full-fledged subdatabase operator (revisit: the ones in the code base are outdated)
+- [ ] tighten `Operator` input typing: the `input_function: INPUT_AttributeFunction`
+  parameter in the operator subclasses (`filter_items`, `filter_values`, …)
+  silently accepts another `Operator` at runtime (via `_resolve_input`), but
+  the static type annotation does not reflect that. Type checkers therefore
+  flag every nested pipeline like `filter_items(filter_values(af, ...), ...)`
+  as a type error. Fix direction: change the annotation to
+  `INPUT_AttributeFunction | Operator[Any, INPUT_AttributeFunction]` in the
+  base class and propagate to subclasses. Surfaced by the IDE while adding
+  type hints to `tests/fql/plan/test_extract.py`.
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
@@ -44,12 +52,29 @@
 
 - [ ] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
   item X through relationship function Y
-- [ ] operator: output a plan, how?
-    - [ ] as everything is functions and the input to an operator is not another operator
-      -> explain must traverse through the call chain including attribute functions!
-    - [ ] maybe through a tainting mechanism, i.e. make the AF being passed through and let it collect information on
-      the way
-      through the pipeline!  STARTED: search for "lineage" in the codebase
+- [x] operator: output a plan, how?  PR 1 landed: `fql/plan/` + `Operator.to_plan()`
+  walks the un-executed operator tree into a serializable `LogicalPlan`
+  (LeafRef/PlanNode/Opaque) without triggering `_compute`. JSON roundtrip
+  works; lambdas become `Opaque` markers.
+    - [ ] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
+      filter/join predicates are no longer forced to be opaque lambdas;
+      needed for any real backend dispatcher.
+    - [ ] PR 3: consolidate existing per-operator `explain()` strings to be
+      derived from `to_plan()` so there is a single source of truth.
+    - [ ] PR 4: demo backend dispatcher that partitions a plan into a
+      backend-executable prefix and a local residual at the first `Opaque`
+      boundary.
+    - [ ] `filter_values` wraps the user predicate in an internal lambda
+      (`filters.py:111`), so the extractor sees the wrapper, not the
+      original predicate. Stash the original on the instance so PR 2 can
+      serialize it.
+    - [ ] `_value_{to,from}_dict` use a bare `"type"` discriminator; a user
+      dict param whose keys include `"type"` with value in
+      {`"leaf"`,`"node"`,`"opaque"`,`"literal"`} would be mis-rehydrated.
+      Namespace to e.g. `"__funqdb_type__"`.
+    - [ ] alternative / future work: tainting mechanism via the AF being
+      passed through and collecting information along the pipeline — search
+      for "lineage" in the codebase for the earlier start.
 - [ ] observer semantics for AFs not in the store, maybe queue or load, when queuing it may break semantics, e.g. for
   other AFs in main memory that should be informed but are not as part of the observer chain is not in main memory
 

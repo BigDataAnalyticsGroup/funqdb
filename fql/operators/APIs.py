@@ -19,6 +19,7 @@
 #
 
 from abc import ABC, abstractmethod
+from typing import Any, Iterable, Mapping
 
 from fdm.util import Explainable
 
@@ -30,6 +31,14 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](Explainable, A
     Accessing .result triggers computation (and caches the result).
     If an input is itself an Operator, its .result is resolved automatically.
     Calling the operator instance also returns .result for convenience.
+
+    Operators are also *extractable*: ``to_plan()`` walks the (still
+    un-executed) operator tree and returns a ``fql.plan.LogicalPlan``. The
+    default implementation uses reflection via ``_plan_inputs`` /
+    ``_plan_params`` and covers the common case where a subclass has one
+    ``input_function`` attribute and stores all other configuration as plain
+    public attributes. Subclasses with unusual parameter shapes (e.g. factory
+    closures that should not appear in the plan) may override the two hooks.
     """
 
     _result: OUTPUT_AttributeFunction | None = None
@@ -53,3 +62,45 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](Explainable, A
     def _compute(self) -> OUTPUT_AttributeFunction:
         """Subclasses implement their computation logic here."""
         ...
+
+    # -- Plan extraction hooks ------------------------------------------------
+    #
+    # These hooks are intentionally kept out of ``_compute``'s path so that
+    # they have zero cost for normal execution. They are only invoked by
+    # ``fql.plan.extract``.
+
+    def _plan_inputs(self) -> Iterable[Any]:
+        """Return the operator's subplan inputs for extraction.
+
+        Default: a single-element iterable containing ``self.input_function``.
+        All FDM operators are unary, so this is sufficient for every operator
+        currently in the codebase. Subclasses that store inputs under a
+        different attribute name should override this hook.
+        """
+        return (self.input_function,)
+
+    def _plan_params(self) -> Mapping[str, Any]:
+        """Return the operator's named parameters for extraction.
+
+        Default: every public instance attribute except ``input_function``
+        (which is surfaced as a subplan input, not a parameter) and the
+        private ``_result`` cache. Subclasses may override this to omit
+        non-serializable fields or add derived ones.
+        """
+        return {
+            k: v
+            for k, v in vars(self).items()
+            if k != "input_function" and not k.startswith("_")
+        }
+
+    def to_plan(self):
+        """Extract this operator (and its inputs) into a ``LogicalPlan``.
+
+        Does *not* trigger ``_compute``. Returns a fully serializable
+        ``fql.plan.LogicalPlan`` wrapper.
+        """
+        # Local import to avoid a top-level cycle: ``fql.plan.extract``
+        # imports from ``fql.operators.APIs`` for its ``isinstance`` check.
+        from fql.plan.extract import extract_plan
+
+        return extract_plan(self)
