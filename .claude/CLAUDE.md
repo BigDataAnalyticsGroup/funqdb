@@ -45,6 +45,55 @@ These come from `CONTRIBUTING.md` and the existing code — please respect them:
 6. Prefer editing existing files over creating new ones; prefer small, focused changes.
 7. add/update the documentation/tutorial when changing/adding code
 
+## AI-generated test marking
+
+Every test method that Claude adds or modifies **must** be flagged for human review.
+The CI job `no-unreviewed-tests` blocks the merge while any flagged test remains.
+Two separate markers distinguish new tests from modified tests.
+
+### New test methods
+
+Add `@pytest.mark.needs_review_new` immediately before the `def`:
+
+```python
+@pytest.mark.needs_review_new
+def test_something_new():
+    """Docstring explaining what this test verifies."""
+    ...
+```
+
+The reviewer must read and debug the **entire** test before removing the marker.
+
+### Modified test methods
+
+If you change an **existing, already-reviewed** test (i.e. one that does *not*
+already carry a `needs_review_*` marker):
+
+1. Add `@pytest.mark.needs_review_modified` to the method.
+2. Wrap only the lines you changed or added with section comments so the
+   reviewer can see exactly what is new:
+
+```python
+@pytest.mark.needs_review_modified
+def test_existing():
+    """Already-reviewed test."""
+    assert something_old()
+
+    # -- begin AI-modified --
+    assert something_new()
+    assert another_new_thing()
+    # -- end AI-modified --
+
+    assert something_else_old()
+```
+
+The reviewer only needs to check the `# -- begin/end AI-modified --` sections,
+then removes **both** the decorator and the section comments.
+
+If the change is so pervasive that section comments would be more noise than
+signal (e.g. a complete rewrite), use `@pytest.mark.needs_review_new` instead
+(treat it as a new test).
+
 ## Things to be careful about
 - **Don't "fix" things that look SQL-ish by making them more SQL-ish.** The whole
   point of funqDB is to *not* reproduce SQL/relational-algebra assumptions
