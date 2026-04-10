@@ -114,26 +114,55 @@ signal (e.g. a complete rewrite), use `@pytest.mark.needs_review_new` instead
 - Swizzling/unswizzling currently works for **reads only**; writes are a known TODO.
 - `TODO.md` tracks known work items — check it before proposing new ones.
 
-## Subagent workflow
+## Subagent workflow — iterative development
 
-Three project-local subagents live in `.claude/agents/`. Use them in this order for any non-trivial code change:
+Three project-local subagents live in `.claude/agents/`. The workflow is **iterative
+and human-in-the-loop**: start minimal, get feedback early, then refine.
 
-### 1. Research (optional) — `researcher`
+### Phase 1: POC — get the core idea working
 
-Before writing code, use the `researcher` agent whenever you need to look up library behaviour, security advisories, best practices, or anything that requires web searches or deep file exploration. It returns sourced bullet-point findings without polluting the main context.
+1. **Research (optional)** — use the `researcher` agent if you need to look up
+   library behaviour, best practices, or anything requiring web searches.
+2. **Implement a bare-bones POC** — focus only on the core functionality. Skip
+   edge cases, full docstrings, and polish. Apply basic conventions (type hints,
+   AGPL header on new files) but keep it minimal.
+3. **Write initial tests** — invoke the `test-writer` agent for happy-path tests
+   only. These prove the POC works and serve as executable documentation of the
+   intended behaviour.
+4. **Review** — invoke the `code-reviewer` agent on the POC. At this stage,
+   "PASS WITH NOTES" is expected and fine — the goal is to catch fundamental
+   design issues early, not to polish.
 
-### 2. Code (parent agent)
+### Phase 2: Human checkpoint (mandatory)
 
-Write the code yourself in the main context. Apply all project conventions (type hints, docstrings, inline comments, AGPL header on new files).
+**Stop and present the POC to the user before proceeding.** Include:
+- A short summary of the approach taken and any design decisions made.
+- What works, what is deliberately left out, and what the known limitations are.
+- Specific questions or options where the user's input would steer the design
+  (e.g. "Should X be eager or lazy?", "Do you want Y to support Z?").
 
-### 3. Review — `code-reviewer`
+**Do not continue to Phase 3 until the user gives explicit go-ahead.** If the
+user requests changes, loop back to Phase 1 with the revised direction.
 
-After writing or modifying code, invoke the `code-reviewer` agent with the changed file paths and a one-line description of intent. It performs a zero-context review across correctness, readability, performance, and security, and returns one of:
+### Phase 3: Iterate to completion
 
-- **PASS** — proceed to test writing.
-- **PASS WITH NOTES** — fix the noted items, then proceed.
-- **NEEDS CHANGES** — fix all blocking issues and re-invoke the reviewer before proceeding.
+Once the user approves the direction:
 
-### 4. Tests — `test-writer`
+1. **Flesh out the implementation** — add edge-case handling, full docstrings,
+   inline comments, and any remaining conventions from `CONTRIBUTING.md`.
+2. **Extend tests** — invoke the `test-writer` agent again, now covering edge
+   cases, failure modes, and security-relevant paths.
+3. **Final review** — invoke the `code-reviewer` agent. Expect:
+   - **PASS** — proceed to presenting the result.
+   - **PASS WITH NOTES** — fix the noted items, then proceed.
+   - **NEEDS CHANGES** — fix all blocking issues and re-invoke the reviewer.
+4. **Update documentation/tutorial** as required.
+5. **Present the final result to the user** for approval before committing.
 
-Once the reviewer returns PASS or PASS WITH NOTES (resolved), invoke the `test-writer` agent with the changed file paths and the relevant existing test files. It writes or extends tests covering happy path, edge cases, failure modes, and security-relevant paths.
+### General principles
+- **Prefer small increments over big-bang delivery.** If a feature is large,
+  break it into multiple Phase 1→2→3 cycles rather than one huge cycle.
+- **When in doubt, ask.** A quick clarifying question is always cheaper than
+  reworking a wrong assumption.
+- **Never gold-plate silently.** If you see an improvement opportunity beyond
+  what was asked, mention it to the user instead of just doing it.
