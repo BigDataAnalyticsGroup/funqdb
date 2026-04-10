@@ -25,11 +25,16 @@ at this stage; clarity and faithfulness to the FDM/FQL ideas are.
   - `fql/operators/` — unary operators (filters, joins, projections, aggregates,
     partitions, subdatabases, set operations, transforms, …)
   - `fql/predicates/` — predicates and constraints
+  - `fql/plan/` — logical IR and extractor for FQL operator pipelines
 - `store/` — persistence layer (currently `SqliteDict` as key/blob store)
 - `tests/` — pytest suite, mirrors the `fdm` / `fql` / `store` layout
 - `benchmarks/job/` — Join Order Benchmark experiments, incl. the
   `SQL vs FQL.md` comparison
 - `docs/tutorial/` — work-in-progress tutorial (often mirrors test examples)
+- `examples/` — standalone example scripts (e.g. schema visualization)
+- `scripts/` — CLI tools (e.g. `funqdb-viz`)
+- `ci/` — CI helper scripts (coverage checks)
+- `.claude/` — Claude Code configuration and subagent definitions
 
 ## Tooling
 - Python **>= 3.12**, managed via **Poetry** (`poetry install`)
