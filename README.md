@@ -1,3 +1,6 @@
+
+[![coverage report](https://gitlab.cs.uni-saarland.de/bigdata/funqdb/funqdb/badges/main/coverage.svg)](https://gitlab.cs.uni-saarland.de/bigdata/funqdb/funqdb/-/commits/main)
+
 # funqDB
 
 *The goal of funqDB is to replace the relational model, relational algebra, ORMs, and SQL in the long run.*
