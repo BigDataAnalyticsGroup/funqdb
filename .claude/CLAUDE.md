@@ -18,6 +18,12 @@ at this stage; clarity and faithfulness to the FDM/FQL ideas are.
 - **Never commit or push directly to `main`.** Always work on a feature branch
   and create a merge request. This applies to all changes — code, CI, docs.
 - Create descriptive branch names (e.g. `feat/plan-extraction`, `ci/coverage-report`).
+- If you need to develop something and are currently on `main`, create a new
+  feature branch first. If in doubt whether a new branch is needed, ask.
+- During POC / iterative development it is fine to change files directly on
+  the current feature branch (no sub-branches needed).
+- **Commit and push after every phase** (POC, checkpoint, iteration, final)
+  so progress is always saved remotely.
 
 ## Repository layout
 - `fdm/`  — the Functional Data Model: `AttributeFunction`, schemas, core API
