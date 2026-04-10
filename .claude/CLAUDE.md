@@ -14,6 +14,11 @@ terminology like **attribute function (AF)**, **relationship function (RF)**,
 This is a proof of concept, not production code. Performance is explicitly a non-goal
 at this stage; clarity and faithfulness to the FDM/FQL ideas are.
 
+## Git workflow
+- **Never commit or push directly to `main`.** Always work on a feature branch
+  and create a merge request. This applies to all changes — code, CI, docs.
+- Create descriptive branch names (e.g. `feat/plan-extraction`, `ci/coverage-report`).
+
 ## Repository layout
 - `fdm/`  — the Functional Data Model: `AttributeFunction`, schemas, core API
 - `fql/`  — the Functional Query Language façade
