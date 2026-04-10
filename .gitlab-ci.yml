@@ -43,6 +43,12 @@ pytest:
     - cp -r htmlcov htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
     - coverage json --fail-under=80
     - cp coverage.json coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
+    # Cobertura XML for MR diff line-by-line coverage visualization
+    - coverage xml
+    # Print total line so GitLab can parse the coverage percentage for the badge
+    - coverage report
+  # Regex for GitLab to extract the coverage percentage from the job log
+  coverage: '/(?i)total.*?(\d+(?:\.\d+)?)%/'
   interruptible: true
   artifacts:
     # Take whole HTML folder and the json report
@@ -51,6 +57,11 @@ pytest:
       - htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA/*
       - coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
     expire_in: 1 week
+    reports:
+      # Cobertura report: GitLab shows covered/uncovered lines in the MR diff
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
 
 
 no-unreviewed-tests:
