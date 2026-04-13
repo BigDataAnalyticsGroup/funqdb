@@ -19,13 +19,13 @@ receives different arguments:
 
 ```python
 # filter_items: predicate receives an Item (key + value)
-filter_items(users, filter_predicate=lambda i: i.value.department.name == "Dev")
+filter_items(users, lambda i: i.value.department.name == "Dev")
 
 # filter_values: predicate receives only the value
-filter_values(users, filter_predicate=lambda v: v.department.name == "Dev")
+filter_values(users, lambda v: v.department.name == "Dev")
 
 # filter_keys: predicate receives only the key
-filter_keys(db, filter_predicate=lambda k: k in ["users", "departments"])
+filter_keys(db, lambda k: k in ["users", "departments"])
 ```
 
 All three variants return a new AF of the same type containing only the qualifying items.
@@ -53,6 +53,63 @@ Available lookups: ```exact```, ```lt```, ```lte```, ```gt```, ```gte```, ```in`
 Plain ```field=value``` is equivalent to ```field__exact=value```.
 
 The relational algebra alias ```𝛔()``` is equivalent to ```where()```.
+
+#### Structured Predicates
+
+Instead of opaque lambdas, filters also accept **structured predicates** from ```fql.predicates```.
+These are callable (drop-in replacements for lambdas) *and* serializable — the plan IR represents
+them as structured dicts instead of ```Opaque``` markers, enabling backend dispatchers to inspect
+filter conditions.
+
+```python
+from fql.predicates import Eq, Gt, Like, In, And, Or, Not, Ref
+
+# Simple equality (filter_predicate= is optional, it's a positional arg):
+filter_values(users, Eq("name", "Alice"))
+
+# Nested attribute paths (dot or __ notation):
+filter_values(users, Eq("department.name", "Dev"))
+filter_values(users, Eq("department__name", "Dev"))  # same
+
+# Other comparisons:
+filter_values(users, Gt("yob", 1980))
+filter_values(users, Like("name", "H%"))
+filter_values(users, In("yob", [1972, 1983, 2003]))
+
+# Attribute-to-attribute comparison via Ref:
+filter_values(events, Gt("end_year", Ref("start_year")))
+
+# Logical composition:
+filter_values(users, And(
+    Eq("department.name", "Dev"),
+    Gt("yob", 1980),
+))
+filter_values(users, Or(Eq("name", "Alice"), Eq("name", "Bob")))
+filter_values(users, Not(Eq("department.name", "HR")))
+```
+
+Structured predicates also work with the ```.where()``` convenience method:
+
+```python
+users.where(Eq("department.name", "Dev"))
+users.where(And(Eq("department.name", "Dev"), Gt("yob", 1980)))
+```
+
+Available predicate classes:
+
+| Predicate | Description | Example |
+|:----------|:------------|:--------|
+| ```Eq``` | Equality | ```Eq("name", "Alice")``` |
+| ```Gt``` | Greater than | ```Gt("yob", 1980)``` |
+| ```Lt``` | Less than | ```Lt("yob", 2000)``` |
+| ```Gte``` | Greater or equal | ```Gte("yob", 1980)``` |
+| ```Lte``` | Less or equal | ```Lte("yob", 2000)``` |
+| ```Like``` | SQL-style ```%``` wildcards | ```Like("name", "H%")``` |
+| ```In``` | Membership test | ```In("yob", [1972, 1983])``` |
+| ```And``` | Conjunction | ```And(pred1, pred2, ...)``` |
+| ```Or``` | Disjunction | ```Or(pred1, pred2, ...)``` |
+| ```Not``` | Negation | ```Not(pred)``` |
+| ```Ref``` | Attribute reference (RHS) | ```Gt("end", Ref("start"))``` |
 
 ### Special cases
 

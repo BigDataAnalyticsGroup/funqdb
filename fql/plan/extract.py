@@ -211,6 +211,14 @@ def _serialize_param(value: Any) -> Any:
     if isinstance(value, (AttributeFunction, Operator)):
         return extract(value)
 
+    # Structured predicates are callable but serializable — detect them
+    # before the generic callable fallback so they appear as structured
+    # dicts in the IR instead of Opaque markers.
+    from fql.predicates.predicates import Predicate
+
+    if isinstance(value, Predicate):
+        return value
+
     if callable(value):
         # Lambdas show up as ``<function <lambda> at 0x...>`` under repr; we
         # keep that verbatim — it is at least as informative as anything we

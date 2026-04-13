@@ -221,6 +221,12 @@ def _value_to_dict(value: Any) -> Any:
     """
     if isinstance(value, Opaque):
         return value.to_dict()
+    # Structured predicates carry a to_dict() that produces a
+    # {"type": "predicate", ...} record.
+    from fql.predicates.predicates import Predicate
+
+    if isinstance(value, Predicate):
+        return value.to_dict()
     if isinstance(value, (LeafRef, PlanNode)):
         return value.to_dict()
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -323,6 +329,10 @@ def _value_from_dict(value: Any) -> Any:
                 repr=value["repr"],
                 py_id=value["py_id"],
             )
+        if t == "predicate":
+            from fql.predicates.predicates import Predicate
+
+            return Predicate.from_dict(value)
         if t in ("leaf", "node"):
             return _child_from_dict(value)
         if t == "literal":
@@ -362,6 +372,10 @@ def _short_param(value: Any) -> str:
     """Short, single-line rendering of a parameter value for ``explain()``."""
     if isinstance(value, Opaque):
         return f"<opaque {value.reason}>"
+    from fql.predicates.predicates import Predicate
+
+    if isinstance(value, Predicate):
+        return repr(value)
     if isinstance(value, (LeafRef, PlanNode)):
         return f"<{value.__class__.__name__}>"
     return repr(value)

@@ -24,6 +24,8 @@ at this stage; clarity and faithfulness to the FDM/FQL ideas are.
   the current feature branch (no sub-branches needed).
 - **Commit and push after every phase** (POC, checkpoint, iteration, final)
   so progress is always saved remotely.
+- **Run `black` before every push** on all changed `.py` files to ensure
+  consistent formatting. The CI pipeline will reject unformatted code.
 
 ## Repository layout
 - `fdm/`  — the Functional Data Model: `AttributeFunction`, schemas, core API

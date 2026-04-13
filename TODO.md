@@ -57,7 +57,7 @@
   walks the un-executed operator tree into a serializable `LogicalPlan`
   (LeafRef/PlanNode/Opaque) without triggering `_compute`. JSON roundtrip
   works; lambdas become `Opaque` markers.
-    - [ ] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
+    - [x] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
       filter/join predicates are no longer forced to be opaque lambdas;
       needed for any real backend dispatcher.
     - [ ] PR 4: demo backend dispatcher that partitions a plan into a
@@ -71,9 +71,6 @@
       dict param whose keys include `"type"` with value in
       {`"leaf"`,`"node"`,`"opaque"`,`"literal"`} would be mis-rehydrated.
       Namespace to e.g. `"__funqdb_type__"`.
-    - [ ] alternative / future work: tainting mechanism via the AF being
-      passed through and collecting information along the pipeline — search
-      for "lineage" in the codebase for the earlier start.
 - [ ] observer semantics for AFs not in the store, maybe queue or load, when queuing it may break semantics, e.g. for
   other AFs in main memory that should be informed but are not as part of the observer chain is not in main memory
 

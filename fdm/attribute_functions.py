@@ -27,6 +27,7 @@ from typing import Generator, Iterable, Callable, Any
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
 from fql.predicates.constraints import AttributeFunctionConstraint
+from fql.predicates.predicates import Predicate
 from fql.util import (
     Item,
     ConstraintViolationErrorFromOutside,
@@ -539,11 +540,12 @@ class DictionaryAttributeFunction[Key, Value](
         return key, "exact"
 
     def where(
-        self, predicate: Callable[..., Any] = None, **kwargs
+        self, predicate: Callable[..., Any] | Predicate = None, **kwargs
     ) -> "DictionaryAttributeFunction":
         """Filter the items of this DictionaryAttributeFunction based on the given conditions.
-        @param predicate: A callable defined on the values of this attribute function and returns True if the item
-        should be included in the result, False otherwise.
+        @param predicate: A callable or structured ``Predicate``. Plain callables receive an
+            ``Item`` and return True/False. Structured ``Predicate`` instances are automatically
+            applied to ``item.value`` (the TF value), consistent with ``filter_values`` semantics.
         @param kwargs: Keyword arguments for filtering conditions, phrased directly against the value of this attribute
         function. Supports Django ORM-style lookups: field__lt, field__lte, field__gt, field__gte, field__in,
         field__contains, field__icontains, field__startswith, field__endswith, field__isnull, field__range.
@@ -565,12 +567,20 @@ class DictionaryAttributeFunction[Key, Value](
         assert predicate is None or callable(predicate)
         assert kwargs is None or dict
 
+        # Structured predicates operate on values (filter_values semantics),
+        # while plain callables receive the full Item.
+        is_structured: bool = isinstance(predicate, Predicate)
+
         item: Item
         # loop over entries of self:
         for item in self:
             # if predicate exists, evaluate it:
-            if predicate is not None and not predicate(item):
-                continue
+            if predicate is not None:
+                if is_structured:
+                    if not predicate(item.value):
+                        continue
+                elif not predicate(item):
+                    continue
 
             # if kwargs conditions exist, evaluate them (Django ORM-style conjunct):
             match: bool = True

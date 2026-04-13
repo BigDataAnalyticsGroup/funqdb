@@ -19,9 +19,11 @@
 #
 
 
+from collections.abc import Mapping
 from typing import Callable, Any, Iterable
 
 from fql.operators.APIs import Operator
+from fql.predicates.predicates import Predicate
 from fql.util import Item
 
 
@@ -38,8 +40,8 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     def __init__(
         self,
         input_function: INPUT_AttributeFunction,
-        *,
         filter_predicate: Callable[..., Any],
+        *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
         create_lineage=False,
     ):
@@ -97,15 +99,22 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     def __init__(
         self,
         input_function: INPUT_AttributeFunction,
+        filter_predicate: Callable[..., Any] | Predicate,
         *,
-        filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
+        self._user_predicate = filter_predicate
         super().__init__(
             input_function,
-            filter_predicate=lambda i: filter_predicate(i.value),
+            lambda i: filter_predicate(i.value),
             output_factory=output_factory,
         )
+
+    def _plan_params(self) -> Mapping[str, Any]:
+        """Expose the original user predicate instead of the Item-wrapping lambda."""
+        params: dict[str, Any] = dict(super()._plan_params())
+        params["filter_predicate"] = self._user_predicate
+        return params
 
 
 class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -120,15 +129,22 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     def __init__(
         self,
         input_function: INPUT_AttributeFunction,
+        filter_predicate: Callable[..., Any] | Predicate,
         *,
-        filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
+        self._user_predicate = filter_predicate
         super().__init__(
             input_function,
-            filter_predicate=lambda i: filter_predicate(i.key),
+            lambda i: filter_predicate(i.key),
             output_factory=output_factory,
         )
+
+    def _plan_params(self) -> Mapping[str, Any]:
+        """Expose the original user predicate instead of the Item-wrapping lambda."""
+        params: dict[str, Any] = dict(super()._plan_params())
+        params["filter_predicate"] = self._user_predicate
+        return params
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -139,8 +155,8 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
     def __init__(
         self,
         input_function: INPUT_AttributeFunction,
+        filter_predicate: Callable[..., Any] | Predicate,
         *,
-        filter_predicate: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         """Initialize the filter_items_scan_complement operator.
@@ -149,8 +165,15 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         False otherwise.
         @param output_factory: This factory function will be used to create the output instance.
         """
+        self._user_predicate = filter_predicate
         super().__init__(
             input_function,
-            filter_predicate=lambda x: not filter_predicate(x),
+            lambda x: not filter_predicate(x),
             output_factory=output_factory,
         )
+
+    def _plan_params(self) -> Mapping[str, Any]:
+        """Expose the original user predicate instead of the negation-wrapping lambda."""
+        params: dict[str, Any] = dict(super()._plan_params())
+        params["filter_predicate"] = self._user_predicate
+        return params
