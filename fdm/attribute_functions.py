@@ -44,21 +44,23 @@ class CompositeForeignObject:
     """A composite foreign object represents a relationship between multiple AFs. This replaces the traditional
     composite key in a relational database."""
 
-    def __init__(self, foreign_objects: list[AttributeFunction]):
-        self.foreign_objects: list[AttributeFunction] = foreign_objects
+    def __init__(self, *foreign_objects: AttributeFunction):
+        self.foreign_objects: tuple[AttributeFunction, ...] = foreign_objects
 
     def __hash__(self):
-        """The hash of the MKey is based on the UUIDs of the user and customer, as those are immutable and unique
-        identifiers for the respective TFs. This allows us to use MKey instances as foreign_objects in a dictionary (or RF) to
-        represent relationships between users and customers."""
-        return hash(tuple([k.uuid for k in self.foreign_objects]))
+        """Hash based on the UUIDs of the constituent AFs, which are immutable and unique.
+        This makes CompositeForeignObject instances usable as dictionary keys (and therefore
+        as keys in RFs and RSFs)."""
+        return hash(tuple(k.uuid for k in self.foreign_objects))
 
-    def __eq__(self, other_foreign_objects: list[AttributeFunction]):
-        """Two MKey instances are considered equal if they have the same user and customer UUIDs. This ensures that
-        the relationship is correctly identified based on the involved TFs, regardless of whether the same MKey
-        instance is used or different instances with the same user and customer are created.
+    def __eq__(self, other: object) -> bool:
+        """Two CompositeForeignObject instances are equal if they reference the same AFs
+        (compared by identity/UUID). This ensures the relationship is correctly identified
+        regardless of whether the same instance or a new one with the same components is used.
         """
-        return self.foreign_objects == other_foreign_objects
+        if isinstance(other, CompositeForeignObject):
+            return self.foreign_objects == other.foreign_objects
+        return NotImplemented
 
     def __contains__(self, foreign_object: AttributeFunction):
         """Check if a given AttributeFunction is part of the CompositeForeignObject."""
@@ -736,7 +738,7 @@ class RSF[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
     Each key is a composite of references to the participating AFs,
     and the value holds the relationship's own attributes (e.g. a date).
 
-    Example: meetings[CompositeForeignObject([user1, customer1])] = TF({"date": "2025-01-01"})
+    Example: meetings[CompositeForeignObject(user1, customer1)] = TF({"date": "2025-01-01"})
     """
 
     def related_values(

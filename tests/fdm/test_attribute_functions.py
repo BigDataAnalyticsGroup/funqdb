@@ -218,21 +218,19 @@ def test_relationship_function():
     assert len(meetings) == 0
     # note that as we are assigning instances, we do not require an extra check like in the relational model that
     # the foreign value "exists"
-    meetings[CompositeForeignObject([users[1], customers[1]])] = TF(
+    meetings[CompositeForeignObject(users[1], customers[1])] = TF(
         {"date": "2024-01-01"}
     )
-    meetings[CompositeForeignObject([users[2], customers[1]])] = TF(
+    meetings[CompositeForeignObject(users[2], customers[1])] = TF(
         {"date": "2025-01-01"}
     )
-    meetings[CompositeForeignObject([users[2], customers[3]])] = TF(
+    meetings[CompositeForeignObject(users[2], customers[3])] = TF(
         {"date": "2026-01-01"}
     )
     assert len(meetings) == 3
 
     # overwrites the previous meeting between user 2 and customer 1:
-    meetings[CompositeForeignObject([users[2], customers[1]])] = TF(
-        {"date": "202-01-01"}
-    )
+    meetings[CompositeForeignObject(users[2], customers[1])] = TF({"date": "202-01-01"})
     assert len(meetings) == 3
 
     # lookup meetings for user 1:
@@ -271,7 +269,7 @@ def test_composite_foreign_object_contains_and_len():
     tf1: TF = TF({"name": "A"})
     tf2: TF = TF({"name": "B"})
     tf3: TF = TF({"name": "C"})
-    cfo: CompositeForeignObject = CompositeForeignObject([tf1, tf2])
+    cfo: CompositeForeignObject = CompositeForeignObject(tf1, tf2)
 
     assert tf1 in cfo
     assert tf2 in cfo
@@ -448,7 +446,7 @@ def test_tensor_add():
     # Note: dimensions is stored in data dict, so __add__ iterates over it too.
     # list + list is concat, so it doesn't error but produces unexpected results for "dimensions".
     # We only check the numeric keys.
-    k: CompositeForeignObject = CompositeForeignObject([TF({"id": 0})])
+    k: CompositeForeignObject = CompositeForeignObject(TF({"id": 0}))
     t1[k] = 10
     t2[k] = 3
     t_add: Tensor = t1 + t2
@@ -461,7 +459,7 @@ def test_tensor_sub():
 
     t1: Tensor = Tensor([1])
     t2: Tensor = Tensor([1])
-    k: CompositeForeignObject = CompositeForeignObject([TF({"id": 0})])
+    k: CompositeForeignObject = CompositeForeignObject(TF({"id": 0}))
     t1[k] = 10
     t2[k] = 3
     # "dimensions" key causes TypeError (list - list), but the sub code lines are entered
@@ -475,7 +473,7 @@ def test_tensor_mul():
 
     t1: Tensor = Tensor([1])
     t2: Tensor = Tensor([1])
-    k: CompositeForeignObject = CompositeForeignObject([TF({"id": 0})])
+    k: CompositeForeignObject = CompositeForeignObject(TF({"id": 0}))
     t1[k] = 10
     t2[k] = 3
     # "dimensions" key causes TypeError (list * list), but the mul code lines are entered

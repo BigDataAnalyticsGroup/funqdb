@@ -18,6 +18,14 @@
 
 - [x] bug: `filter_items_scan_complement` (`filters.py`) had `lambda x: not filter_predicate`
   instead of `lambda x: not filter_predicate(x)` — fixed, test now covers actual filtering.
+- [ ] bug: `Tensor` element-wise arithmetic (`+`, `-`, `*`) is broken because `dimensions`
+  is stored in the same data dict as tensor entries. `+` silently corrupts the result's
+  dimensions via list concatenation; `-` and `*` raise `TypeError`. Fix: store `dimensions`
+  outside the data dict, or skip it when iterating keys in arithmetic operators.
+- [ ] bug: `RSF.related_values(subkey_index, subkey)` filters and returns at the **same**
+  index — it returns the matched AF back, not the related AF at another position. The
+  docstring example (`returns all customers that have a meeting with user1`) is misleading.
+  Either fix the method to accept separate match/return indices, or correct the docstring.
 - [ ] tighten `Operator` input typing: the `input_function: INPUT_AttributeFunction`
   parameter in the operator subclasses (`filter_items`, `filter_values`, …)
   silently accepts another `Operator` at runtime (via `_resolve_input`), but
