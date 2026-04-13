@@ -381,7 +381,6 @@ def test_filter_items_create_lineage_not_implemented():
         ).result
 
 
-@pytest.mark.needs_review_modified
 def test_filter_items_scan_complement():
     """Verify that filter_items_scan_complement returns the complement of the predicate."""
     db: DBF = _create_testdata(frozen=True)
@@ -394,7 +393,6 @@ def test_filter_items_scan_complement():
     explanation: str = op.explain()
     assert "filter_items_scan_complement" in explanation
 
-    # -- begin AI-modified --
     # The complement must keep only items that do NOT match the predicate.
     result: RF = op.result
     result_names: set[str] = {item.value.name for item in result}
@@ -402,4 +400,3 @@ def test_filter_items_scan_complement():
     assert "Horst" not in result_names
     assert "Tom" not in result_names
     assert len(result) > 0, "complement must not be empty"
-    # -- end AI-modified --
