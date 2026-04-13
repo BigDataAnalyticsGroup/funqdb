@@ -104,21 +104,10 @@ matrix[coord] = 42
 
 #### Element-wise arithmetic
 
-Tensors of the same dimensions support element-wise ```+```:
-
-```python
-t1: Tensor = Tensor([2])
-t2: Tensor = Tensor([2])
-
-k: CompositeForeignObject = CompositeForeignObject(TF({"id": 0}))
-t1[k] = 10
-t2[k] = 3
-
-t_sum: Tensor = t1 + t2    # t_sum[k] == 13
-```
-
-> **Note:** ```-``` and ```*``` are defined but currently broken due to the ```dimensions```
-> attribute being stored in the same data dict as tensor entries — a known limitation.
+Tensors define ```+```, ```-```, and ```*``` for element-wise operations, but these are
+**currently broken** due to the ```dimensions``` attribute being stored in the same data dict
+as tensor entries. ```+``` silently corrupts the result's dimensions (list concatenation),
+while ```-``` and ```*``` raise ```TypeError```. This is a known limitation.
 
 ***
 

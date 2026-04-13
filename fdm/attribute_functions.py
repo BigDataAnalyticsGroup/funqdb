@@ -48,10 +48,10 @@ class CompositeForeignObject:
         self.foreign_objects: tuple[AttributeFunction, ...] = foreign_objects
 
     def __hash__(self):
-        """The hash of the MKey is based on the UUIDs of the user and customer, as those are immutable and unique
-        identifiers for the respective TFs. This allows us to use MKey instances as foreign_objects in a dictionary (or RF) to
-        represent relationships between users and customers."""
-        return hash(tuple([k.uuid for k in self.foreign_objects]))
+        """Hash based on the UUIDs of the constituent AFs, which are immutable and unique.
+        This makes CompositeForeignObject instances usable as dictionary keys (and therefore
+        as keys in RFs and RSFs)."""
+        return hash(tuple(k.uuid for k in self.foreign_objects))
 
     def __eq__(self, other: object) -> bool:
         """Two CompositeForeignObject instances are equal if they reference the same AFs
