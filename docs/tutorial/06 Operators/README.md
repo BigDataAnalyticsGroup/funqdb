@@ -20,7 +20,8 @@ Operators follow a **configure-then-apply** pattern:
 ```python
 # Phase 1: construct with parameters
 op: Operator[RF, RF] = filter_items[RF, RF](
-    filter_predicate=lambda i: i.value.department.name == "Dev",
+    users,
+    lambda i: i.value.department.name == "Dev",
 )
 
 # Phase 2: apply to input
@@ -44,6 +45,11 @@ users.where(department__name="Dev")
 
 # with comparison lookups:
 users.where(yob__gte=1980, yob__lte=2000)
+
+# structured predicates (serializable, not opaque):
+from fql.predicates import Eq, Gt, And
+users.where(Eq("department.name", "Dev"))
+users.where(And(Eq("department.name", "Dev"), Gt("yob", 1980)))
 ```
 
 The ```__```-syntax serves double duty: it resolves **nested attributes** (```department__name``` traverses
