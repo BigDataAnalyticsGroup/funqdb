@@ -16,6 +16,10 @@
   should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
   constructor (DONE, but breaks some tests when used in where()).
 
+- [ ] bug: `filter_items_scan_complement` (`filters.py`) has `lambda x: not filter_predicate`
+  instead of `lambda x: not filter_predicate(x)` — evaluates truthiness of the
+  function object (always `True`), so the complement is always empty. The existing
+  test only checks `explain()`, not filtering behavior, so the bug is masked.
 - [ ] tighten `Operator` input typing: the `input_function: INPUT_AttributeFunction`
   parameter in the operator subclasses (`filter_items`, `filter_values`, …)
   silently accepts another `Operator` at runtime (via `_resolve_input`), but
@@ -32,7 +36,6 @@
   stream of
   the contents of an AF)
 - [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
-- [ ] pipelining
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
   from the store
@@ -59,8 +62,6 @@
     - [ ] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
       filter/join predicates are no longer forced to be opaque lambdas;
       needed for any real backend dispatcher.
-    - [ ] PR 3: consolidate existing per-operator `explain()` strings to be
-      derived from `to_plan()` so there is a single source of truth.
     - [ ] PR 4: demo backend dispatcher that partitions a plan into a
       backend-executable prefix and a local residual at the first `Opaque`
       boundary.
@@ -89,6 +90,9 @@
 
 ### DONE
 - [ ] sync docu and tutorial for new operators
+- [x] PR 3: consolidate existing per-operator `explain()` strings to be
+      derived from `to_plan()` so there is a single source of truth.
+- [x] pipelining
 - [x] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
 - [x] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
   transform operator, i.e. the input RF is mapped to a new RF containing only the top-k elements

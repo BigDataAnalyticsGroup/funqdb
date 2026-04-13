@@ -320,10 +320,6 @@ def test_filter_items_reused_and_chained():
         filter_items[RF, RF](users, **filter_kw).result,
         **filter_kw,
     ).result  # apply filter twice by chaining
-    filter_items[RF, RF](
-        filter_items[RF, RF](users, **filter_kw).result,
-        **filter_kw,
-    ).result.explain()
 
     assert type(users_filtered) == RF
     assert len(users_filtered) == 2
@@ -331,30 +327,6 @@ def test_filter_items_reused_and_chained():
         assert item.value.department.name == "Dev"
     filtered_user_names = {user.value.name for user in users_filtered}
     assert filtered_user_names == {"Horst", "Tom"}
-
-
-# TODO: re-enable lineage and explain for filters, then re-enable this test
-def _test_filter_explain():
-    db: DBF = _create_testdata(frozen=True)
-    users: RF = db.users
-    print(users.get_lineage())
-
-    ret1: RF = filter_items[RF, RF](
-        users,
-        filter_predicate=lambda item: item.value.department.name == "Dev",
-        output_factory=lambda _: RF(),
-        create_lineage=True,
-    ).result
-    ret2: RF = filter_items[RF, RF](
-        ret1,
-        filter_predicate=lambda item: item.value.department.name == "bla",
-        output_factory=lambda _: RF(),
-        create_lineage=True,
-    ).result
-    # print("ret2 lineage:")
-    lineage: list[str] = ret2.get_lineage()
-    # for i, lin in enumerate(lineage, 1):
-    #    print(f"{i}.\t->", lin)
 
 
 def test_filter_items_explain():

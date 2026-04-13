@@ -170,22 +170,26 @@ def test_subset_neither_param():
 
 
 def test_subset_explain():
-    """Verify that explain() returns a descriptive string."""
+    """Verify that explain() returns a descriptive string derived from to_plan()."""
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
     op_topk: subset = subset(users, ranking_key=lambda item: item.value.yob, k=3)
-    assert "top-3" in op_topk.explain()
-    assert "smallest" in op_topk.explain()
+    explanation: str = op_topk.explain()
+    assert "subset" in explanation
+    assert "k=3" in explanation
+    assert "reverse=False" in explanation
 
     op_topk_rev: subset = subset(
         users, ranking_key=lambda item: item.value.yob, k=2, reverse=True
     )
-    assert "top-2" in op_topk_rev.explain()
-    assert "largest" in op_topk_rev.explain()
+    explanation_rev: str = op_topk_rev.explain()
+    assert "subset" in explanation_rev
+    assert "k=2" in explanation_rev
+    assert "reverse=True" in explanation_rev
 
     op_pred: subset = subset(users, subset_predicate=lambda af: af)
-    assert "subset operator" in op_pred.explain()
+    assert "subset" in op_pred.explain()
 
 
 def test_convenience_top():

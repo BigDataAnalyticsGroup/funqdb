@@ -7,8 +7,8 @@ An FQL operator is a **pure function** that transforms one attribute function (A
 ```output: AF = operator(input: AF)```
 
 Every operator inherits from ```Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]``` (defined in
-```fql/operators/APIs.py```), which itself extends ```PureFunction``` and ```Explainable```. This means every operator
-is callable and can explain its behavior.
+```fql/operators/APIs.py```). Every operator provides an ```explain()``` method that pretty-prints the full operator
+subtree by delegating to ```to_plan().explain()``` — a single source of truth for plan representation.
 
 ## Two-Phase Usage Pattern
 
