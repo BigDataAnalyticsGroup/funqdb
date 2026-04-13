@@ -409,7 +409,6 @@ def test_extract_literal_fallback_for_unsupported_types():
     assert root.params["value"] == 42
 
 
-@pytest.mark.needs_review_modified
 def test_serialize_param_covers_list_and_dict_params():
     """Operator parameters that are lists or dicts must be recursively
     serialized. We verify this by extracting a ``filter_items`` whose
@@ -419,7 +418,6 @@ def test_serialize_param_covers_list_and_dict_params():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    # -- begin AI-modified --
     # filter_items stores output_factory (None or callable).
     # We construct one with output_factory=None to cover the primitive param
     # path, then check params roundtrip. create_lineage is an unimplemented
@@ -436,7 +434,6 @@ def test_serialize_param_covers_list_and_dict_params():
     assert root.params["output_factory"] is None
     # create_lineage is private (_create_lineage) and must not appear in params.
     assert "create_lineage" not in root.params
-    # -- end AI-modified --
 
 
 # -- Pretty-print nested plan ------------------------------------------------

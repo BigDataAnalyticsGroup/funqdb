@@ -169,34 +169,27 @@ def test_subset_neither_param():
         subset(users)
 
 
-@pytest.mark.needs_review_modified
 def test_subset_explain():
     """Verify that explain() returns a descriptive string derived from to_plan()."""
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
     op_topk: subset = subset(users, ranking_key=lambda item: item.value.yob, k=3)
-    # -- begin AI-modified --
     explanation: str = op_topk.explain()
     assert "subset" in explanation
     assert "k=3" in explanation
     assert "reverse=False" in explanation
-    # -- end AI-modified --
 
     op_topk_rev: subset = subset(
         users, ranking_key=lambda item: item.value.yob, k=2, reverse=True
     )
-    # -- begin AI-modified --
     explanation_rev: str = op_topk_rev.explain()
     assert "subset" in explanation_rev
     assert "k=2" in explanation_rev
     assert "reverse=True" in explanation_rev
-    # -- end AI-modified --
 
     op_pred: subset = subset(users, subset_predicate=lambda af: af)
-    # -- begin AI-modified --
     assert "subset" in op_pred.explain()
-    # -- end AI-modified --
 
 
 def test_convenience_top():

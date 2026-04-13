@@ -75,7 +75,7 @@ class AttributeFunction[Key, Value](PureFunction):
         """Assign a unique UUID to this instance."""
         self.__dict__["_uuid"] = AttributeFunction.global_uuid
 
-        # increase the global UUID counter for the nex/efft instance:
+        # increase the global UUID counter for the next instance:
         AttributeFunction.global_uuid += 1
 
     @property
