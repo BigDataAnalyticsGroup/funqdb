@@ -341,8 +341,8 @@ def test_rank_by_rsf_input_yields_rf_output() -> None:
     # Build two dummy foreign objects and wrap each in a CompositeForeignObject:
     fo_1: TF = TF({"x": 1})
     fo_2: TF = TF({"x": 2})
-    key1: CompositeForeignObject = CompositeForeignObject([fo_1])
-    key2: CompositeForeignObject = CompositeForeignObject([fo_2])
+    key1: CompositeForeignObject = CompositeForeignObject(fo_1)
+    key2: CompositeForeignObject = CompositeForeignObject(fo_2)
 
     rsf: RSF = RSF({key1: TF({"w": 10}), key2: TF({"w": 20})})
 

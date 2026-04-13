@@ -12,7 +12,7 @@ user1: TF = TF({"name": "Alice"})
 customer1: TF = TF({"name": "ACME Corp"})
 
 # A composite key referencing both a user and a customer:
-key: CompositeForeignObject = CompositeForeignObject([user1, customer1])
+key: CompositeForeignObject = CompositeForeignObject(user1, customer1)
 ```
 
 A ```CompositeForeignObject``` supports:
@@ -49,9 +49,9 @@ customers: RF = RF({
 
 # An RSF modeling meetings between users and customers:
 meetings: RSF = RSF(frozen=False)
-meetings[CompositeForeignObject([users["u1"], customers["c1"]])] = TF({"date": "2025-01-01"})
-meetings[CompositeForeignObject([users["u2"], customers["c1"]])] = TF({"date": "2025-02-15"})
-meetings[CompositeForeignObject([users["u2"], customers["c2"]])] = TF({"date": "2025-03-20"})
+meetings[CompositeForeignObject(users["u1"], customers["c1"])] = TF({"date": "2025-01-01"})
+meetings[CompositeForeignObject(users["u2"], customers["c1"])] = TF({"date": "2025-02-15"})
+meetings[CompositeForeignObject(users["u2"], customers["c2"])] = TF({"date": "2025-03-20"})
 ```
 
 #### Querying relationships: ```related_values()```
@@ -98,7 +98,7 @@ matrix: Tensor = Tensor([3, 4])
 assert matrix.rank() == 2
 
 # Use CompositeForeignObjects as coordinates:
-coord: CompositeForeignObject = CompositeForeignObject([TF({"id": 0}), TF({"id": 1})])
+coord: CompositeForeignObject = CompositeForeignObject(TF({"id": 0}), TF({"id": 1}))
 matrix[coord] = 42
 ```
 
@@ -110,7 +110,7 @@ Tensors of the same dimensions support element-wise ```+```:
 t1: Tensor = Tensor([2])
 t2: Tensor = Tensor([2])
 
-k: CompositeForeignObject = CompositeForeignObject([TF({"id": 0})])
+k: CompositeForeignObject = CompositeForeignObject(TF({"id": 0}))
 t1[k] = 10
 t2[k] = 3
 
