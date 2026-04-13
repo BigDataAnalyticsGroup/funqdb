@@ -62,8 +62,6 @@
     - [ ] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
       filter/join predicates are no longer forced to be opaque lambdas;
       needed for any real backend dispatcher.
-    - [ ] PR 3: consolidate existing per-operator `explain()` strings to be
-      derived from `to_plan()` so there is a single source of truth.
     - [ ] PR 4: demo backend dispatcher that partitions a plan into a
       backend-executable prefix and a local residual at the first `Opaque`
       boundary.
@@ -92,6 +90,8 @@
 
 ### DONE
 - [ ] sync docu and tutorial for new operators
+- [x] PR 3: consolidate existing per-operator `explain()` strings to be
+      derived from `to_plan()` so there is a single source of truth.
 - [x] pipelining
 - [x] some schema/constraint visualization, i.e. through .references(), graphviz, vue.js?
 - [x] top-k/limit queries, in a single operator! parameters are k and the ranking attribute(s); this is a variant of a
