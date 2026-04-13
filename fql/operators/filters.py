@@ -151,6 +151,6 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         """
         super().__init__(
             input_function,
-            filter_predicate=lambda x: not filter_predicate,
+            filter_predicate=lambda x: not filter_predicate(x),
             output_factory=output_factory,
         )

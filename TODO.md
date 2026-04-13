@@ -16,10 +16,8 @@
   should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
   constructor (DONE, but breaks some tests when used in where()).
 
-- [ ] bug: `filter_items_scan_complement` (`filters.py`) has `lambda x: not filter_predicate`
-  instead of `lambda x: not filter_predicate(x)` — evaluates truthiness of the
-  function object (always `True`), so the complement is always empty. The existing
-  test only checks `explain()`, not filtering behavior, so the bug is masked.
+- [x] bug: `filter_items_scan_complement` (`filters.py`) had `lambda x: not filter_predicate`
+  instead of `lambda x: not filter_predicate(x)` — fixed, test now covers actual filtering.
 - [ ] tighten `Operator` input typing: the `input_function: INPUT_AttributeFunction`
   parameter in the operator subclasses (`filter_items`, `filter_values`, …)
   silently accepts another `Operator` at runtime (via `_resolve_input`), but
