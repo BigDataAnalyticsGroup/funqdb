@@ -59,11 +59,3 @@ class Observable(ABC):
         ...
 
 
-class Explainable:
-    """An abstract base class for explainable objects."""
-
-    def explain(self) -> str:
-        """Provide an explanation of the object.
-        @return: A string explanation of the object.
-        """
-        return "The explanation is 42."

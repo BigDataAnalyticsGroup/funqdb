@@ -134,13 +134,6 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self.reverse = reverse
         self.output_factory = output_factory
 
-    def explain(self) -> str:
-        direction: str = "descending" if self.reverse else "ascending"
-        return (
-            f"rank_by operator: ranking items {direction} by {self.ranking_key} "
-            f"into a new AF with natural-number keys."
-        )
-
     def _compute(self) -> OUTPUT_AttributeFunction:
         input_function = self._resolve_input(self.input_function)
         assert input_function is not None

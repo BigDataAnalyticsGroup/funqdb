@@ -409,6 +409,7 @@ def test_extract_literal_fallback_for_unsupported_types():
     assert root.params["value"] == 42
 
 
+@pytest.mark.needs_review_modified
 def test_serialize_param_covers_list_and_dict_params():
     """Operator parameters that are lists or dicts must be recursively
     serialized. We verify this by extracting a ``filter_items`` whose
@@ -418,9 +419,11 @@ def test_serialize_param_covers_list_and_dict_params():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
 
-    # filter_items stores create_lineage (bool) and output_factory (None or
-    # callable). We construct one with output_factory=None to cover the
-    # primitive param path, then check params roundtrip.
+    # -- begin AI-modified --
+    # filter_items stores output_factory (None or callable).
+    # We construct one with output_factory=None to cover the primitive param
+    # path, then check params roundtrip. create_lineage is an unimplemented
+    # internal flag (prefixed with _) and correctly excluded from plan params.
     pipeline: filter_items[RF, RF] = filter_items[RF, RF](
         users,
         filter_predicate=lambda i: True,
@@ -431,8 +434,9 @@ def test_serialize_param_covers_list_and_dict_params():
     assert isinstance(root, PlanNode)
     # output_factory=None should serialize as None (primitive).
     assert root.params["output_factory"] is None
-    # create_lineage=False should serialize as False (primitive).
-    assert root.params["create_lineage"] is False
+    # create_lineage is private (_create_lineage) and must not appear in params.
+    assert "create_lineage" not in root.params
+    # -- end AI-modified --
 
 
 # -- Pretty-print nested plan ------------------------------------------------

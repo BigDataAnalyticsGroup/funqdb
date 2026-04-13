@@ -22,8 +22,6 @@ import logging
 from abc import abstractmethod, ABC
 from typing import Generator, Callable, Any
 
-from fdm.util import Explainable
-
 logger = logging.Logger(__name__)
 
 
@@ -63,7 +61,7 @@ class AttributeFunctionSentinel:
         return self._id
 
 
-class AttributeFunction[Key, Value](PureFunction, Explainable):
+class AttributeFunction[Key, Value](PureFunction):
     """An abstract base class representing a callable object that can also manage its attributes."""
 
     # global UUID counter for all AttributeFunction instances
@@ -77,7 +75,7 @@ class AttributeFunction[Key, Value](PureFunction, Explainable):
         """Assign a unique UUID to this instance."""
         self.__dict__["_uuid"] = AttributeFunction.global_uuid
 
-        # increase the global UUID counter for the next instance:
+        # increase the global UUID counter for the nex/efft instance:
         AttributeFunction.global_uuid += 1
 
     @property

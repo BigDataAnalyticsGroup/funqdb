@@ -19,7 +19,6 @@
 #
 
 
-import inspect
 from typing import Callable, Any, Iterable
 
 from fql.operators.APIs import Operator
@@ -54,15 +53,11 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self.input_function = input_function
         self.filter_predicate = filter_predicate
         self.output_factory = output_factory
-        self.create_lineage = create_lineage
-
-    def explain(self) -> str:
-        """Explains the filter."""
-        return f"filter_items operator with predicate {self.filter_predicate}."
+        self._create_lineage = create_lineage
 
     def _compute(self) -> OUTPUT_AttributeFunction:
 
-        if self.create_lineage:
+        if self._create_lineage:
             raise NotImplementedError()
 
         input_function = self._resolve_input(self.input_function)
@@ -112,10 +107,6 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             output_factory=output_factory,
         )
 
-    def explain(self) -> str:
-        """Explains the filter."""
-        return f"filter_values operator with predicate {self.filter_predicate}."
-
 
 class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
@@ -138,10 +129,6 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             filter_predicate=lambda i: filter_predicate(i.key),
             output_factory=output_factory,
         )
-
-    def explain(self) -> str:
-        """Explains the filter."""
-        return f"filter_keys operator with predicate {self.filter_predicate}."
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -168,6 +155,3 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
             output_factory=output_factory,
         )
 
-    def explain(self) -> str:
-        """Explains the filter."""
-        return f"filter_items_scan_complement operator with predicate {self.filter_predicate}."

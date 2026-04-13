@@ -77,12 +77,6 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self.subset_predicate = subset_predicate
         self.output_factory = output_factory
 
-    def explain(self) -> str:
-        if self.ranking_key is not None:
-            direction: str = "largest" if self.reverse else "smallest"
-            return f"subset operator: top-{self.k} {direction} items by {self.ranking_key}."
-        return f"subset operator with predicate {self.subset_predicate}."
-
     def _compute(self) -> OUTPUT_AttributeFunction:
         input_function = self._resolve_input(self.input_function)
         assert input_function is not None

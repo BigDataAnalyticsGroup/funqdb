@@ -308,6 +308,7 @@ def test_filter_as_a_parameter():
     assert a(a=42) == None
 
 
+@pytest.mark.needs_review_modified
 def test_filter_items_reused_and_chained():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
@@ -320,10 +321,9 @@ def test_filter_items_reused_and_chained():
         filter_items[RF, RF](users, **filter_kw).result,
         **filter_kw,
     ).result  # apply filter twice by chaining
-    filter_items[RF, RF](
-        filter_items[RF, RF](users, **filter_kw).result,
-        **filter_kw,
-    ).result.explain()
+    # -- begin AI-modified --
+    # removed: .result.explain() — explain() no longer exists on AFs
+    # -- end AI-modified --
 
     assert type(users_filtered) == RF
     assert len(users_filtered) == 2

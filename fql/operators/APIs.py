@@ -21,10 +21,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Iterable, Mapping
 
-from fdm.util import Explainable
 
-
-class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](Explainable, ABC):
+class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](ABC):
     """Signature for an operator that transforms inputs to outputs.
 
     Operators are lazy: __init__ stores config and input references but does not compute.
@@ -104,3 +102,12 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](Explainable, A
         from fql.plan.extract import extract_plan
 
         return extract_plan(self)
+
+    def explain(self) -> str:
+        """Produce a human-readable, indented pretty-print of this operator's
+        full subtree.
+
+        Delegates to ``to_plan().explain()`` so there is a single source of
+        truth for plan representation. Does *not* trigger ``_compute``.
+        """
+        return self.to_plan().explain()
