@@ -154,4 +154,3 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
             filter_predicate=lambda x: not filter_predicate,
             output_factory=output_factory,
         )
-

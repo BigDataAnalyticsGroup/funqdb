@@ -57,5 +57,3 @@ class Observable(ABC):
         @param item: The item that has changed.
         """
         ...
-
-
