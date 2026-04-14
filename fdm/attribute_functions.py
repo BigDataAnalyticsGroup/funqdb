@@ -88,7 +88,22 @@ class DictionaryAttributeFunction[Key, Value](
         lineage: list[str] = None,
         store: Store = None,
         schema: dict | None = None,
+        computed: dict[str, Callable] | None = None,
     ):
+        """Initialize a DictionaryAttributeFunction.
+        @param data: A dictionary of stored key-value pairs.
+        @param frozen: Whether the AF is read-only after construction.
+        @param observe_items: Whether to register as observer at Observable values.
+        @param lineage: Provenance information for this AF.
+        @param store: A Store instance for lazy loading of AF references.
+        @param schema: Optional schema dict — see _apply_schema() for details.
+        @param computed: Optional dict mapping attribute names to callables.
+            Each callable receives this AF as its argument and is evaluated on every
+            access (not cached). Computed attributes are indistinguishable from stored
+            attributes when accessed via [], ., (), in, len, or iteration.
+            They are read-only (cannot be overwritten or deleted), ephemeral (stripped
+            on pickling), and must not overlap with stored keys.
+        """
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = False  # start unfrozen to allow schema setup
         self.__dict__["af_constraints"] = set()
@@ -98,6 +113,18 @@ class DictionaryAttributeFunction[Key, Value](
         # how this attribute function was derived:
         self.__dict__["lineage"] = [] if lineage is None else lineage
         self.__dict__["store"] = store
+        # Computed attributes: key -> callable(self), evaluated lazily on every access.
+        # Stored separately from data to avoid the Tensor bug pattern (metadata
+        # contaminating the data dict and breaking iteration/arithmetic).
+        self.__dict__["computed"] = computed or {}
+        # A key must be either stored or computed, never both — reject overlaps
+        # to prevent trapped-value states where a stored value becomes unmodifiable:
+        overlap = set(self.__dict__["data"]) & set(self.__dict__["computed"])
+        if overlap:
+            raise ValueError(
+                f"Keys {overlap} exist in both data and computed. "
+                f"A key must be either stored or computed, not both."
+            )
 
         if observe_items:
             # register self as observer at all Observable values:
@@ -126,6 +153,36 @@ class DictionaryAttributeFunction[Key, Value](
             else:
                 schema_types[key] = value
         self.add_values_constraint(SchemaConstraint(schema_types))
+
+    def add_computed(self, key: str, func: Callable[..., Any]) -> None:
+        """Add a computed attribute that is evaluated on every access (not cached).
+
+        The callable receives this AF instance as its sole argument at *access time*,
+        not at definition time. This means the computed value reflects the current state
+        of stored attributes, e.g.::
+
+            t = TF({"age": 20})
+            t.add_computed("salary", lambda tf: 1000 * tf["age"])
+            t.salary        # → 20000
+            t["age"] = 30
+            t.salary        # → 30000  (recomputed)
+
+        @param key: The attribute name. Must not collide with an existing stored key.
+        @param func: A callable(self) -> value, evaluated on every access.
+        @raises ReadOnlyError: If the AF is frozen.
+        @raises ValueError: If key already exists as a stored attribute.
+        """
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"Attempt to add computed attribute '{key}'. "
+                f"This DictionaryAttributeFunction is read-only."
+            )
+        if key in self.__dict__["data"]:
+            raise ValueError(
+                f"Key '{key}' already exists as a stored attribute. "
+                f"A key must be either stored or computed, not both."
+            )
+        self.__dict__["computed"][key] = func
 
     def copy(self) -> "DictionaryAttributeFunction":
         """Create a copy of this AttributeFunction with a new UUID, i.e. this functions as a copy constructor for
@@ -282,6 +339,16 @@ class DictionaryAttributeFunction[Key, Value](
                 if (key_suffix and len(key_suffix) > 0)
                 else value
             )
+        elif key in self.__dict__["computed"]:
+            # Computed attribute: call the stored function with self as argument.
+            # The value is recomputed on every access (no caching), so it always
+            # reflects the current state of stored attributes.
+            value = self.__dict__["computed"][key](self)
+            return (
+                value.__getitem__("__".join(key_suffix))
+                if (key_suffix and len(key_suffix) > 0)
+                else value
+            )
         else:
             raise AttributeError
 
@@ -346,6 +413,13 @@ class DictionaryAttributeFunction[Key, Value](
             raise ReadOnlyError(
                 f"Write attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )
+        # Computed attributes are derived values — overwriting them with a stored
+        # value would silently break the computation contract. Raise instead.
+        if key in self.__dict__["computed"]:
+            raise ReadOnlyError(
+                f"Write attempt to computed attribute '{key}'. "
+                f"Computed attributes cannot be overwritten."
+            )
 
         # check constraints on the item and on self:
         item: Item = Item(key, value)
@@ -376,6 +450,13 @@ class DictionaryAttributeFunction[Key, Value](
             raise ReadOnlyError(
                 f"Delete attempt to attribute '{key}'. This DictionaryAttributeFunction is read-only."
             )
+        # Computed attributes are definitions, not stored data — deleting them
+        # through the regular item API would be confusing. Raise instead.
+        if key in self.__dict__["computed"]:
+            raise ReadOnlyError(
+                f"Delete attempt to computed attribute '{key}'. "
+                f"Computed attributes cannot be deleted."
+            )
 
         if key in self.__dict__["data"]:
             # unroll logic:
@@ -397,28 +478,46 @@ class DictionaryAttributeFunction[Key, Value](
             raise AttributeError
 
     def __contains__(self, item):
-        return item in self.__dict__["data"]
+        """Check if a key exists in this AF — includes both stored and computed attributes."""
+        return item in self.__dict__["data"] or item in self.__dict__["computed"]
 
     def __len__(self):
-        return len(self.__dict__["data"])
+        """Return the total number of attributes (stored + computed).
+        The constructor ensures no overlap between stored and computed keys,
+        so a simple addition suffices."""
+        return len(self.__dict__["data"]) + len(self.__dict__["computed"])
 
     def __iter__(self):
+        """Iterate over all items (stored and computed) as Item(key, value) objects.
+        Computed values are evaluated on each iteration. Stored items are yielded
+        first, then computed items — making computed attributes indistinguishable
+        from stored ones when consumed by operators, filters, or schema validation."""
+
         def mapper(item):
             return Item(item[0], item[1])
 
-        return map(mapper, self.__dict__["data"].items())
+        yield from map(mapper, self.__dict__["data"].items())
+        # Yield computed attributes — each function is called with self to produce
+        # the current value. Since the constructor rejects key overlaps, no
+        # shadowing check is needed here.
+        for key, func in self.__dict__["computed"].items():
+            yield Item(key, func(self))
 
     def keys(self) -> Generator:
-        """Get the keys of the AttributeFunction.
+        """Get the keys of the AttributeFunction (stored and computed).
         @return: An iterable of the keys.
         """
-        return iter(self.__dict__["data"].keys())
+        yield from self.__dict__["data"].keys()
+        yield from self.__dict__["computed"].keys()
 
     def values(self):
-        """Get the values of the AttributeFunction.
+        """Get the values of the AttributeFunction (stored and computed).
+        Computed values are evaluated on each call.
         @return: An iterable of the values.
         """
-        return iter(self.__dict__["data"].values())
+        yield from self.__dict__["data"].values()
+        for func in self.__dict__["computed"].values():
+            yield func(self)
 
     def __eq__(self, other: "DictionaryAttributeFunction") -> bool:
         """Check equality between two DictionaryAttributeFunction instances based on their items.
@@ -434,41 +533,46 @@ class DictionaryAttributeFunction[Key, Value](
         return self_items == other_items
 
     def update(self, other: "AttributeFunction[Key, Value]"):
-        """Update the current AttributeFunction with another one.
-        @param AttributeFunction: The AttributeFunction to update with.
+        """Update the current AttributeFunction with the stored items of another one.
+        Computed attributes of the source are skipped — they are not materialized.
+        @param other: The AttributeFunction to update with.
         """
-        for item in other:
-            if item.key in self:
-                logger.warning(
-                    f"key '{item.key}' already exists and will be overwritten."
-                )
-            self.__setitem__(item.key, item.value)
+        # iterate only over stored items to avoid materializing computed attributes:
+        for key, value in other.__dict__["data"].items():
+            if key in self:
+                logger.warning(f"key '{key}' already exists and will be overwritten.")
+            self.__setitem__(key, value)
 
     def print(self, flat=False, recursion_depth: int = 0):
         """Print representation of the current AttributeFunction."""
         prefix: str = "    " * recursion_depth
-        for key, value in self.__dict__["data"].items():
-            if isinstance(value, AttributeFunction):
+        for item in self:
+            if isinstance(item.value, AttributeFunction):
                 if flat:
-                    print(prefix + f"{key}: {value}")
+                    print(prefix + f"{item.key}: {item.value}")
                 else:
-                    print(prefix + f"{key}:")
-                    value.print(flat=flat, recursion_depth=recursion_depth + 1)
+                    print(prefix + f"{item.key}:")
+                    item.value.print(flat=flat, recursion_depth=recursion_depth + 1)
             else:
-                print(prefix + f"{key}: {value}")
+                print(prefix + f"{item.key}: {item.value}")
 
     def my_str(self, flat=False, recursion_depth: int = 0):
         ret: str = ""
         prefix: str = "    " * recursion_depth
-        for key, value in self.__dict__["data"].items():
-            if isinstance(value, AttributeFunction):
+        for item in self:
+            if isinstance(item.value, AttributeFunction):
                 if flat:
-                    ret += prefix + f"{key}: {value.__repr__() if value else "NONE"}\n"
+                    ret += (
+                        prefix
+                        + f"{item.key}: {item.value.__repr__() if item.value else "NONE"}\n"
+                    )
                 else:
-                    ret += prefix + f"{key}:\n"
-                    ret += value.my_str(flat=flat, recursion_depth=recursion_depth + 1)
+                    ret += prefix + f"{item.key}:\n"
+                    ret += item.value.my_str(
+                        flat=flat, recursion_depth=recursion_depth + 1
+                    )
             else:
-                ret += prefix + f"{key}: {value}\n"
+                ret += prefix + f"{item.key}: {item.value}\n"
         return ret
 
     def __str__(self):
@@ -509,6 +613,10 @@ class DictionaryAttributeFunction[Key, Value](
         # We also need to handle the store reference, otherwise we would try to pickle the whole store,
         #  which is not what we want, see Store class for that
         state_dict["store"] = None
+        # Computed attributes contain lambdas/closures which cannot be pickled.
+        # They are ephemeral by design — after deserialization, the caller must
+        # re-attach computed definitions via add_computed() or the constructor.
+        state_dict["computed"] = {}
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
                 # replace the AttributeFunction with a AttributeFunctionSentinel:
@@ -638,11 +746,18 @@ class DictionaryAttributeFunction[Key, Value](
         # what about inserting multiple items into an AF?
         def project(input_DAF: DictionaryAttributeFunction, keys):
             output_DAF: DictionaryAttributeFunction = type(input_DAF)()
-            item: Item
-            for item in input_DAF:
-                # if key exists, add it to the projection result:
-                if item.key in keys:
-                    output_DAF[item.key] = item.value
+            # Copy only stored items that are in the projection set:
+            for key, value in input_DAF.__dict__["data"].items():
+                if key in keys:
+                    output_DAF[key] = value
+            # Carry over computed definitions for projected keys — the lambda
+            # itself is preserved, not its current value, so the computation
+            # stays live on the projected AF. Note: if the lambda references
+            # a key that was excluded from the projection, it will raise
+            # AttributeError on access (same as SQL dropping a dependency column).
+            for key, func in input_DAF.__dict__["computed"].items():
+                if key in keys:
+                    output_DAF.__dict__["computed"][key] = func
             return output_DAF
 
         outer_item: Item
@@ -680,11 +795,18 @@ class DictionaryAttributeFunction[Key, Value](
         for outer_item in self:
             # create a new value AF of the same type as the original value (e.g. TF → TF):
             renamed: DictionaryAttributeFunction = type(outer_item.value)()
-            inner_item: Item
-            for inner_item in outer_item.value:
-                # apply the rename mapping; fall back to the original key if not in kwargs:
-                new_key = kwargs.get(inner_item.key, inner_item.key)
-                renamed[new_key] = inner_item.value
+            # Copy stored items with potentially renamed keys:
+            for key, value in outer_item.value.__dict__["data"].items():
+                new_key = kwargs.get(key, key)
+                renamed[new_key] = value
+            # Carry over computed definitions under their (potentially renamed) keys.
+            # The lambda itself is preserved — only the key changes, the computation
+            # stays live. The lambda still references the original attribute names
+            # internally (e.g. tf["age"]), which is correct since rename() only
+            # changes the external key, not how other attributes are accessed.
+            for key, func in outer_item.value.__dict__["computed"].items():
+                new_key = kwargs.get(key, key)
+                renamed.__dict__["computed"][new_key] = func
             # preserve the outer key (e.g. the tuple ID in an RF):
             result[outer_item.key] = renamed
 

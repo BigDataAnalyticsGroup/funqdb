@@ -39,6 +39,10 @@ sdb: SDBF = SDBF({"app": app_db, "analytics_db": ...})
 ```
 
 
+Attribute functions can also contain **computed attributes** — values that are
+not stored but calculated on every access, indistinguishable from stored ones.
+See [Computed Attributes](Computed%20Attributes.md) for details.
+
 ***
 
 ### But what about repeated keys?

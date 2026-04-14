@@ -6,10 +6,6 @@
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
-- [ ] computed tuple functions / computed attributes (paper Sec 2.3): a TF should
-  be able to return computed values (e.g. `salary = 1000 * t1('age')`).
-  Computed attributes must be indistinguishable from stored attributes. Core
-  paper concept — blurs the line between stored and computed data.
 - [ ] computed relations (paper Sec 2.6): an RF should be able to return
   computed TFs for keys not explicitly stored (lambda-based generation, e.g.
   `R4(10)('age') = 420`). Enables infinite/generated domains — powerful for
@@ -96,6 +92,10 @@
 ---
 
 ### DONE
+- [x] computed tuple functions / computed attributes (paper Sec 2.3): a TF can
+  return computed values (e.g. `salary = 1000 * t1('age')`), indistinguishable
+  from stored attributes. Implemented via `computed=` constructor parameter and
+  `add_computed()` method on `DictionaryAttributeFunction`.
 - [x] schema definitions for larger examples
 - [x] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
   item X through relationship function Y

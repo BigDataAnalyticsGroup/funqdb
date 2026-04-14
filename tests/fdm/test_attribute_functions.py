@@ -506,3 +506,95 @@ def test_tensor_matmul():
     t2: Tensor = Tensor([1])
     with pytest.raises(NotImplementedError):
         _ = t1 @ t2
+
+
+def test_computed_attributes():
+    """Test computed attributes on TF — paper Sec 2.3: computed values must be
+    indistinguishable from stored attributes."""
+
+    # 1. Basic computed attribute via constructor:
+    t = TF(
+        {"name": "Alice", "age": 12},
+        computed={"salary": lambda tf: 1000 * tf["age"]},
+    )
+
+    # access via bracket, dot, and call syntax:
+    assert t["salary"] == 12000
+    assert t.salary == 12000
+    assert t("salary") == 12000
+
+    # membership:
+    assert "salary" in t
+    assert "name" in t
+
+    # len includes computed attributes:
+    assert len(t) == 3
+
+    # iteration includes computed attributes:
+    items = {item.key: item.value for item in t}
+    assert items == {"name": "Alice", "age": 12, "salary": 12000}
+
+    # keys() and values() include computed attributes:
+    assert set(t.keys()) == {"name", "age", "salary"}
+    assert 12000 in list(t.values())
+
+    # 2. Computed attribute depends on stored — updates are reflected:
+    t2 = TF({"age": 20}, computed={"double_age": lambda tf: 2 * tf["age"]})
+    assert t2.double_age == 40
+    t2["age"] = 30
+    assert t2.double_age == 60  # recomputed on access
+
+    # 3. Cannot overwrite or delete computed attributes:
+    with pytest.raises(ReadOnlyError):
+        t["salary"] = 99
+    with pytest.raises(ReadOnlyError):
+        del t.salary
+
+    # 4. add_computed after construction:
+    t3 = TF({"x": 5})
+    t3.add_computed("x_squared", lambda tf: tf["x"] ** 2)
+    assert t3.x_squared == 25
+
+    # 4b. add_computed rejects overlap with stored keys:
+    with pytest.raises(ValueError):
+        t3.add_computed("x", lambda tf: 99)
+
+    # 5. add_computed fails on frozen AF:
+    t4 = TF({"x": 5}, frozen=True)
+    with pytest.raises(ReadOnlyError):
+        t4.add_computed("y", lambda tf: tf["x"])
+
+    # 6. Computed attributes work on frozen AFs (read access):
+    t5 = TF({"age": 25}, computed={"senior": lambda tf: tf["age"] >= 65}, frozen=True)
+    assert t5.senior is False
+
+    # 7. Nested access via __-syntax:
+    dept = TF({"name": "Dev", "budget": 100})
+    emp = TF(
+        {"name": "Bob", "dept": dept},
+        computed={"dept_name": lambda tf: tf["dept"]["name"]},
+    )
+    assert emp.dept_name == "Dev"
+
+    # 8. Overlapping keys between data and computed are rejected:
+    with pytest.raises(ValueError):
+        TF({"age": 12}, computed={"age": lambda tf: 99})
+
+    # 9. project() preserves computed definitions (age included as dependency):
+    t_proj = RF(
+        {
+            1: TF(
+                {"name": "Alice", "age": 12},
+                computed={"salary": lambda tf: 1000 * tf["age"]},
+            )
+        }
+    ).project("name", "age", "salary")
+    assert t_proj[1].salary == 12000
+    assert "salary" in t_proj[1].__dict__["computed"]
+
+    # 10. rename() preserves computed definitions under new key:
+    t_ren = RF(
+        {1: TF({"age": 12}, computed={"salary": lambda tf: 1000 * tf["age"]})}
+    ).rename(salary="pay")
+    assert t_ren[1].pay == 12000
+    assert "pay" in t_ren[1].__dict__["computed"]
