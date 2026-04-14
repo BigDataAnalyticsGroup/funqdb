@@ -6,10 +6,20 @@
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
-- [ ] subqueries
+- [ ] computed tuple functions / computed attributes (paper Sec 2.3): a TF should
+  be able to return computed values (e.g. `salary = 1000 * t1('age')`).
+  Computed attributes must be indistinguishable from stored attributes. Core
+  paper concept — blurs the line between stored and computed data.
+- [ ] computed relations (paper Sec 2.6): an RF should be able to return
+  computed TFs for keys not explicitly stored (lambda-based generation, e.g.
+  `R4(10)('age') = 420`). Enables infinite/generated domains — powerful for
+  test data, computed views, continuous spaces.
 
 ## Medium prio:
 
+- [ ] subqueries — FQL's functional composition already subsumes SQL subqueries
+  (uncorrelated = variable assignment, correlated = lambda closures, scalar =
+  transforms). Needs a tutorial page demonstrating each SQL pattern in FQL.
 - [ ] double-check observer semantic in the presence ov .where() and .project(). I think observers are removed, but
   should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
   constructor (DONE, but breaks some tests when used in where()).
@@ -18,6 +28,13 @@
   is stored in the same data dict as tensor entries. `+` silently corrupts the result's
   dimensions via list concatenation; `-` and `*` raise `TypeError`. Fix: store `dimensions`
   outside the data dict, or skip it when iterating keys in arithmetic operators.
+- [ ] logical index operator `index_by(rf, key_function)` (paper Sec 2.5):
+  create a new RF organized by a different key, sharing the same TF instances.
+  Different RFs mapping to the same TFs already work by design, but there is no
+  convenience operator to create an "index RF" from an existing one.
+- [ ] in-place FQL operators (paper Sec 4.3): INSERT/UPDATE/DELETE as composable
+  FQL operators, not just `__setitem__`/`__delitem__`. The paper envisions
+  in-place usage across the entire Table 1 landscape, not limited to RF→RF.
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
@@ -39,6 +56,18 @@
 - [ ] façades in other languages
 - [ ] backends in other languages, e.g. Rust, C++, etc.
 - [ ] other non-flat data like tensors
+- [ ] continuous domain constraints (paper Sec 2.4): constrain an RF's domain
+  to a continuous range like `[7, 12]`, not just discrete sets. Practical use
+  depends on computed relations being implemented first.
+- [ ] Table 1 coverage gaps: purpose-built operators for DBF→TF (aggregate
+  entire database to a tuple), DBF→RF (reduce each relation in a DBF to
+  produce one RF), TF→RF (generate relation from specification tuple). The
+  generic `transform` can cover these, but dedicated operators would be cleaner.
+- [ ] SDBF operators (paper Table 1): the SDBF class exists but no
+  SDBF-specific operators. Low priority — the paper itself defers these.
+- [ ] relationship predicates (paper Sec 3, Def 4): a relationship function
+  with Y_RF == bool, indicating whether a relationship exists. Currently
+  expressible via regular predicates/lambdas.
 
 # Other thoughts and ideas: prio unclear
 
