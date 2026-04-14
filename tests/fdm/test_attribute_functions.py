@@ -249,9 +249,26 @@ def test_relationship_function():
     ).result
     assert len(res) == 2
 
-    # same through the more convenient syntax:
-    assert len(list(meetings.related_values(0, users[1]))) == 1
-    assert len(list(meetings.related_values(0, users[2]))) == 2
+    # same through the more convenient syntax — now with separate match and return indices:
+    # match_index=0 (user position), return_index=1 (customer position):
+    user1_customers = list(meetings.related_values(0, users[1], 1))
+    assert len(user1_customers) == 1
+    assert user1_customers[0] is customers[1]
+
+    user2_customers = list(meetings.related_values(0, users[2], 1))
+    assert len(user2_customers) == 2
+    assert customers[1] in user2_customers
+    assert customers[3] in user2_customers
+
+    # reverse lookup: match_index=1 (customer position), return_index=0 (user position):
+    customer1_users = list(meetings.related_values(1, customers[1], 0))
+    assert len(customer1_users) == 2
+    assert users[1] in customer1_users
+    assert users[2] in customer1_users
+
+    customer3_users = list(meetings.related_values(1, customers[3], 0))
+    assert len(customer3_users) == 1
+    assert customer3_users[0] is users[2]
 
 
 def test_key_constraint():

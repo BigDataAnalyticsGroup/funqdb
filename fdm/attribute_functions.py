@@ -742,22 +742,27 @@ class RSF[Value](DictionaryAttributeFunction[CompositeForeignObject, Value]):
     """
 
     def related_values(
-        self, subkey_index: int, subkey: AttributeFunction
+        self,
+        match_index: int,
+        subkey: AttributeFunction,
+        return_index: int,
     ) -> Iterable[AttributeFunction]:
-        """Get all related AFs at a given subkey position that are paired with a specific AF.
-        @param subkey_index: Which position in the composite key to return (0-based).
-        @param subkey: The AF to match against at that same position.
-        @return: An iterable of AFs from the matched composite keys at position subkey_index.
+        """Get all related AFs at one subkey position that are paired with a specific AF at another position.
+        @param match_index: Which position in the composite key to match against (0-based).
+        @param subkey: The AF to match against at position match_index.
+        @param return_index: Which position in the composite key to return (0-based).
+        @return: An iterable of AFs from the matched composite keys at position return_index.
 
-        Example: meetings.related_values(1, user1) returns all customers that have a meeting with user1.
+        Example: Given meetings[CompositeForeignObject(user, customer)] = ...,
+                 meetings.related_values(0, user1, 1) returns all customers that have a meeting with user1.
         """
 
         return map(
-            # extract the related subkey value at the given index from the composite key:
-            lambda item: item.key.subkey(subkey_index),
+            # extract the related subkey value at the return index from the composite key:
+            lambda item: item.key.subkey(return_index),
             filter(
-                # keep only items where the composite key matches the given subkey at the given index:
-                lambda item: item.key.subkey(subkey_index) == subkey,
+                # keep only items where the composite key matches the given subkey at the match index:
+                lambda item: item.key.subkey(match_index) == subkey,
                 self,
             ),
         )

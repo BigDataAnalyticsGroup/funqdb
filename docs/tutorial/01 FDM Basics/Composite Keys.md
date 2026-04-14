@@ -56,31 +56,35 @@ meetings[CompositeForeignObject(users["u2"], customers["c2"])] = TF({"date": "20
 
 #### Querying relationships: ```related_values()```
 
-The ```related_values(subkey_index, subkey)``` method finds all composite keys where the
-component at ```subkey_index``` matches ```subkey```, and returns those matching components:
+The ```related_values(match_index, subkey, return_index)``` method finds all composite keys
+where the component at ```match_index``` matches ```subkey```, and returns the components at
+```return_index``` — i.e. the *related* AFs:
 
 ```python
-# How many meetings does Bob have?
-# subkey_index=0 means "look at the user part (position 0) of each composite key"
-# subkey=users["u2"] means "keep only keys where position 0 is Bob"
-bobs_meetings = list(meetings.related_values(0, users["u2"]))
-assert len(bobs_meetings) == 2  # Bob has 2 meetings
+# Which customers does Bob meet with?
+# match_index=0: match against the user part (position 0)
+# subkey=users["u2"]: keep only keys where position 0 is Bob
+# return_index=1: return the customer part (position 1)
+bobs_customers = list(meetings.related_values(0, users["u2"], 1))
+assert len(bobs_customers) == 2  # customers["c1"] and customers["c2"]
+
+# Reverse lookup: which users meet with customer c1?
+c1_users = list(meetings.related_values(1, customers["c1"], 0))
+assert len(c1_users) == 2  # users["u1"] and users["u2"]
 ```
 
-To find the *other* participants in a relationship, use ```filter_items``` and access
-the composite key directly:
+For more complex filtering (e.g. accessing the relationship value), use ```filter_items```:
 
 ```python
 from fql.operators.filters import filter_items
 from fdm.attribute_functions import RF
 
-# Find all customers that Bob meets with:
+# Find all entries for Bob's meetings (including dates):
 bobs_entries = filter_items(meetings,
     lambda i: i.key.subkey(0) == users["u2"],
     output_factory=lambda _: RF(),
 ).result
-bobs_customers = [item.key.subkey(1) for item in bobs_entries]
-assert len(bobs_customers) == 2  # customers["c1"] and customers["c2"]
+assert len(bobs_entries) == 2
 ```
 
 ***
