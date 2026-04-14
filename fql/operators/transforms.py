@@ -21,7 +21,7 @@
 
 from typing import Callable, Any, Iterable
 
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
 import logging
@@ -36,7 +36,7 @@ class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         transformation_function: Callable[..., Any],
     ):
@@ -55,7 +55,7 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         transformation_function: Callable[..., Any],
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,

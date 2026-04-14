@@ -18,6 +18,7 @@
 #
 #
 
+from fql.operators.APIs import OperatorInput
 from fql.operators.transforms import transform
 
 
@@ -31,7 +32,9 @@ class project[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     a null value.
     """
 
-    def __init__(self, input_function, *attributes):
+    def __init__(
+        self, input_function: OperatorInput[INPUT_AttributeFunction], *attributes
+    ):
         """Initialize the project operator with the given set of attributes to project to.
         @param input_function: The input attribute function to project.
         @param attributes: The set of attributes to project to.

@@ -22,7 +22,7 @@
 from typing import Callable, Any
 
 from fdm.attribute_functions import RF, DBF
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.operators.aggregates import aggregate
 from fql.operators.partition import group_by, partition
 from fql.operators.transforms import transform_items
@@ -33,7 +33,9 @@ class group_by_aggregate(Operator[RF, RF]):
     """Group an input RF by the equality of the given keys (the values mapped to by those keys) and aggregate the
     groups using the specified aggregation functions."""
 
-    def __init__(self, input_function: RF, *aggregate_keys, **aggregates):
+    def __init__(
+        self, input_function: OperatorInput[RF], *aggregate_keys, **aggregates
+    ):
         self.input_function = input_function
         self.aggregate_keys = aggregate_keys
         self.aggregates = aggregates
@@ -63,7 +65,7 @@ class partition_by_aggregate(Operator[RF, RF]):
 
     def __init__(
         self,
-        input_function: RF,
+        input_function: OperatorInput[RF],
         *,
         partitioning_function: Callable[[Item], Any],
         aggregation_function: Callable[[RF], Any],

@@ -21,6 +21,11 @@
 from abc import ABC, abstractmethod
 from typing import Any, Iterable, Mapping
 
+# Type alias for operator inputs: either a direct AF or an Operator that produces one.
+# This allows type checkers to accept nested pipelines like
+# filter_items(filter_values(af, ...), ...) without flagging a type error.
+type OperatorInput[T] = T | Operator[Any, T]
+
 
 class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](ABC):
     """Signature for an operator that transforms inputs to outputs.
@@ -41,7 +46,10 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](ABC):
 
     _result: OUTPUT_AttributeFunction | None = None
 
-    def _resolve_input(self, input_val):
+    def _resolve_input(
+        self,
+        input_val: "OperatorInput[INPUT_AttributeFunction]",
+    ) -> INPUT_AttributeFunction:
         """If input is an Operator, resolve its result; otherwise return as-is."""
         if isinstance(input_val, Operator):
             return input_val.result

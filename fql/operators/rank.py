@@ -77,7 +77,7 @@ from typing import Any, Callable, Iterator
 
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import RF
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
 
@@ -100,7 +100,7 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         ranking_key: Callable[[Item], Any],
         reverse: bool = False,

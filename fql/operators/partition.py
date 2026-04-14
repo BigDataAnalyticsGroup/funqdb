@@ -22,7 +22,7 @@
 from typing import Callable, Any
 
 from fdm.attribute_functions import RF, DBF, CompositeForeignObject
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
 
@@ -39,7 +39,7 @@ class partition(Operator[RF, DBF]):
 
     def __init__(
         self,
-        input_function: RF,
+        input_function: OperatorInput[RF],
         *,
         partitioning_function: Callable[[Item], Any],
         output_factory: Callable[..., DBF] = None,
@@ -76,7 +76,7 @@ class group_by(partition):
 
     # TODO: generic type: this operator can also partition an entire database...
 
-    def __init__(self, input_function: RF, *aggregate_keys):
+    def __init__(self, input_function: OperatorInput[RF], *aggregate_keys):
 
         assert (
             len(aggregate_keys) > 0

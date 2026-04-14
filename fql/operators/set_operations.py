@@ -21,7 +21,7 @@
 from typing import Callable
 
 from fdm.API import AttributeFunction
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
 
@@ -33,7 +33,7 @@ class union[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
         warn_about_duplicate_keys: bool = True,
@@ -101,7 +101,7 @@ class cogroup[
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction],
         output_factory_nested: Callable[..., OUTPUT_AttributeFunction_Nested],
@@ -153,7 +153,7 @@ class intersect[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
@@ -217,7 +217,7 @@ class minus[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):

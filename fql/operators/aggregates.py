@@ -21,7 +21,7 @@
 from typing import Callable, Any
 
 from fdm.attribute_functions import RF, TF
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 
 
 class AggregationFunction:
@@ -88,7 +88,7 @@ class Mean(Avg):
 class aggregate(Operator[RF, TF]):
     """Aggregate an input RF using the specified aggregation functions."""
 
-    def __init__(self, input_function: RF, **aggregates):
+    def __init__(self, input_function: OperatorInput[RF], **aggregates):
         self.input_function = input_function
         self.aggregates = aggregates
 

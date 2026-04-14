@@ -3,10 +3,10 @@
 ## High prio:
 
 
+- [ ] schema definitions for larger examples
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
-
 - [ ] window functions, partition by (technically only syntactic sugar anyway)
 - [ ] subqueries
 
@@ -16,25 +16,10 @@
   should not. Do not simply copy the AF as the id used for the store may then be doubled. The AE needs a copy
   constructor (DONE, but breaks some tests when used in where()).
 
-- [x] bug: `filter_items_scan_complement` (`filters.py`) had `lambda x: not filter_predicate`
-  instead of `lambda x: not filter_predicate(x)` — fixed, test now covers actual filtering.
 - [ ] bug: `Tensor` element-wise arithmetic (`+`, `-`, `*`) is broken because `dimensions`
   is stored in the same data dict as tensor entries. `+` silently corrupts the result's
   dimensions via list concatenation; `-` and `*` raise `TypeError`. Fix: store `dimensions`
   outside the data dict, or skip it when iterating keys in arithmetic operators.
-- [x] bug: `RSF.related_values(subkey_index, subkey)` filters and returns at the **same**
-  index — it returns the matched AF back, not the related AF at another position. The
-  docstring example (`returns all customers that have a meeting with user1`) is misleading.
-  Fixed: method now accepts separate `match_index` and `return_index` parameters.
-- [ ] tighten `Operator` input typing: the `input_function: INPUT_AttributeFunction`
-  parameter in the operator subclasses (`filter_items`, `filter_values`, …)
-  silently accepts another `Operator` at runtime (via `_resolve_input`), but
-  the static type annotation does not reflect that. Type checkers therefore
-  flag every nested pipeline like `filter_items(filter_values(af, ...), ...)`
-  as a type error. Fix direction: change the annotation to
-  `INPUT_AttributeFunction | Operator[Any, INPUT_AttributeFunction]` in the
-  base class and propagate to subclasses. Surfaced by the IDE while adding
-  type hints to `tests/fql/plan/test_extract.py`.
 - [ ] flattening joins (revisit: the ones in the code base are outdated)
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
@@ -61,13 +46,7 @@
 
 - [ ] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
   item X through relationship function Y
-- [x] operator: output a plan, how?  PR 1 landed: `fql/plan/` + `Operator.to_plan()`
-  walks the un-executed operator tree into a serializable `LogicalPlan`
-  (LeafRef/PlanNode/Opaque) without triggering `_compute`. JSON roundtrip
-  works; lambdas become `Opaque` markers.
-    - [x] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
-      filter/join predicates are no longer forced to be opaque lambdas;
-      needed for any real backend dispatcher.
+- [ ] operator: output a plan:
     - [ ] PR 4: demo backend dispatcher that partitions a plan into a
       backend-executable prefix and a local residual at the first `Opaque`
       boundary.
@@ -92,7 +71,26 @@
 ---
 
 ### DONE
-- [ ] sync docu and tutorial for new operators
+- [x] bug: `filter_items_scan_complement` (`filters.py`) had `lambda x: not filter_predicate`
+  instead of `lambda x: not filter_predicate(x)` — fixed, test now covers actual filtering.
+- [x] bug: `RSF.related_values(subkey_index, subkey)` filters and returns at the **same**
+  index — it returns the matched AF back, not the related AF at another position. The
+  docstring example (`returns all customers that have a meeting with user1`) is misleading.
+  Fixed: method now accepts separate `match_index` and `return_index` parameters.
+- [x] tighten `Operator` input typing: the `input_function: INPUT_AttributeFunction`
+  parameter in the operator subclasses (`filter_items`, `filter_values`, …)
+  silently accepts another `Operator` at runtime (via `_resolve_input`), but
+  the static type annotation does not reflect that. Fixed: introduced
+  `OperatorInput[T] = T | Operator[Any, T]` type alias in `APIs.py` and
+  propagated to all operator subclasses.
+- [x] operator: output a plan — PR 1 landed: `fql/plan/` + `Operator.to_plan()`
+  walks the un-executed operator tree into a serializable `LogicalPlan`
+  (LeafRef/PlanNode/Opaque) without triggering `_compute`. JSON roundtrip
+  works; lambdas become `Opaque` markers.
+    - [x] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
+      filter/join predicates are no longer forced to be opaque lambdas;
+      needed for any real backend dispatcher.
+- [x] sync docu and tutorial for new operators
 - [x] PR 3: consolidate existing per-operator `explain()` strings to be
       derived from `to_plan()` so there is a single source of truth.
 - [x] pipelining
@@ -134,9 +132,6 @@
   No, actually good to keep it apart. Other option: make these classes functions instead of classes. Everything in one
   call.
 
----
-
-DONE:
 
 ### Github
 

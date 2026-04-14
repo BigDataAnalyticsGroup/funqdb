@@ -22,7 +22,7 @@
 from typing import Callable
 
 from fdm.attribute_functions import TF, RF, DBF
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.operators.subdatabases import subdatabase
 from fql.util import Item
 import logging
@@ -44,7 +44,7 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         join_predicate: Callable[..., bool],
         left: str | None = None,
@@ -103,7 +103,7 @@ class equi_join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         left_identifier: str | None = None,
         right_identifier: str | None = None,

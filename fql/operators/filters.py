@@ -22,7 +22,7 @@
 from collections.abc import Mapping
 from typing import Callable, Any, Iterable
 
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.predicates.predicates import Predicate
 from fql.util import Item
 
@@ -39,7 +39,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         filter_predicate: Callable[..., Any],
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
@@ -98,7 +98,7 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         filter_predicate: Callable[..., Any] | Predicate,
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
@@ -128,7 +128,7 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         filter_predicate: Callable[..., Any] | Predicate,
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
@@ -154,7 +154,7 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         filter_predicate: Callable[..., Any] | Predicate,
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,

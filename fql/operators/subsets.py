@@ -21,7 +21,7 @@
 
 from typing import Callable, Any
 
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
 
@@ -46,7 +46,7 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         ranking_key: Callable[[Item], Any] = None,
         k: int = None,

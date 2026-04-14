@@ -22,7 +22,7 @@
 from typing import Callable, Any
 
 from fdm.attribute_functions import TF, RF, DBF
-from fql.operators.APIs import Operator
+from fql.operators.APIs import Operator, OperatorInput
 from fql.operators.filters import filter_items
 
 
@@ -40,7 +40,7 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     def __init__(
         self,
-        input_function: INPUT_AttributeFunction,
+        input_function: OperatorInput[INPUT_AttributeFunction],
         *,
         join_predicate: Callable[..., Any],
         left: str | None = None,
