@@ -87,9 +87,10 @@ class DictionaryAttributeFunction[Key, Value](
         observe_items: bool = False,
         lineage: list[str] = None,
         store: Store = None,
+        schema: dict | None = None,
     ):
         self.__dict__["data"] = data or dict()
-        self.__dict__["frozen"] = frozen
+        self.__dict__["frozen"] = False  # start unfrozen to allow schema setup
         self.__dict__["af_constraints"] = set()
         self.__dict__["values_constraints"] = set()
         self.__dict__["observe_items"] = observe_items
@@ -105,6 +106,26 @@ class DictionaryAttributeFunction[Key, Value](
                     value.add_observer(self)
 
         super().__init__()
+
+        if schema is not None:
+            self._apply_schema(schema)
+
+        # apply the requested frozen state after schema setup:
+        self.__dict__["frozen"] = frozen
+
+    def _apply_schema(self, schema: dict) -> None:
+        """Apply a schema dict: type values become a Schema constraint,
+        AF-instance values additionally set up foreign references via .references()."""
+        from fdm.schema import Schema as SchemaConstraint
+
+        schema_types: dict = {}
+        for key, value in schema.items():
+            if isinstance(value, AttributeFunction):
+                schema_types[key] = AttributeFunction
+                self.references(key, value)
+            else:
+                schema_types[key] = value
+        self.add_values_constraint(SchemaConstraint(schema_types))
 
     def copy(self) -> "DictionaryAttributeFunction":
         """Create a copy of this AttributeFunction with a new UUID, i.e. this functions as a copy constructor for

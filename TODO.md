@@ -2,8 +2,6 @@
 
 ## High prio:
 
-
-- [ ] schema definitions for larger examples
 - [ ] we need set operators where we can define the identity of items to be used for the set operation; this
   is also broken in relational algebra and SQL, let's fix that, could in theory be different projection functions for
   different input AFs? Or would that be a separate rename step?
@@ -44,8 +42,6 @@
 
 # Other thoughts and ideas: prio unclear
 
-- [ ] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
-  item X through relationship function Y
 - [ ] operator: output a plan:
     - [ ] PR 4: demo backend dispatcher that partitions a plan into a
       backend-executable prefix and a local residual at the first `Opaque`
@@ -71,6 +67,9 @@
 ---
 
 ### DONE
+- [x] schema definitions for larger examples
+- [x] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
+  item X through relationship function Y
 - [x] bug: `filter_items_scan_complement` (`filters.py`) had `lambda x: not filter_predicate`
   instead of `lambda x: not filter_predicate(x)` — fixed, test now covers actual filtering.
 - [x] bug: `RSF.related_values(subkey_index, subkey)` filters and returns at the **same**

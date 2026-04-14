@@ -134,3 +134,54 @@ def test_foreign_value_constraint():
     # time. So maybe we can do (1.) or (2.) as an optimization, but also add (3.) as a pure constraint that can be
     # used if we do not want to rely on the optimization. For now, we do (3.) and then we can add (1.) or (2.) as an
     # optimization later.
+
+
+def test_schema_parameter():
+    """Test the schema= constructor parameter as a concise alternative to
+    manually calling add_values_constraint(Schema(...)) and .references()."""
+
+    # 1. Basic type-only schema (no references):
+    departments: RF = RF(
+        {
+            "d1": TF({"name": "Dev", "budget": "11M"}),
+            "d2": TF({"name": "Consulting", "budget": "22M"}),
+        },
+        schema={"name": str, "budget": str},
+    )
+    # schema constraint is enforced — wrong type must fail:
+    with pytest.raises(ConstraintViolationError):
+        departments["d3"] = TF({"name": 123, "budget": "5M"})
+    # correct insert works:
+    departments["d3"] = TF({"name": "Sales", "budget": "5M"})
+
+    # 2. Schema with AF reference — sets up both Schema and .references():
+    users: RF = RF(
+        {
+            1: TF({"name": "Alice", "yob": 1990, "department": departments.d1}),
+        },
+        schema={"name": str, "yob": int, "department": departments},
+    )
+    # type constraint works:
+    with pytest.raises(ConstraintViolationError):
+        users[2] = TF(
+            {"name": "Bob", "yob": "not_an_int", "department": departments.d1}
+        )
+    # referential integrity works — value must be in departments:
+    with pytest.raises(ConstraintViolationError):
+        users[2] = TF({"name": "Bob", "yob": 1985, "department": TF()})
+    # reverse constraint works — cannot delete referenced department:
+    with pytest.raises(ConstraintViolationError):
+        del departments.d1
+
+    # valid insert works:
+    users[2] = TF({"name": "Bob", "yob": 1985, "department": departments.d2})
+
+    # 3. schema= works together with frozen=True:
+    frozen_rf: RF = RF(
+        {"x": TF({"a": 1})},
+        frozen=True,
+        schema={"a": int},
+    )
+    assert frozen_rf.frozen
+    with pytest.raises(ReadOnlyError):
+        frozen_rf["y"] = TF({"a": 2})
