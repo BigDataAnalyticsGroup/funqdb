@@ -115,3 +115,9 @@ renamed[1].yearly_bonus  # → 5000.0
   raises ``ReadOnlyError``.
 - Computed attributes are **ephemeral**: they are stripped during pickling
   (serialization) and must be re-attached after deserialization.
+
+***
+
+> **See also:** [Computed Relations](Computed%20Relations.md) — the ``default=``
+> parameter, which provides a fallback function for keys not in ``data`` or
+> ``computed``, enabling RFs with potentially infinite domains (paper Sec 2.6).

@@ -89,6 +89,7 @@ class DictionaryAttributeFunction[Key, Value](
         store: Store = None,
         schema: dict | None = None,
         computed: dict[str, Callable] | None = None,
+        default: Callable[[Any], Any] | None = None,
     ):
         """Initialize a DictionaryAttributeFunction.
         @param data: A dictionary of stored key-value pairs.
@@ -103,6 +104,11 @@ class DictionaryAttributeFunction[Key, Value](
             attributes when accessed via [], ., (), in, len, or iteration.
             They are read-only (cannot be overwritten or deleted), ephemeral (stripped
             on pickling), and must not overlap with stored keys.
+        @param default: Optional fallback callable(key) -> value for keys not found
+            in data or computed. Enables computed relations (paper Sec 2.6): an RF
+            with a default function can generate TFs on the fly for any key.
+            The default covers a potentially infinite domain — it is not reflected
+            in len(), iteration, keys(), or values(). Ephemeral (stripped on pickling).
         """
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = False  # start unfrozen to allow schema setup
@@ -117,6 +123,9 @@ class DictionaryAttributeFunction[Key, Value](
         # Stored separately from data to avoid the Tensor bug pattern (metadata
         # contaminating the data dict and breaking iteration/arithmetic).
         self.__dict__["computed"] = computed or {}
+        # Default fallback: callable(key) -> value for any unstored key.
+        # Enables computed relations with potentially infinite domains.
+        self.__dict__["default"] = default
         # A key must be either stored or computed, never both — reject overlaps
         # to prevent trapped-value states where a stored value becomes unmodifiable:
         overlap = set(self.__dict__["data"]) & set(self.__dict__["computed"])
@@ -183,6 +192,30 @@ class DictionaryAttributeFunction[Key, Value](
                 f"A key must be either stored or computed, not both."
             )
         self.__dict__["computed"][key] = func
+
+    def add_default(self, func: Callable[[Any], Any]) -> None:
+        """Set a default fallback function for keys not in data or computed.
+
+        The callable receives the requested key as its sole argument and returns
+        the value. This enables computed relations (paper Sec 2.6): an RF with a
+        default can generate TFs on the fly for any key::
+
+            users = RF({1: TF({"name": "Alice"})})
+            users.add_default(lambda key: TF({"name": f"User-{key}"}))
+            users[999]  # → TF({"name": "User-999"})
+
+        The default covers a potentially infinite domain — it is not reflected
+        in len(), iteration, keys(), or values().
+
+        @param func: A callable(key) -> value.
+        @raises ReadOnlyError: If the AF is frozen.
+        """
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"Attempt to set default function. "
+                f"This DictionaryAttributeFunction is read-only."
+            )
+        self.__dict__["default"] = func
 
     def copy(self) -> "DictionaryAttributeFunction":
         """Create a copy of this AttributeFunction with a new UUID, i.e. this functions as a copy constructor for
@@ -344,6 +377,16 @@ class DictionaryAttributeFunction[Key, Value](
             # The value is recomputed on every access (no caching), so it always
             # reflects the current state of stored attributes.
             value = self.__dict__["computed"][key](self)
+            return (
+                value.__getitem__("__".join(key_suffix))
+                if (key_suffix and len(key_suffix) > 0)
+                else value
+            )
+        elif self.__dict__["default"] is not None:
+            # Default fallback: generate a value for any unstored key.
+            # The callable receives the key as argument (not self), enabling
+            # computed relations with potentially infinite domains (paper Sec 2.6).
+            value = self.__dict__["default"](key)
             return (
                 value.__getitem__("__".join(key_suffix))
                 if (key_suffix and len(key_suffix) > 0)
@@ -617,6 +660,8 @@ class DictionaryAttributeFunction[Key, Value](
         # They are ephemeral by design — after deserialization, the caller must
         # re-attach computed definitions via add_computed() or the constructor.
         state_dict["computed"] = {}
+        # Default fallback is also a lambda — strip it for the same reason:
+        state_dict["default"] = None
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
                 # replace the AttributeFunction with a AttributeFunctionSentinel:

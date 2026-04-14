@@ -598,3 +598,74 @@ def test_computed_attributes():
     ).rename(salary="pay")
     assert t_ren[1].pay == 12000
     assert "pay" in t_ren[1].__dict__["computed"]
+
+
+def test_computed_relations():
+    """Test computed relations — paper Sec 2.6: an RF with a default function
+    can generate TFs on the fly for any key not explicitly stored."""
+
+    # 1. Basic computed relation (paper example R4):
+    R4: RF = RF(
+        {
+            1: TF({"name": "Alice", "age": 12}),
+            2: TF({"name": "Bob", "age": 25}),
+        },
+        default=lambda key: TF({"name": f"Generated-{key}", "age": 42 * key}),
+    )
+
+    # stored keys return stored values:
+    assert R4[1].name == "Alice"
+    assert R4[2].age == 25
+
+    # unstored keys return generated values:
+    assert R4[10].name == "Generated-10"
+    assert R4[10].age == 420
+    assert R4[100]("age") == 4200
+
+    # 2. len, iter, keys only reflect stored + computed, not default:
+    assert len(R4) == 2
+    assert set(R4.keys()) == {1, 2}
+    items = {item.key: item.value.name for item in R4}
+    assert items == {1: "Alice", 2: "Bob"}
+
+    # 3. __contains__ only checks stored + computed (like Python defaultdict):
+    assert 1 in R4
+    assert 10 not in R4  # default is not enumerable
+
+    # 4. Writing stores in data dict as usual:
+    R4[3] = TF({"name": "Charlie", "age": 30})
+    assert len(R4) == 3
+    assert R4[3].name == "Charlie"
+
+    # 5. Stored values take precedence over default:
+    R4[10] = TF({"name": "Stored-10", "age": 99})
+    assert R4[10].name == "Stored-10"  # stored, not generated
+
+    # 6. add_default after construction:
+    simple_rf: RF = RF({1: TF({"x": 1})})
+    with pytest.raises(AttributeError):
+        _ = simple_rf[99]
+    simple_rf.add_default(lambda key: TF({"x": key * 10}))
+    assert simple_rf[99].x == 990
+
+    # 7. add_default fails on frozen AF:
+    frozen_rf: RF = RF({1: TF({"x": 1})}, frozen=True)
+    with pytest.raises(ReadOnlyError):
+        frozen_rf.add_default(lambda key: TF({"x": 0}))
+
+    # 8. default works on frozen AFs (read access):
+    frozen_with_default: RF = RF(
+        {1: TF({"x": 1})},
+        default=lambda key: TF({"x": key * 100}),
+        frozen=True,
+    )
+    assert frozen_with_default[50].x == 5000
+
+    # 9. Works on TFs too (computed attribute with open domain):
+    config = TF(
+        {"host": "localhost"},
+        default=lambda key: f"default_{key}",
+    )
+    assert config.host == "localhost"
+    assert config["port"] == "default_port"
+    assert config.timeout == "default_timeout"
