@@ -105,17 +105,38 @@ at this point, this cannot be a full time job (unfortunately).
 
 ### Already Supported features include:
 
-- [x] attribute functions (AFs) as replacements for tuples, relations, and databases, and sets of databases
-- [x] operators including simple relational algebra operators such as selection, projection, join, etc., but also
-  more complex ones such as subdatabase, group-by, etc.
-- [x] an observer mechanism for AFs, i.e. when an AF is updated, all AFs that depend on it are informed and can react to
-  the change (TODO: make this work through the store)
-- [x] support for composite primary keys
-- [x] relationship functions (RFs) as replacements for n:m-relationships, i.e. they can be used to express relationships
-  between AFs, e.g. one-to-many, many-to-many, etc.
-- [x] a store for AFs, currently using SqliteDict as a key/blob-store, yet as it is used as a key/blob-store, we then
-  cannot push down query processing
-- [x] automatic on-demand swizzling/unswizzling of references (for read, TODO: writes)
+**Functional Data Model (FDM):**
+
+- [x] attribute functions (AFs): TF, RF, DBF, SDBF as uniform replacements for tuples, relations, databases, and sets of databases
+- [x] relationship functions (RSFs) for n:m-relationships between AFs
+- [x] composite primary keys
+- [x] tensor type with element-wise arithmetic (+, -, \*) (TODO: incomplete, see TODO.md)
+- [x] computed attribute values (`computed=`): derived values indistinguishable from stored ones (paper Sec 2.3)
+- [x] computed attribute functions (`default=`): AFs that generate values on the fly for unstored keys (paper Sec 2.6)
+- [x] active domains (`domain=`): finite scoping of default functions, enabling enumeration (paper Sec 2.4)
+- [x] frozen/read-only AFs
+- [x] schema definitions and constraints (type checking, foreign value constraints)
+- [x] `where()`, `project()`, `rename()` directly on AFs with Django ORM-style lookups
+- [x] `__`-path syntax for nested attribute access (e.g. `af["department__name"]`)
+- [x] observer mechanism: AFs notify dependents on changes (TODO: through the store)
+
+**Functional Query Language (FQL):**
+
+- [x] unary operators: filter (items/values/keys), projection, join (predicate-based and equi-join with join index), subdatabase
+- [x] aggregation operators with built-in functions (Sum, Avg, Count, Min, Max, Median)
+- [x] partitioning: group_by, partition, group_by_aggregate, partition_by_aggregate
+- [x] set operators: union, intersect, minus/difference, cogroup
+- [x] ranking: rank_by, top-k via subset
+- [x] transforms: transform, transform_items
+- [x] structured predicates: Eq, Gt, Lt, Gte, Lte, Like, In, And, Or, Not — serializable, not opaque lambdas
+- [x] logical plan IR: `to_plan()` and `explain()` extract operator pipelines without execution; JSON-serializable
+- [x] lazy operator execution and composable pipelines (`OperatorInput` type)
+
+**Persistence & Tooling:**
+
+- [x] store for AFs using SqliteDict as key/blob-store (query pushdown not yet implemented)
+- [x] automatic on-demand swizzling/unswizzling of references (reads only, TODO: writes)
+- [x] schema visualization to interactive HTML (Cytoscape.js) via `funqdb-viz` CLI
 
 ### Project Goals
 
