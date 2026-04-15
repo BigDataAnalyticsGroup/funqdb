@@ -50,7 +50,7 @@
 - [ ] other non-flat data like tensors
 - [ ] continuous domain constraints (paper Sec 2.4): constrain an RF's domain
   to a continuous range like `[7, 12]`, not just discrete sets. Practical use
-  depends on computed relations being implemented first.
+  depends on computed attribute functions being implemented first.
 - [ ] Table 1 coverage gaps: purpose-built operators for DBF→TF (aggregate
   entire database to a tuple), DBF→RF (reduce each relation in a DBF to
   produce one RF), TF→RF (generate relation from specification tuple). The
@@ -60,6 +60,18 @@
 - [ ] relationship predicates (paper Sec 3, Def 4): a relationship function
   with Y_RF == bool, indicating whether a relationship exists. Currently
   expressible via regular predicates/lambdas.
+- [ ] active domain: `set_domain()` checks `TypeError` (str guard) before
+  `ReadOnlyError` (frozen guard) — opposite order from other mutating methods.
+  Defensible (type errors are more fundamental), but inconsistent convention.
+- [ ] active domain: `set(domain)` eagerly materializes the iterable, turning
+  O(1)-space `range` objects into O(n) sets. Consider keeping `range` as-is
+  and only converting general iterables to `set`.
+- [ ] persist `computed`, `default`, and `domain` across pickling: currently
+  stripped because standard `pickle` cannot serialize lambdas/closures.
+  `cloudpickle` or `dill` could handle this, but **deserializing callables
+  from untrusted sources is a remote code execution vector** — same concern
+  as the existing pickle security TODOs above. Needs a trust/signing model
+  before enabling.
 
 # Other thoughts and ideas: prio unclear
 
@@ -88,13 +100,13 @@
 ---
 
 ### DONE
-- [x] computed relations (paper Sec 2.6): an RF can return computed TFs for
-  keys not explicitly stored via the `default=` fallback function on
+- [x] computed attribute functions (paper Sec 2.6): any AF can generate values
+  on the fly for unstored keys via the `default=` fallback function on
   `DictionaryAttributeFunction`. Covers potentially infinite domains.
-- [x] computed tuple functions / computed attributes (paper Sec 2.3): a TF can
-  return computed values (e.g. `salary = 1000 * t1('age')`), indistinguishable
-  from stored attributes. Implemented via `computed=` constructor parameter and
-  `add_computed()` method on `DictionaryAttributeFunction`.
+- [x] computed attribute values (paper Sec 2.3): any AF can return computed values
+  (e.g. `salary = 1000 * t1('age')`), indistinguishable from stored attributes.
+  Implemented via `computed=` constructor parameter and `add_computed()` method
+  on `DictionaryAttributeFunction`.
 - [x] schema definitions for larger examples
 - [x] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
   item X through relationship function Y

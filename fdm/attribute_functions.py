@@ -22,6 +22,7 @@
 import inspect
 import random
 from copy import copy
+import warnings
 from typing import Generator, Iterable, Callable, Any
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
@@ -88,8 +89,9 @@ class DictionaryAttributeFunction[Key, Value](
         lineage: list[str] = None,
         store: Store = None,
         schema: dict | None = None,
-        computed: dict[str, Callable] | None = None,
+        computed: dict[Any, Callable] | None = None,
         default: Callable[[Any], Any] | None = None,
+        domain: Iterable | None = None,
     ):
         """Initialize a DictionaryAttributeFunction.
         @param data: A dictionary of stored key-value pairs.
@@ -105,10 +107,15 @@ class DictionaryAttributeFunction[Key, Value](
             They are read-only (cannot be overwritten or deleted), ephemeral (stripped
             on pickling), and must not overlap with stored keys.
         @param default: Optional fallback callable(key) -> value for keys not found
-            in data or computed. Enables computed relations (paper Sec 2.6): an RF
-            with a default function can generate TFs on the fly for any key.
-            The default covers a potentially infinite domain — it is not reflected
-            in len(), iteration, keys(), or values(). Ephemeral (stripped on pickling).
+            in data or computed. Enables computed attribute functions (paper
+            Sec 2.6): an AF with a default can generate values on the fly.
+            Without a domain, the default covers a potentially infinite domain and is
+            not reflected in len(), iteration, keys(), or values().
+            Ephemeral (stripped on pickling).
+        @param domain: Optional finite iterable of keys the default function covers
+            (paper Sec 2.4). Does NOT restrict stored or computed keys — only
+            limits where the default is called. Enables enumeration:
+            len/iteration/keys/values reflect data ∪ computed ∪ domain.
         """
         self.__dict__["data"] = data or dict()
         self.__dict__["frozen"] = False  # start unfrozen to allow schema setup
@@ -124,8 +131,23 @@ class DictionaryAttributeFunction[Key, Value](
         # contaminating the data dict and breaking iteration/arithmetic).
         self.__dict__["computed"] = computed or {}
         # Default fallback: callable(key) -> value for any unstored key.
-        # Enables computed relations with potentially infinite domains.
+        # Enables computed attribute functions with potentially infinite domains.
         self.__dict__["default"] = default
+        # Active domain: defines which keys the default function covers (paper
+        # Sec 2.4). Does NOT restrict stored or computed keys — only limits
+        # where the default is called. Enables enumeration of default-backed keys.
+        if isinstance(domain, str):
+            raise TypeError(
+                f"domain must be an iterable of keys, not a string. "
+                f"Did you mean domain={{'{domain}'}}?"
+            )
+        self.__dict__["domain"] = set(domain) if domain is not None else None
+        if self.__dict__["domain"] is not None and default is None:
+            warnings.warn(
+                "domain= without default= has no effect — domain keys are "
+                "only resolvable when a default function is set.",
+                stacklevel=2,
+            )
         # A key must be either stored or computed, never both — reject overlaps
         # to prevent trapped-value states where a stored value becomes unmodifiable:
         overlap = set(self.__dict__["data"]) & set(self.__dict__["computed"])
@@ -163,7 +185,7 @@ class DictionaryAttributeFunction[Key, Value](
                 schema_types[key] = value
         self.add_values_constraint(SchemaConstraint(schema_types))
 
-    def add_computed(self, key: str, func: Callable[..., Any]) -> None:
+    def add_computed(self, key: Any, func: Callable[..., Any]) -> None:
         """Add a computed attribute that is evaluated on every access (not cached).
 
         The callable receives this AF instance as its sole argument at *access time*,
@@ -197,8 +219,8 @@ class DictionaryAttributeFunction[Key, Value](
         """Set a default fallback function for keys not in data or computed.
 
         The callable receives the requested key as its sole argument and returns
-        the value. This enables computed relations (paper Sec 2.6): an RF with a
-        default can generate TFs on the fly for any key::
+        the value. This enables computed attribute functions (paper Sec 2.6):
+        an AF with a default can generate values on the fly for any key::
 
             users = RF({1: TF({"name": "Alice"})})
             users.add_default(lambda key: TF({"name": f"User-{key}"}))
@@ -216,6 +238,57 @@ class DictionaryAttributeFunction[Key, Value](
                 f"This DictionaryAttributeFunction is read-only."
             )
         self.__dict__["default"] = func
+
+    def set_domain(self, domain: Iterable) -> None:
+        """Set the active domain — the finite set of keys the default covers.
+
+        The domain does not restrict stored or computed keys. It defines which
+        keys the default function is valid for and enables their enumeration
+        in len/iteration/keys/values.
+
+        @param domain: A finite iterable of valid default keys.
+        @raises ReadOnlyError: If the AF is frozen.
+        """
+        if isinstance(domain, str):
+            raise TypeError(
+                f"domain must be an iterable of keys, not a string. "
+                f"Did you mean domain={{'{domain}'}}?"
+            )
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"Attempt to set domain. "
+                f"This DictionaryAttributeFunction is read-only."
+            )
+        self.__dict__["domain"] = set(domain)
+        if self.__dict__["default"] is None:
+            warnings.warn(
+                "domain= without default= has no effect — domain keys are "
+                "only resolvable when a default function is set.",
+                stacklevel=2,
+            )
+
+    def __copy__(self) -> "DictionaryAttributeFunction":
+        """Shallow-copy that preserves ephemeral state (computed, default, domain).
+
+        copy.copy() falls back to __getstate__/__setstate__ when __copy__ is
+        absent, which strips computed/default/domain (they are non-picklable).
+        This override keeps them intact so that .copy() returns a fully
+        functional clone.
+        """
+        cls = type(self)
+        new = cls.__new__(cls)
+        state = self.__dict__.copy()
+        # Shallow-copy mutable containers so mutations are independent:
+        state["data"] = state["data"].copy()
+        state["computed"] = state["computed"].copy()
+        state["observers"] = state["observers"].copy()
+        state["af_constraints"] = state["af_constraints"].copy()
+        state["values_constraints"] = state["values_constraints"].copy()
+        state["lineage"] = state["lineage"].copy()
+        if state["domain"] is not None:
+            state["domain"] = state["domain"].copy()
+        new.__dict__.update(state)
+        return new
 
     def copy(self) -> "DictionaryAttributeFunction":
         """Create a copy of this AttributeFunction with a new UUID, i.e. this functions as a copy constructor for
@@ -382,10 +455,13 @@ class DictionaryAttributeFunction[Key, Value](
                 if (key_suffix and len(key_suffix) > 0)
                 else value
             )
-        elif self.__dict__["default"] is not None:
-            # Default fallback: generate a value for any unstored key.
-            # The callable receives the key as argument (not self), enabling
-            # computed relations with potentially infinite domains (paper Sec 2.6).
+        elif self.__dict__["default"] is not None and (
+            self.__dict__["domain"] is None or key in self.__dict__["domain"]
+        ):
+            # Default fallback: generate a value for keys in the domain (or any
+            # key if no domain is set). The domain scopes where the default applies
+            # — it does NOT restrict stored or computed keys. The callable receives
+            # the key as argument (not self), enabling computed AFs (Sec 2.6).
             value = self.__dict__["default"](key)
             return (
                 value.__getitem__("__".join(key_suffix))
@@ -520,47 +596,68 @@ class DictionaryAttributeFunction[Key, Value](
         else:
             raise AttributeError
 
-    def __contains__(self, item):
-        """Check if a key exists in this AF — includes both stored and computed attributes."""
-        return item in self.__dict__["data"] or item in self.__dict__["computed"]
+    def __contains__(self, item) -> bool:
+        """Check if a key exists in this AF (data ∪ computed ∪ resolvable domain).
+        Domain keys are only included when a default function is set."""
+        if item in self.__dict__["data"] or item in self.__dict__["computed"]:
+            return True
+        return (
+            self.__dict__["domain"] is not None
+            and self.__dict__["default"] is not None
+            and item in self.__dict__["domain"]
+        )
 
-    def __len__(self):
-        """Return the total number of attributes (stored + computed).
-        The constructor ensures no overlap between stored and computed keys,
-        so a simple addition suffices."""
-        return len(self.__dict__["data"]) + len(self.__dict__["computed"])
+    def __len__(self) -> int:
+        """Return the total number of attributes (data ∪ computed ∪ resolvable domain).
+        Domain keys are only counted when a default function is set."""
+        all_keys = set(self.__dict__["data"]) | set(self.__dict__["computed"])
+        if self.__dict__["domain"] is not None and self.__dict__["default"] is not None:
+            all_keys |= self.__dict__["domain"]
+        return len(all_keys)
 
     def __iter__(self):
-        """Iterate over all items (stored and computed) as Item(key, value) objects.
-        Computed values are evaluated on each iteration. Stored items are yielded
-        first, then computed items — making computed attributes indistinguishable
-        from stored ones when consumed by operators, filters, or schema validation."""
+        """Iterate over all items as Item(key, value) objects.
+        Yields stored items, then computed items, then default-backed items
+        for domain keys not already covered by data or computed."""
 
         def mapper(item):
             return Item(item[0], item[1])
 
         yield from map(mapper, self.__dict__["data"].items())
-        # Yield computed attributes — each function is called with self to produce
-        # the current value. Since the constructor rejects key overlaps, no
-        # shadowing check is needed here.
         for key, func in self.__dict__["computed"].items():
             yield Item(key, func(self))
+        # Yield default-backed items for domain keys not in data or computed:
+        if self.__dict__["domain"] is not None and self.__dict__["default"] is not None:
+            covered = set(self.__dict__["data"]) | set(self.__dict__["computed"])
+            for key in self.__dict__["domain"]:
+                if key not in covered:
+                    yield Item(key, self.__dict__["default"](key))
 
     def keys(self) -> Generator:
-        """Get the keys of the AttributeFunction (stored and computed).
+        """Get the keys of the AttributeFunction (data ∪ computed ∪ resolvable domain).
+        Domain keys are only included when a default function is set.
         @return: An iterable of the keys.
         """
         yield from self.__dict__["data"].keys()
         yield from self.__dict__["computed"].keys()
+        if self.__dict__["domain"] is not None and self.__dict__["default"] is not None:
+            covered = set(self.__dict__["data"]) | set(self.__dict__["computed"])
+            for key in self.__dict__["domain"]:
+                if key not in covered:
+                    yield key
 
     def values(self):
-        """Get the values of the AttributeFunction (stored and computed).
-        Computed values are evaluated on each call.
+        """Get the values of the AttributeFunction (data ∪ computed ∪ resolvable domain).
         @return: An iterable of the values.
         """
         yield from self.__dict__["data"].values()
         for func in self.__dict__["computed"].values():
             yield func(self)
+        if self.__dict__["domain"] is not None and self.__dict__["default"] is not None:
+            covered = set(self.__dict__["data"]) | set(self.__dict__["computed"])
+            for key in self.__dict__["domain"]:
+                if key not in covered:
+                    yield self.__dict__["default"](key)
 
     def __eq__(self, other: "DictionaryAttributeFunction") -> bool:
         """Check equality between two DictionaryAttributeFunction instances based on their items.
@@ -662,6 +759,10 @@ class DictionaryAttributeFunction[Key, Value](
         state_dict["computed"] = {}
         # Default fallback is also a lambda — strip it for the same reason:
         state_dict["default"] = None
+        # Domain is stripped too: it may reference keys only resolvable via
+        # default or computed (both stripped above). After deserialization the
+        # caller must re-attach domain via set_domain() if needed.
+        state_dict["domain"] = None
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
                 # replace the AttributeFunction with a AttributeFunctionSentinel:
