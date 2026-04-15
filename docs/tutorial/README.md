@@ -4,11 +4,42 @@ Welcome to this tutorial! In this guide, we will walk you through the basics of 
 examples, we will use Python syntax. But note, that all these concepts apply to other programming languages as well.
 The ideas behind FDM and FQL are not bound to one particular programming language.
 
-### Table of Contents
-1. [FDM Basics](<01 FDM Basics>)
-   
-2. [FDM Store](<02 FDM Store>)
-...
-5. [FQL Basics](<05 FQL Basics>)
+## Table of Contents
 
-6. [Operators](<06 Operators>)
+### [01 FDM Basics](<01 FDM Basics>)
+
+The Functional Data Model — attribute functions as a uniform replacement for
+tuples, relations, databases, and sets of databases.
+
+- [Attribute Functions](<01 FDM Basics/Attribute Functions.md>) — TF, RF, DBF, SDBF
+- [Accessing Data](<01 FDM Basics/Accessing Data.md>) — bracket, dot, call syntax
+- [Computed Attribute Values](<01 FDM Basics/Computed Attribute Values.md>) — `computed=`
+- [Computed Attribute Functions](<01 FDM Basics/Computed Attribute Functions.md>) — `default=` / `domain=`
+- [Frozen Attribute Functions](<01 FDM Basics/Frozen Attribute Functions.md>) — read-only AFs
+- [Rename](<01 FDM Basics/Rename.md>) — rename keys (ρ operator)
+- [Schemas](<01 FDM Basics/Schemas.md>) & [Constraints](<01 FDM Basics/Constraints.md>)
+- [Composite Keys](<01 FDM Basics/Composite Keys.md>) — RSF, Tensor
+- [Observers](<01 FDM Basics/Observers.md>) — reactive notifications
+- [Visualization](<01 FDM Basics/Visualization.md>) — interactive schema graphs
+
+### [02 FDM Store](<02 FDM Store>)
+
+Persistence for attribute functions — SQLite-backed key/blob store with
+automatic swizzling/unswizzling.
+
+- [Store](<02 FDM Store/Store.md>) — register, load, and lazy-load AFs
+
+### [03 FQL](<03 FQL>)
+
+The Functional Query Language — unary operators that transform AFs.
+
+- **Filtering:** [filter](<03 FQL/filter.md>), [subset](<03 FQL/subset.md>)
+- **Projection:** [project](<03 FQL/project.md>)
+- **Ranking:** [rank_by](<03 FQL/rank.md>)
+- **Transform:** [transform](<03 FQL/transform.md>)
+- **Grouping:** [partition](<03 FQL/partition.md>), [group_by](<03 FQL/group_by.md>)
+- **Aggregation:** [aggregate](<03 FQL/aggregate.md>), [disaggregate](<03 FQL/disaggregate.md>)
+- **Set operations:** [union](<03 FQL/union.md>), [intersect / minus](<03 FQL/set_operations.md>)
+- **Join:** [join](<03 FQL/join.md>), [subdatabase](<03 FQL/subdatabase.md>)
+- **Predicates:** [structured predicates](<03 FQL/predicates.md>)
+- **Plan inspection:** [explain() and plan IR](<03 FQL/plan.md>)

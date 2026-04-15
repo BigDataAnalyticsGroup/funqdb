@@ -1,4 +1,4 @@
-# 06 FQL Operators
+# 03 FQL
 
 ## What is an FQL Operator?
 
