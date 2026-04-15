@@ -12,24 +12,24 @@ subtree by delegating to ```to_plan().explain()``` — a single source of truth 
 
 ## Two-Phase Usage Pattern
 
-Operators follow a **configure-then-apply** pattern:
+Operators follow a **construct-then-access** pattern:
 
-1. **Construct** the operator with its parameters (predicate, partitioning function, output factory, etc.)
-2. **Call** the operator instance on an input AF to produce the output AF
+1. **Construct** the operator with its input AF and parameters (predicate, partitioning function, output factory, etc.)
+2. **Access** the result via ``.result`` (lazily computed on first access)
 
 ```python
-# Phase 1: construct with parameters
+# Phase 1: construct with input and parameters
 op: Operator[RF, RF] = filter_items[RF, RF](
     users,
     lambda i: i.value.department.name == "Dev",
 )
 
-# Phase 2: apply to input
-result: RF = op(users)
+# Phase 2: access the result (triggers computation)
+result: RF = op.result
 ```
 
-This separation is intentional: the same operator instance can be **reused** on different inputs, **chained**
-with other operators, and **explained** before execution.
+This separation is intentional: the operator can be **chained** with other operators and
+**explained** before execution via ``op.explain()``.
 
 ## Convenience API: where()
 
@@ -96,8 +96,21 @@ operators which operate exclusively on DBFs (DBF → DBF).
 | [subset](subset.md) | AF → AF | Select items matching a global condition (top-k) |
 | [rank_by](rank.md) | AF → AF | FDM-faithful ORDER BY: produces a new AF with `ℕ`-key domain |
 | [items_sorted_by](rank.md#items_sorted_by-af--iteratoritem) | AF → Iterator[Item] | Terminal sink for ordered consumption (presentation only) |
+| [transform](transform.md) | AF → AF | Apply arbitrary transformation to an AF |
 | [partition](partition.md) | AF → AF↑ | Split into partitions (inverse of union) |
+| [group_by](group_by.md) | RF → DBF | Partition by attribute equality (SQL GROUP BY) |
+| [group_by_aggregate](group_by.md#group_by_aggregate--group-then-aggregate-in-one-step) | RF → RF | Group then aggregate in one step |
 | [union](union.md) | AF → AF↓ | Merge partitions (inverse of partition) |
+| [intersect](set_operations.md#intersect) | DBF → AF | Keep items whose key is in all inputs |
+| [minus](set_operations.md#minus--difference) | DBF → AF | Keep items whose key is only in first input |
 | [aggregate](aggregate.md) | AF → AF↓ | Compute aggregates (inverse of disaggregate) |
 | [disaggregate](disaggregate.md) | AF → AF↑ | Expand aggregates (inverse of aggregate) |
 | [subdatabase](subdatabase.md) | DBF → DBF | Reduce a database to participating tuples |
+| [join](join.md) | DBF → AF | Join operators (being reworked) |
+
+### Additional Topics
+
+| Topic | Description |
+|:------|:------------|
+| [Structured predicates](predicates.md) | Serializable filter predicates (Eq, Gt, Like, In, And, Or, Not) |
+| [Plan extraction](plan.md) | Inspect operator pipelines via `explain()` and `to_plan()` |

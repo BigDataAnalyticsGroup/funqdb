@@ -1,5 +1,9 @@
 ## Subdatabase
 
+> **Note:** The subdatabase operator is currently being reworked together with
+> the [join](join.md) operators. The API and semantics described below may
+> change.
+
 ### Generic Form: DBF → DBF
 
 ```output: DBF = subdatabase(input: DBF)```
