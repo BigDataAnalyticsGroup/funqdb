@@ -21,6 +21,8 @@
 
 from typing import Type
 
+from docutils.nodes import target
+
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import DictionaryAttributeFunction
 from fql.predicates.constraints import AttributeFunctionConstraint
@@ -77,30 +79,30 @@ class Schema[Key](DictionaryAttributeFunction[Key, Type], AttributeFunctionConst
 
 class ForeignValueConstraint[Key](AttributeFunctionConstraint):
     """A foreign value constraint is an attribute function constraint that a given value of an attribute function must
-    be mapped to by another attribute function (the parent). This is used to express foreign value constraints between
+    be mapped to by another attribute function (the target). This is used to express foreign value constraints between
     relations. This class is from the point of view of the referrer, i.e., the relation that has the foreign value
     reference to another relation.
     Note that is in contrast to relational DBMS that have foreign key constraints leading to an additional
     indirection. FDM does not require that indirection.
     """
 
-    def __init__(self, key: Key, parent_attribute_function: AttributeFunction):
+    def __init__(self, key: Key, target_attribute_function: AttributeFunction):
         self.key = key
-        self.parent_attribute_function = parent_attribute_function
+        self.target_attribute_function = target_attribute_function
 
     def __call__(
         self, attribute_function: AttributeFunction, event: ChangeEvent
     ) -> bool:
         assert isinstance(attribute_function, AttributeFunction)
 
-        # check whether the value mapped to by attribute_function[self.key] is available in the parent attribute
-        # function, i.e., whether there is an item in the parent attribute function that maps to this value
+        # check whether the value mapped to by attribute_function[self.key] is available in the target attribute
+        # function, i.e., whether there is an item in the target attribute function that maps to this value
         # O(n) find, TODO: replace by indexed version
         # maybe extend AFs to generally index on their values
         value_to_find = attribute_function[self.key]
         return (
             len(
-                self.parent_attribute_function.where(lambda i: i.value == value_to_find)
+                self.target_attribute_function.where(lambda i: i.value == value_to_find)
             )
             > 0
         )
@@ -110,9 +112,9 @@ class ReverseForeignObjectConstraint[Key](AttributeFunctionConstraint):
     """This is the reverse of a foreign value constraint, i.e., it is from the point of view of the referenced
     attribute function."""
 
-    def __init__(self, key: Key, child_attribute_function: AttributeFunction):
+    def __init__(self, key: Key, source_attribute_function: AttributeFunction):
         self.key = key
-        self.child_attribute_function = child_attribute_function
+        self.source_attribute_function = source_attribute_function
 
     # TODO: actually this only has to be true in case we want to delete!
     # this will yield a constraint validation error if we do a change of the instance without deleting it, but that is
@@ -124,7 +126,7 @@ class ReverseForeignObjectConstraint[Key](AttributeFunctionConstraint):
         # only relevant for delete events:
         return event != ChangeEvent.DELETE or (
             len(
-                self.child_attribute_function.where(
+                self.source_attribute_function.where(
                     lambda i: i.value[self.key] == attribute_function
                 )
             )

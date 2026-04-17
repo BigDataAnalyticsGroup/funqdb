@@ -85,12 +85,12 @@ def _collect_graph(db: DBF) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
     Nodes correspond to the relations (``RF``\ s) in the database, keyed by
     their name in the ``DBF``. Edges correspond to
     :class:`~fdm.schema.ForeignValueConstraint`\ s on those relations; an
-    edge is only emitted if the referenced parent AF is itself one of the
+    edge is only emitted if the referenced target AF is itself one of the
     relations contained in ``db`` (references to external AFs are silently
     skipped because we would have no node to point at).
 
     The returned lists are in deterministic order (by RF name, then by
-    ``(parent, key)`` for edges) so that :func:`to_html` produces
+    ``(target, key)`` for edges) so that :func:`to_html` produces
     reproducible output.
     """
     # Iterate ``db`` only once and materialize its RF items into a list so
@@ -99,7 +99,7 @@ def _collect_graph(db: DBF) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
     rf_items: list[Item] = [item for item in db if isinstance(item.value, RF)]
     rf_items.sort(key=lambda item: str(item.key))
 
-    # Map parent RF uuid → relation name so we can resolve the target of a
+    # Map target RF uuid → relation name so we can resolve the target of a
     # ForeignValueConstraint back to a node in our graph. We rely on uuid
     # identity rather than Python's ``is`` to stay consistent with how the
     # rest of funqDB identifies AFs.
@@ -132,10 +132,10 @@ def _collect_graph(db: DBF) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
         for constraint in rf.__dict__["values_constraints"]:
             if not isinstance(constraint, ForeignValueConstraint):
                 continue
-            parent_uuid = constraint.parent_attribute_function.uuid
+            parent_uuid = constraint.target_attribute_function.uuid
             parent_name = name_by_uuid.get(parent_uuid)
             if parent_name is None:
-                # Reference points at something that is not a direct child
+                # Reference points at something that is not a direct source
                 # of this DBF — nothing to draw.
                 continue
             rf_edges.append((parent_name, str(constraint.key)))

@@ -352,7 +352,7 @@ class DictionaryAttributeFunction[Key, Value](
 
     def references(self, key: Key, parent_attribute_function: AttributeFunction):
         """Convenience method to express a foreign value constraint, i.e., the value of the item with the given key
-        mapped to by the given parent attribute function. Adds constraints to both the parent and the child attribute function.
+        mapped to by the given target attribute function. Adds constraints to both the target and the source attribute function.
         """
         from fdm.schema import ForeignValueConstraint
 

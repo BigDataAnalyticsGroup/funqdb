@@ -160,7 +160,7 @@ class Opaque:
         }
 
 
-#: Anything that can appear as a child under a ``PlanNode.inputs`` entry.
+#: Anything that can appear as a source under a ``PlanNode.inputs`` entry.
 PlanChild = Union["PlanNode", LeafRef]
 
 
@@ -178,9 +178,9 @@ class PlanNode:
     #: ``"filter_values"``, ``"equi_join"``, ``"DBF_bind"``.
     op: str
 
-    #: Tuple of child subplans. Always a tuple (not list) so ``PlanNode`` can
+    #: Tuple of source subplans. Always a tuple (not list) so ``PlanNode`` can
     #: remain hashable / frozen. In FDM all operators are unary, so real
-    #: operator nodes have exactly one child; the synthetic ``"DBF_bind"``
+    #: operator nodes have exactly one source; the synthetic ``"DBF_bind"``
     #: node is the one place where multiple children appear.
     inputs: tuple[PlanChild, ...] = ()
 
@@ -203,7 +203,7 @@ class PlanNode:
 
 
 def _child_to_dict(child: PlanChild) -> dict:
-    """Serialize a ``PlanNode``/``LeafRef`` child to a plain dict."""
+    """Serialize a ``PlanNode``/``LeafRef`` source to a plain dict."""
     if isinstance(child, (PlanNode, LeafRef)):
         return child.to_dict()
     # Defensive: should not happen if the extractor is well-behaved, but we
@@ -316,7 +316,7 @@ def _child_from_dict(data: Mapping[str, Any]) -> PlanChild:
             inputs=tuple(_child_from_dict(c) for c in data.get("inputs", ())),
             params={k: _value_from_dict(v) for k, v in data.get("params", {}).items()},
         )
-    raise ValueError(f"Unknown plan child type: {t!r}")
+    raise ValueError(f"Unknown plan source type: {t!r}")
 
 
 def _value_from_dict(value: Any) -> Any:

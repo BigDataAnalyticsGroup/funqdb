@@ -63,3 +63,6 @@ Functional Query Language (FQL). There is no frontend and no web framework.
 ```
 
 Be direct. Do not soften criticism. Do not praise code for doing the basics correctly.
+
+IMPORTANT: Always return the FULL review output in the exact format above. The parent agent
+MUST show the complete review to the user — never summarize or omit parts of it.

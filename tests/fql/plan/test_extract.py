@@ -90,7 +90,7 @@ def test_single_filter_values_extraction():
     # outer ``filter_values`` class name — that is the correct behaviour.
     assert root.op == "filter_values"
 
-    # Exactly one child, which is the ``users`` leaf.
+    # Exactly one source, which is the ``users`` leaf.
     assert len(root.inputs) == 1
     child: PlanChild = root.inputs[0]
     assert isinstance(child, LeafRef)
@@ -351,7 +351,7 @@ def test_extract_dbf_produces_dbf_bind():
     assert "customers" in names
     assert len(root.inputs) == len(names)
 
-    # Each child is a LeafRef with the binding name stamped on.
+    # Each source is a LeafRef with the binding name stamped on.
     for i, name in enumerate(names):
         child: PlanChild = root.inputs[i]
         assert isinstance(child, LeafRef)
@@ -361,7 +361,7 @@ def test_extract_dbf_produces_dbf_bind():
 
 def test_extract_dbf_with_operator_input():
     """When an operator's ``input_function`` is a ``DBF``, the extractor
-    must produce a ``PlanNode`` whose child is a ``DBF_bind`` — not a flat
+    must produce a ``PlanNode`` whose source is a ``DBF_bind`` — not a flat
     ``LeafRef``. This preserves the named structure that a backend needs
     to resolve joins implied by foreign-object constraints."""
     db: DBF = _create_testdata(frozen=True)
@@ -375,7 +375,7 @@ def test_extract_dbf_with_operator_input():
     assert isinstance(root, PlanNode)
     assert root.op == "filter_items"
 
-    # The child must be a DBF_bind, not a LeafRef.
+    # The source must be a DBF_bind, not a LeafRef.
     child: PlanChild = root.inputs[0]
     assert isinstance(child, PlanNode)
     assert child.op == "DBF_bind"

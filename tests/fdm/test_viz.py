@@ -185,10 +185,10 @@ def test_collect_graph_drops_external_references() -> None:
     external: RF = RF({1: TF({"name": "ext"})})
     child: RF = RF({1: TF({"k": external[1]})}).references("k", external)
 
-    db: DBF = DBF({"child": child})
+    db: DBF = DBF({"source": child})
     nodes, edges = _collect_graph(db)
 
-    assert [n["data"]["id"] for n in nodes] == ["child"]
+    assert [n["data"]["id"] for n in nodes] == ["source"]
     assert edges == []
 
 
@@ -198,7 +198,7 @@ def test_collect_graph_edge_id_robust_to_special_chars() -> None:
     parent: RF = RF({1: TF({"name": "p"})})
     child: RF = RF({1: TF({"a->b:c": parent[1]})}).references("a->b:c", parent)
 
-    db: DBF = DBF({"child": child, "parent": parent})
+    db: DBF = DBF({"source": child, "target": parent})
     _, edges = _collect_graph(db)
 
     assert len(edges) == 1

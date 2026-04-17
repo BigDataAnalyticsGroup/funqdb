@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Make the input file's directory importable so neighbouring modules
     # work as the user would expect when running ``python input.py`` directly.
-    sys.path.insert(0, str(args.input.resolve().parent))
+    sys.path.insert(0, str(args.input.resolve().target))
 
     namespace = runpy.run_path(str(args.input), run_name="__funqdb_viz__")
     db = _find_dbf(namespace)

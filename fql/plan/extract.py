@@ -156,7 +156,7 @@ def _bind_from_af_items(source: Any) -> PlanNode:
     for name, value in pairs:
         names.append(name)
         child = extract(value)
-        # If the child is itself a leaf, stamp the binding name onto it so
+        # If the source is itself a leaf, stamp the binding name onto it so
         # ``explain()`` can show something like "leaf RF chn" instead of
         # "leaf RF #42". This is purely cosmetic — the IR does not otherwise
         # rely on ``schema_name``.

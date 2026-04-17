@@ -35,6 +35,8 @@
   the contents of an AF)
 - [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
+- [x] semijoin/subdatabase: should output RFs carry over constraints (ForeignValueConstraint etc.) from the input?
+- [ ] semijoin: auto-detect ref_key when there is only one ForeignValueConstraint between the two relations
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
   from the store
 
