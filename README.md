@@ -175,6 +175,12 @@ through
 The tests also serve as a good starting point to understand how to use the project, as they contain a lot of
 textbook-style code examples. I often re-use the examples from the tests in the [tutorial](docs/tutorial/README.md).
 
+### Podcast
+
+[Listen to the podcast](https://bigdata.uni-saarland.de/publications/Replacing_SQL_Tables_With_Pure_Functions_01.mp3) — an English-language dialogue summarizing the core ideas of the [Dit26] paper ([script](docs/podcast/podcast_script.md))
+
+*Note: Both the podcast audio and script were generated with AI assistance.*
+
 ### Talks
 
 see [talks](docs/Talks.md)

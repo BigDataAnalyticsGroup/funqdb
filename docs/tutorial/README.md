@@ -43,3 +43,9 @@ The Functional Query Language — unary operators that transform AFs.
 - **Join:** [join](<03 FQL/join.md>), [subdatabase](<03 FQL/subdatabase.md>)
 - **Predicates:** [structured predicates](<03 FQL/predicates.md>)
 - **Plan inspection:** [explain() and plan IR](<03 FQL/plan.md>)
+
+### Podcast
+
+[Listen to the podcast](https://bigdata.uni-saarland.de/publications/Replacing_SQL_Tables_With_Pure_Functions_01.mp3) — an English-language dialogue summarizing the core ideas of the FDM/FQL paper ([script](../podcast/podcast_script.md)). A good starting point before diving into the details above.
+
+*Note: Both the podcast audio and script were generated with AI assistance.*
