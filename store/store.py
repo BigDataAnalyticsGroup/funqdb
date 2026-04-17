@@ -55,7 +55,8 @@ class Store:
             self.file_name, tablename=attribute_function_space, autocommit=True
         )
 
-        # dependency registry (persistent)
+       # Internal registry to persist dependency relationships derived from AF subscriptions.
+       # This is not intended for direct user interaction.
         self._registry_key = "__dependency_registry__"
 
         if self._registry_key not in self.sqlite_dict:
@@ -90,6 +91,9 @@ class Store:
         self.sqlite_dict.commit()
         self.attribute_function_buffer[af.uuid] = af
 
+    def load(self, afid: int) -> None:
+        try:
+            af: AttributeFunction = self.sqlite_dict[str(afid)]
             if self.add_reference_to_store_on_read:
                 af.__dict__["store"] = self
 
@@ -99,6 +103,21 @@ class Store:
 
     def _get_registry(self) -> dict[str, list[str]]:
         return self.sqlite_dict.get(self._registry_key, {})
+
+    def put(self, af: AttributeFunction):
+        """Store an AttributeFunction in the persistent store."""
+        uuid_str: str = str(af.uuid)
+
+        self.sqlite_dict[uuid_str] = af
+        self.sqlite_dict.commit()
+        self.attribute_function_buffer[af.uuid] = af
+
+        if hasattr(af, "inputs"):
+            for parent_af in af.inputs:
+                if hasattr(parent_af, "uuid"):
+                    self.register_dependency(parent_af.uuid, af.uuid)
+
+        self._notify(af.uuid)
 
     def register_dependency(self, parent_uuid: uuid.UUID, child_uuid: uuid.UUID):
         """
@@ -136,7 +155,6 @@ class Store:
                 dependent_af: AttributeFunction = self.get(dependent_id)
                 if dependent_af and hasattr(dependent_af, "update"):
                     dependent_af.update(other=parent_af)
-                    dependent_af.was_updated_in_test = True
                     self.put(dependent_af)
             except KeyError:
                 continue

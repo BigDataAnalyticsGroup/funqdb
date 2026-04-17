@@ -252,7 +252,7 @@ def test_store_dependency_notification(tmp_path):
     parent_af = TF({"value": 1}, store=store)
     child_af = TF({"value": 2}, store=store)
 
-    store.register_dependency(parent_af.uuid, child_af.uuid)
+    child_af.inputs = [parent_af]
 
     store.put(child_af)
     store.put(parent_af) 
