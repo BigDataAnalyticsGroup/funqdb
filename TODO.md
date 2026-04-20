@@ -27,7 +27,15 @@
 - [ ] in-place FQL operators (paper Sec 4.3): INSERT/UPDATE/DELETE as composable
   FQL operators, not just `__setitem__`/`__delitem__`. The paper envisions
   in-place usage across the entire Table 1 landscape, not limited to RF→RF.
-- [ ] flattening joins (revisit: the ones in the code base are outdated)
+- [ ] flattening joins (MR 1 landed — see the DONE section for the four-
+  operator API. MR 2 pending: the actual `join` operator (DBF → flat RF)
+  that consumes the constraint-decorated DBF. The old `fql/operators/joins.py`
+  is still broken and will be replaced in MR 2.)
+- [ ] bug: stray `from docutils.nodes import target` at `fql/plan/join_graph.py:6`
+  — dead IDE auto-import. The file uses `target` 20+ times as a local name so
+  the import either shadows local scope (if `docutils` is installed) or will
+  `ImportError` on a fresh environment. Same pattern was just fixed in
+  `fdm/schema.py`. Remove in a separate one-line cleanup MR.
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
 - [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
@@ -102,6 +110,16 @@
 ---
 
 ### DONE
+- [x] constraint operators (MR 1 of the join rework): four specialized
+  operators in `fql/operators/constraints.py` — `add_reference` /
+  `drop_reference` for `ForeignValueConstraint`s and `add_join_predicate` /
+  `drop_join_predicate` for the new `JoinPredicate` (`fdm/schema.py`).
+  Users assemble a DBF whose constraints fully describe a join — references
+  and arbitrary cross-RF predicates alike. Join predicates accept both
+  lambdas and structured predicates from `fql.predicates.predicates` (e.g.
+  `Gt("a.x", Ref("b.y"))`); the constraint wraps its tuples dict in a TF at
+  evaluate time so `getattr`-path predicates just work. The forthcoming
+  `join` operator (MR 2) will consume that DBF and flatten it.
 - [x] computed attribute functions (paper Sec 2.6): any AF can generate values
   on the fly for unstored keys via the `default=` fallback function on
   `DictionaryAttributeFunction`. Covers potentially infinite domains.

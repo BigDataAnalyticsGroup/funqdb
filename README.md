@@ -115,20 +115,23 @@ at this point, this cannot be a full time job (unfortunately).
 - [x] computed attribute functions (`default=`): AFs that generate values on the fly for unstored keys (paper Sec 2.6)
 - [x] active domains (`domain=`): finite scoping of default functions, enabling enumeration (paper Sec 2.4)
 - [x] frozen/read-only AFs
-- [x] schema definitions and constraints (type checking, foreign value constraints)
+- [x] schema definitions and constraints (type checking, foreign value constraints, cross-relation `JoinPredicate`s for arbitrary SQL-style join conditions)
 - [x] `where()`, `project()`, `rename()` directly on AFs with Django ORM-style lookups
 - [x] `__`-path syntax for nested attribute access (e.g. `af["department__name"]`)
 - [x] observer mechanism: AFs notify dependents on changes (TODO: through the store)
 
 **Functional Query Language (FQL):**
 
-- [x] unary operators: filter (items/values/keys), projection, join (predicate-based and equi-join with join index), subdatabase
+- [x] unary operators: filter (items/values/keys), projection
+- [x] `subdatabase` (DBF → DBF): Yannakakis-style semi-join reduction expressed as a cascade of `semijoin` operators; reads the reference graph from `ForeignValueConstraint`s and reduces every relation in the DBF to the tuples that participate in the full join (acyclic graphs only)
+- [x] constraint operators (DBF → DBF): `add_reference` / `drop_reference` install or remove foreign-key-style references, `add_join_predicate` / `drop_join_predicate` install or remove arbitrary cross-relation `JoinPredicate`s. Together they let users assemble a DBF whose constraints fully describe a join in a pipeline-friendly, immutable, plan-extractable way
+- [ ] flattening `join` operator (DBF → flat RF): work in progress. Consumes the constraint-decorated DBF produced by `subdatabase` + the constraint operators and materializes tuple combinations into a single flat RF. The previous `join` / `equi_join` implementation was retired together with the `subdatabase` rewrite
 - [x] aggregation operators with built-in functions (Sum, Avg, Count, Min, Max, Median)
 - [x] partitioning: group_by, partition, group_by_aggregate, partition_by_aggregate
 - [x] set operators: union, intersect, minus/difference, cogroup
 - [x] ranking: rank_by, top-k via subset
 - [x] transforms: transform, transform_items
-- [x] structured predicates: Eq, Gt, Lt, Gte, Lte, Like, In, And, Or, Not — serializable, not opaque lambdas
+- [x] structured predicates: Eq, Gt, Lt, Gte, Lte, Like, In, And, Or, Not — serializable, not opaque lambdas. `Ref(attr)` enables attribute-to-attribute comparisons (e.g. `Gt("users.age", Ref("departments.min_age"))`), which also work as `JoinPredicate` bodies
 - [x] logical plan IR: `to_plan()` and `explain()` extract operator pipelines without execution; JSON-serializable
 - [x] lazy operator execution and composable pipelines (`OperatorInput` type)
 
