@@ -27,15 +27,26 @@
 - [ ] in-place FQL operators (paper Sec 4.3): INSERT/UPDATE/DELETE as composable
   FQL operators, not just `__setitem__`/`__delitem__`. The paper envisions
   in-place usage across the entire Table 1 landscape, not limited to RF→RF.
-- [ ] flattening joins (MR 1 landed — see the DONE section for the four-
-  operator API. MR 2 pending: the actual `join` operator (DBF → flat RF)
-  that consumes the constraint-decorated DBF. The old `fql/operators/joins.py`
-  is still broken and will be replaced in MR 2.)
-- [ ] bug: stray `from docutils.nodes import target` at `fql/plan/join_graph.py:6`
-  — dead IDE auto-import. The file uses `target` 20+ times as a local name so
-  the import either shadows local scope (if `docutils` is installed) or will
-  `ImportError` on a fresh environment. Same pattern was just fixed in
-  `fdm/schema.py`. Remove in a separate one-line cleanup MR.
+- [ ] flattening joins — follow-up MR to lift the two NotImplementedError
+  paths that MR 2's minimal POC explicitly declines: (a) JoinPredicate
+  pushdown during the join walk, firing predicates as soon as all their
+  participating relations are in the accumulator; (b) multi-source
+  reference graphs (e.g. JOB's `ci→t`, `mc→t`) and diamond-shaped
+  acyclic graphs via a BFS-spanning-tree walk with an on-the-fly
+  reverse index. Also: Cartesian fallback for multi-RF DBFs with zero
+  references, if anyone ever asks for it.
+- [ ] SQL-style flat join results — separate follow-up MR. The current
+  `join` operator emits rows as **nested** TFs of shape
+  `TF({relation_name: relation_tf, …})` (references, object identity
+  preserved, no value duplication — the FDM-native shape per the
+  [Dit26] paper). For **compatibility** with SQL-shaped downstream
+  consumers (e.g. tools that want every attribute as a top-level
+  scalar on the row), add a sibling operator or a `flatten=True`
+  option on `join` that copies every scalar attribute of every
+  relation into a single flat TF per row, with `"relation.attribute"`
+  keys. Accepts the SQL-style value denormalization deliberately;
+  the FDM-native shape stays the default so the paper's argument
+  against SQL redundancy is not silently undermined.
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
 - [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
@@ -45,6 +56,14 @@
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [x] semijoin/subdatabase: should output RFs carry over constraints (ForeignValueConstraint etc.) from the input?
 - [ ] semijoin: auto-detect ref_key when there is only one ForeignValueConstraint between the two relations
+- [ ] semijoin: `_find_ref_direction` matches constraints by ref_key only
+  and silently picks the first hit. That enforces a hidden invariant that
+  every `ref_key` must be unique across the whole DBF — reusing the same
+  name (e.g. `"next"` on every hop of a chain) silently returns the wrong
+  direction and breaks Yannakakis reduction for chains of length ≥ 3.
+  The invariant is load-bearing and should be self-policing: either raise
+  when two RFs carry the same `ref_key`, or index constraints by
+  `(ref_key, target_rf.uuid)` so the lookup is unambiguous.
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
   from the store
 
@@ -110,6 +129,18 @@
 ---
 
 ### DONE
+- [x] flattening `join` operator (MR 2 of the join-rework): minimal POC
+  in `fql/operators/joins.py`. Consumes a constraint-decorated DBF,
+  runs `subdatabase` for Yannakakis reduction, walks outgoing
+  `ForeignValueConstraint` edges from the unique pure-source relation,
+  and emits an RF of **nested** per-row TFs of the form
+  `TF({relation_name: relation_tf, …})` — no value denormalization;
+  relation TFs are shared across rows by object identity. Explicit
+  scope limits (JoinPredicate pushdown, multi-source / non-tree
+  graphs, Cartesian over edgeless multi-RF DBFs) raise
+  `NotImplementedError` and are tracked as a follow-up above.
+- [x] dead `from docutils.nodes import target` import at
+  `fql/plan/join_graph.py:6` — removed alongside MR 2.
 - [x] constraint operators (MR 1 of the join rework): four specialized
   operators in `fql/operators/constraints.py` — `add_reference` /
   `drop_reference` for `ForeignValueConstraint`s and `add_join_predicate` /

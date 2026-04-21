@@ -486,3 +486,23 @@ def test_check_acyclicity_linear_chain_passes() -> None:
         [Edge(A, B, "r1"), Edge(B, C, "r2"), Edge(C, D, "r3")],
     )
     graph.check_acyclicity()  # should not raise
+
+
+def test_join_graph_len_counts_nodes() -> None:
+    """`len(graph)` returns the number of relations, matching the
+    external reference `JoinGraph.__len__`."""
+    graph: JoinGraph = _make_graph(["A", "B", "C"], [])
+    assert len(graph) == 3
+
+    empty: JoinGraph = _make_graph([], [])
+    assert len(empty) == 0
+
+
+def test_join_graph_iter_yields_relation_names() -> None:
+    """`for name in graph:` iterates relation names in insertion order
+    — not JoinNode objects, and not edges."""
+    graph: JoinGraph = _make_graph(
+        ["Alpha", "Bravo", "Charlie"],
+        [Edge(Node("Alpha"), Node("Bravo"), "r")],
+    )
+    assert list(graph) == ["Alpha", "Bravo", "Charlie"]

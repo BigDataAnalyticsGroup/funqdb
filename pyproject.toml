@@ -23,6 +23,16 @@ markers = [
     "needs_review_modified: AI-modified test — check '# -- begin/end AI-modified --' sections before merge",
 ]
 
+[tool.coverage.run]
+# Write **relative** file paths into coverage reports (Cobertura XML,
+# JSON, HTML). Without this, `coverage xml` emits absolute filesystem
+# paths like `/builds/bigdata/funqdb/funqdb/fql/operators/joins.py`,
+# which GitLab cannot match against the MR-diff paths (those are
+# repo-relative). Result: no per-line coverage annotations in the MR
+# "Changes" tab. With `relative_files = true` the XML carries plain
+# `fql/operators/joins.py` and GitLab renders the diff correctly.
+relative_files = true
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"

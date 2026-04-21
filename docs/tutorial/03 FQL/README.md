@@ -107,7 +107,7 @@ operators which operate exclusively on DBFs (DBF → DBF).
 | [disaggregate](disaggregate.md) | AF → AF↑ | Expand aggregates (inverse of aggregate) |
 | [subdatabase](subdatabase.md) | DBF → DBF | Reduce a database to participating tuples |
 | [add_reference / drop_reference / add_join_predicate / drop_join_predicate](constraints.md) | DBF → DBF | Assemble join specifications as constraints on a DBF |
-| [join](join.md) | DBF → AF | Join operators (being reworked) |
+| [join](join.md) | DBF → RF | Materialize the constraint-decorated DBF as an RF of nested per-row TFs (reference-based, minimal POC — see [scope](join.md#scope-and-deferred-follow-ups)) |
 
 ### Additional Topics
 

@@ -38,13 +38,20 @@ pytest:
     - poetry install --no-root
     # Run all unit tests with coverage
     - poetry run coverage run -m pytest
-    # Generate coverage reports
+    # Cobertura XML for MR diff line-by-line coverage visualization.
+    # Produced **first** so that it exists even when the `--fail-under`
+    # checks below abort the job — otherwise GitLab would have no
+    # coverage report to annotate the MR diff with in a failing build,
+    # which is exactly when the reviewer wants to see it. Paths inside
+    # the XML are repo-relative (pyproject.toml `[tool.coverage.run]
+    # relative_files = true`) so GitLab can match them to the diff.
+    # The -o target matches the `reports.coverage_report.path` below.
+    - coverage xml -o coverage/cobertura-coverage.xml
+    # Generate human-readable reports; both enforce the 80% floor.
     - coverage html --fail-under=80
     - cp -r htmlcov htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
     - coverage json --fail-under=80
     - cp coverage.json coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
-    # Cobertura XML for MR diff line-by-line coverage visualization
-    - coverage xml
     # Print total line so GitLab can parse the coverage percentage for the badge
     - coverage report
   # Regex for GitLab to extract the coverage percentage from the job log
@@ -53,6 +60,10 @@ pytest:
   artifacts:
     # Take whole HTML folder and the json report
     name: "coverage-report-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    # Upload artifacts / reports even when the job fails — the
+    # coverage XML is specifically valuable on failing builds because
+    # it shows the reviewer which newly-changed lines are not covered.
+    when: always
     paths:
       - htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA/*
       - coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
@@ -61,7 +72,7 @@ pytest:
       # Cobertura report: GitLab shows covered/uncovered lines in the MR diff
       coverage_report:
         coverage_format: cobertura
-        path: coverage.xml
+        path: coverage/cobertura-coverage.xml
 
 
 no-unreviewed-tests:
