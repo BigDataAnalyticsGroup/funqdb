@@ -35,18 +35,6 @@
   acyclic graphs via a BFS-spanning-tree walk with an on-the-fly
   reverse index. Also: Cartesian fallback for multi-RF DBFs with zero
   references, if anyone ever asks for it.
-- [ ] SQL-style flat join results — separate follow-up MR. The current
-  `join` operator emits rows as **nested** TFs of shape
-  `TF({relation_name: relation_tf, …})` (references, object identity
-  preserved, no value duplication — the FDM-native shape per the
-  [Dit26] paper). For **compatibility** with SQL-shaped downstream
-  consumers (e.g. tools that want every attribute as a top-level
-  scalar on the row), add a sibling operator or a `flatten=True`
-  option on `join` that copies every scalar attribute of every
-  relation into a single flat TF per row, with `"relation.attribute"`
-  keys. Accepts the SQL-style value denormalization deliberately;
-  the FDM-native shape stays the default so the paper's argument
-  against SQL redundancy is not silently undermined.
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
 - [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
@@ -129,6 +117,15 @@
 ---
 
 ### DONE
+- [x] SQL-style flat join results (`flatten` operator, MR 3 of the join-rework):
+  standalone `flatten` class in `fql/operators/flatten.py`. Accepts any RF
+  whose row values are nested TFs (typically the output of `join`) and emits
+  a new RF of flat TFs with dot-separated `"relation.attribute"` keys.
+  Recursively expands AF-valued attributes to arbitrary depth; computed
+  attributes are materialised at flatten time; reference cycles raise
+  `ValueError` via a visited-set guard. Key-collision behaviour (last write
+  wins) is documented. The FDM-native nested shape from `join` is unchanged
+  and remains the default.
 - [x] flattening `join` operator (MR 2 of the join-rework): minimal POC
   in `fql/operators/joins.py`. Consumes a constraint-decorated DBF,
   runs `subdatabase` for Yannakakis reduction, walks outgoing

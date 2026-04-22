@@ -22,27 +22,27 @@ tuples, relations, databases, and sets of databases.
 - [Observers](<01 FDM Basics/Observers.md>) — reactive notifications
 - [Visualization](<01 FDM Basics/Visualization.md>) — interactive schema graphs
 
-### [02 FDM Store](<02 FDM Store>)
+### [02 FQL](<02 FQL>)
+
+The Functional Query Language — unary operators that transform AFs.
+
+- **Filtering:** [filter](<02 FQL/filter.md>), [subset](<02 FQL/subset.md>)
+- **Projection:** [project](<02 FQL/project.md>)
+- **Ranking:** [rank_by](<02 FQL/rank.md>)
+- **Transform:** [transform](<02 FQL/transform.md>)
+- **Grouping:** [partition](<02 FQL/partition.md>), [group_by](<02 FQL/group_by.md>)
+- **Aggregation:** [aggregate](<02 FQL/aggregate.md>), [disaggregate](<02 FQL/disaggregate.md>)
+- **Set operations:** [union](<02 FQL/union.md>), [intersect / minus](<02 FQL/set_operations.md>)
+- **Join:** [join](<02 FQL/join.md>), [flatten](<02 FQL/flatten.md>), [subdatabase](<02 FQL/subdatabase.md>)
+- **Predicates:** [structured predicates](<02 FQL/predicates.md>)
+- **Plan inspection:** [explain() and plan IR](<02 FQL/plan.md>)
+
+### [03 FDM Store](<03 FDM Store>)
 
 Persistence for attribute functions — SQLite-backed key/blob store with
 automatic swizzling/unswizzling.
 
-- [Store](<02 FDM Store/Store.md>) — register, load, and lazy-load AFs
-
-### [03 FQL](<03 FQL>)
-
-The Functional Query Language — unary operators that transform AFs.
-
-- **Filtering:** [filter](<03 FQL/filter.md>), [subset](<03 FQL/subset.md>)
-- **Projection:** [project](<03 FQL/project.md>)
-- **Ranking:** [rank_by](<03 FQL/rank.md>)
-- **Transform:** [transform](<03 FQL/transform.md>)
-- **Grouping:** [partition](<03 FQL/partition.md>), [group_by](<03 FQL/group_by.md>)
-- **Aggregation:** [aggregate](<03 FQL/aggregate.md>), [disaggregate](<03 FQL/disaggregate.md>)
-- **Set operations:** [union](<03 FQL/union.md>), [intersect / minus](<03 FQL/set_operations.md>)
-- **Join:** [join](<03 FQL/join.md>), [subdatabase](<03 FQL/subdatabase.md>)
-- **Predicates:** [structured predicates](<03 FQL/predicates.md>)
-- **Plan inspection:** [explain() and plan IR](<03 FQL/plan.md>)
+- [Store](<03 FDM Store/Store.md>) — register, load, and lazy-load AFs
 
 ### Podcast
 

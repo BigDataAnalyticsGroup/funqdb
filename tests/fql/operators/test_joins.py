@@ -358,8 +358,8 @@ def test_join_linear_chain_produces_nested_row_per_leaf_tuple() -> None:
         }
     # the tasks TFs land in the rows by object identity — each row's
     # "tasks" entry is exactly one of the two input task TFs
-    seen_tasks: set[int] = {id(item.value["tasks"]) for item in out}
-    assert seen_tasks == {id(tasks["t1"]), id(tasks["t2"])}
+    seen_tasks: set[int] = {item.value["tasks"].uuid for item in out}
+    assert seen_tasks == {tasks["t1"].uuid, tasks["t2"].uuid}
 
     # both rows reach the same project and department TFs by identity —
     # zero-redundancy contract even across the chain
