@@ -19,12 +19,28 @@
 #
 
 import pickle
+import uuid
 
 from fdm.API import AttributeFunction, AttributeFunctionSentinel
 from fdm.attribute_functions import TF
 from fql.util import Item
 from store.store import Store
 
+WAS_UPDATED = False
+
+def global_update_mock(self, other=None, *args, **kwargs):
+    """
+    Picklable global mock that accepts the 'other' argument.
+    This function is required because the Store triggers update() internally
+    when notifying dependent AttributeFunctions. The test itself cannot directly
+    observe this call, so this mock sets the global flag WAS_UPDATED to True
+    when invoked.
+
+    The function is defined at module level to ensure it is picklable, as
+    AttributeFunctions may be serialized when stored.
+    """
+    global WAS_UPDATED
+    WAS_UPDATED = True
 
 def test_pickle_Item(tmp_path):
 
@@ -215,3 +231,44 @@ def test_store_get_put_with_sentinel_replacement(tmp_path):
     assert type(outer_tuple.observers[0]) == TF
 
     store_read.close()
+
+def test_store_dependency_notification(tmp_path):
+    """
+    Test that updates propagate through the Store via subscriptions,
+    using the persistent dependency mechanism transparently.
+    This test covers:
+    1. Creating AttributeFunctions (AFs) with dependencies
+    2. Verifying that updating a parent AF triggers the child's update method
+    3. Ensuring that update propagation works across store persistence
+    """
+    global WAS_UPDATED
+    WAS_UPDATED = False
+
+    TF.update = global_update_mock 
+
+    file_name = str(tmp_path / "test_dependency.sqlite")
+    store = Store(file_name=file_name)
+
+    parent_af = TF({"value": 1}, store=store)
+    child_af = TF({"value": 2}, store=store)
+
+    child_af.inputs = [parent_af]
+
+    store.put(child_af)
+    store.put(parent_af) 
+
+    assert WAS_UPDATED is True 
+
+    # verify registry persisted correctly
+    registry = store._get_registry()
+    parent_uuid_str = str(parent_af.uuid)
+    assert parent_uuid_str in registry
+    assert str(child_af.uuid) in registry[parent_uuid_str]
+
+    store.close()
+    store = Store(file_name=file_name)
+
+    # Check that the data is STILL there after re-opening
+    new_registry = store._get_registry()
+    assert str(parent_af.uuid) in new_registry
+
