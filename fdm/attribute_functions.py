@@ -876,41 +876,90 @@ class DictionaryAttributeFunction[Key, Value](
 
         return result
 
-    def project(self, *keys) -> "AttributeFunction":
+    def project(self, *keys: str) -> "DictionaryAttributeFunction":
         """Project the values of this DictionaryAttributeFunction based on the given keys.
-        @param keys: the keys to project to, i.e., the keys of the items to include in the result.
 
-        @return: A new DictionaryAttributeFunction instance containing only the keys specified.
+        Keys may be flat (e.g. ``"name"``) or dot-separated paths (e.g. ``"department.name"``).
+        For a path key the intermediate segments are traversed and the value is stored under
+        the last segment in the result TF.  Missing paths are silently skipped — consistent
+        with FDM's convention that absent attributes are simply not present.
+
+        When a flat key and a path key resolve to the same last-segment name, the path key
+        wins because path keys are applied after flat keys.
+
+        @param keys: the keys (or dot-separated paths) to project to.
+        @return: A new DictionaryAttributeFunction instance containing only the specified keys.
+        @raises ValueError: If no keys are provided.
+        @raises TypeError: If any value in this AF is not a DictionaryAttributeFunction.
         """
+        if len(keys) < 1:
+            raise ValueError("At least one key must be provided for projection.")
+
         result: DictionaryAttributeFunction = type(
             self
         )()  # create result instance of the same type as self
 
-        assert len(keys) >= 1, "At least one key must be provided for projection."
+        flat_keys: tuple[str, ...] = tuple(k for k in keys if "." not in str(k))
+        path_keys: tuple[str, ...] = tuple(k for k in keys if "." in str(k))
 
         # TODO: make operator, via new transform_values operator?
         # what about inserting multiple items into an AF?
-        def project(input_DAF: DictionaryAttributeFunction, keys):
+        def _apply_to_tf(
+            input_DAF: DictionaryAttributeFunction,
+            flat_keys: tuple[str, ...],
+            path_keys: tuple[str, ...],
+        ) -> DictionaryAttributeFunction:
             output_DAF: DictionaryAttributeFunction = type(input_DAF)()
-            # Copy only stored items that are in the projection set:
+            # Copy only stored items that are in the flat projection set:
             for key, value in input_DAF.__dict__["data"].items():
-                if key in keys:
+                if key in flat_keys:
                     output_DAF[key] = value
             # Carry over computed definitions for projected keys — the lambda
             # itself is preserved, not its current value, so the computation
             # stays live on the projected AF. Note: if the lambda references
             # a key that was excluded from the projection, it will raise
-            # AttributeError on access (same as SQL dropping a dependency column).
+            # AttributeError on access (same as dropping a dependency attribute).
             for key, func in input_DAF.__dict__["computed"].items():
-                if key in keys:
-                    output_DAF.__dict__["computed"][key] = func
+                if key in flat_keys:
+                    output_DAF.add_computed(key, func)
+            # Note: domain-backed keys (present only via default+domain) are
+            # intentionally excluded from flat projection. They are derived from
+            # the full attribute space of the source TF; projecting a subset
+            # would silently change the semantics of the default function. Path
+            # keys can still reach domain-backed intermediate segments because
+            # the traversal uses __getitem__, which honours the default function.
+            # Resolve dot-separated paths: use __contains__ and __getitem__ so that
+            # computed and domain-backed keys are reachable at every level, then
+            # store the final value under the last segment name.
+            for path in path_keys:
+                segments: list[str] = path.split(".")
+                current: DictionaryAttributeFunction = input_DAF
+                found: bool = True
+                for segment in segments[:-1]:
+                    if (
+                        not isinstance(current, DictionaryAttributeFunction)
+                        or segment not in current
+                    ):
+                        found = False
+                        break
+                    current = current[segment]
+                if found and isinstance(current, DictionaryAttributeFunction):
+                    last: str = segments[-1]
+                    if last in current:
+                        output_DAF[last] = current[last]
             return output_DAF
 
-        outer_item: Item
         # loop over entries of self:
         for outer_item in self:
-            # if key exists, add it to the projection result:
-            result[outer_item.key] = project(outer_item.value, keys)
+            if not isinstance(outer_item.value, DictionaryAttributeFunction):
+                raise TypeError(
+                    f"project() requires each value to be a DictionaryAttributeFunction, "
+                    f"but found {type(outer_item.value).__name__} at key '{outer_item.key}'."
+                )
+            # apply projection to each inner TF:
+            result[outer_item.key] = _apply_to_tf(
+                outer_item.value, flat_keys, path_keys
+            )
 
         return result
 
@@ -929,16 +978,27 @@ class DictionaryAttributeFunction[Key, Value](
             # Before: RF({1: TF({"name": "Alice", "yob": 1990}), ...})
             # After:  RF({1: TF({"first_name": "Alice", "birth_year": 1990}), ...})
 
+        Note: domain-backed keys (present only via default+domain) are intentionally excluded
+        from renaming — same rationale as in ``project()``.
+
         @param kwargs: old_key=new_key pairs, e.g. rename(name="first_name").
         @return: A new DictionaryAttributeFunction where each value has its keys renamed accordingly.
+        @raises ValueError: If no rename mappings are provided.
+        @raises TypeError: If any value in this AF is not a DictionaryAttributeFunction.
         """
-        assert len(kwargs) >= 1, "At least one rename mapping must be provided."
+        if len(kwargs) < 1:
+            raise ValueError("At least one rename mapping must be provided.")
 
         # create a new AF of the same type (e.g. RF → RF):
         result: DictionaryAttributeFunction = type(self)()
 
         outer_item: Item
         for outer_item in self:
+            if not isinstance(outer_item.value, DictionaryAttributeFunction):
+                raise TypeError(
+                    f"rename() requires each value to be a DictionaryAttributeFunction, "
+                    f"but found {type(outer_item.value).__name__} at key '{outer_item.key}'."
+                )
             # create a new value AF of the same type as the original value (e.g. TF → TF):
             renamed: DictionaryAttributeFunction = type(outer_item.value)()
             # Copy stored items with potentially renamed keys:
@@ -952,7 +1012,7 @@ class DictionaryAttributeFunction[Key, Value](
             # changes the external key, not how other attributes are accessed.
             for key, func in outer_item.value.__dict__["computed"].items():
                 new_key = kwargs.get(key, key)
-                renamed.__dict__["computed"][new_key] = func
+                renamed.add_computed(new_key, func)
             # preserve the outer key (e.g. the tuple ID in an RF):
             result[outer_item.key] = renamed
 

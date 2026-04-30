@@ -26,14 +26,14 @@ class project[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """A projection operator. Implemented as a transform operator that deletes all items from the input function that
-    are not in the given set of attributes. Not that if you project to an attribute that does not exist in the input
+    are not in the given set of attributes. Note that if you project to an attribute that does not exist in the input
     function, the output function will simply not contain that attribute, instead of throwing an error. This is because
     in FDM and FQL, missing attributes are simply not present in the attribute function, rather than being present with
     a null value.
     """
 
     def __init__(
-        self, input_function: OperatorInput[INPUT_AttributeFunction], *attributes
+        self, input_function: OperatorInput[INPUT_AttributeFunction], *attributes: str
     ):
         """Initialize the project operator with the given set of attributes to project to.
         @param input_function: The input attribute function to project.
@@ -42,5 +42,5 @@ class project[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         super().__init__(
             input_function,
             # redirect the transformation function to the projection function:
-            transformation_function=lambda af: af.project(attributes),
+            transformation_function=lambda af: af.project(*attributes),
         )
