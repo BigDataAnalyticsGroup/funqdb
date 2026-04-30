@@ -983,11 +983,17 @@ class DictionaryAttributeFunction[Key, Value](
 
         @param kwargs: old_key=new_key pairs, e.g. rename(name="first_name").
         @return: A new DictionaryAttributeFunction where each value has its keys renamed accordingly.
-        @raises ValueError: If no rename mappings are provided.
+        @raises ValueError: If no rename mappings are provided, or if any key is a dot-separated path.
         @raises TypeError: If any value in this AF is not a DictionaryAttributeFunction.
         """
         if len(kwargs) < 1:
             raise ValueError("At least one rename mapping must be provided.")
+        path_keys = [k for k in kwargs if "." in k]
+        if path_keys:
+            raise ValueError(
+                f"rename() does not support path-based keys: {path_keys}. "
+                f"rename() operates one level deep; use project() for nested access."
+            )
 
         # create a new AF of the same type (e.g. RF → RF):
         result: DictionaryAttributeFunction = type(self)()

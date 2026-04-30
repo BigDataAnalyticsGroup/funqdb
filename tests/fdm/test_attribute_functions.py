@@ -900,3 +900,19 @@ def test_active_domain():
     R12_copy.set_domain({1, 2, 3, 4, 5})
     assert len(R12_copy) == 5
     assert len(R12) == 3  # original unchanged
+
+
+def test_rename_path_key_raises():
+    """rename() raises ValueError when given a dot-separated path key.
+    Path-based rename is not supported; the error prevents silent no-ops
+    that would otherwise mask caller mistakes.
+    """
+    # Build an RF whose TFs have a nested 'department' TF with a 'name' attribute
+    db: DBF = _create_testdata(frozen=False)
+    # users RF: each TF has 'name', 'yob', and a nested 'department' TF
+    users: RF = db.users
+
+    # Attempting to rename via a path key must raise ValueError — path-based
+    # rename is not supported and silently ignoring it would hide caller mistakes
+    with pytest.raises(ValueError):
+        users.rename(**{"department.name": "dept_name"})
