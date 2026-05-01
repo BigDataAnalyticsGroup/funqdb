@@ -103,44 +103,10 @@ the [Masterhorst application system](https://apply.cs.uni-saarland.de), etc., so
 at this point, this cannot be a full time job (unfortunately).
 
 
-### Already Supported features include:
+### Supported features
 
-**Functional Data Model (FDM):**
-
-- [x] attribute functions (AFs): TF, RF, DBF, SDBF as uniform replacements for tuples, relations, databases, and sets of databases
-- [x] relationship functions (RSFs) for n:m-relationships between AFs
-- [x] composite primary keys
-- [x] tensor type with element-wise arithmetic (+, -, \*) (TODO: incomplete, see TODO.md)
-- [x] computed attribute values (`computed=`): derived values indistinguishable from stored ones (paper Sec 2.3)
-- [x] computed attribute functions (`default=`): AFs that generate values on the fly for unstored keys (paper Sec 2.6)
-- [x] active domains (`domain=`): finite scoping of default functions, enabling enumeration (paper Sec 2.4)
-- [x] frozen/read-only AFs
-- [x] schema definitions and constraints (type checking, foreign value constraints, cross-relation `JoinPredicate`s for arbitrary SQL-style join conditions)
-- [x] `where()`, `project()`, `rename()` directly on AFs with Django ORM-style lookups
-- [x] `__`-path syntax for nested attribute access (e.g. `af["department__name"]`)
-- [x] observer mechanism: AFs notify dependents on changes (TODO: through the store)
-
-**Functional Query Language (FQL):**
-
-- [x] unary operators: filter (items/values/keys), projection
-- [x] `subdatabase` (DBF → DBF): Yannakakis-style semi-join reduction expressed as a cascade of `semijoin` operators; reads the reference graph from `ForeignValueConstraint`s and reduces every relation in the DBF to the tuples that participate in the full join (acyclic graphs only)
-- [x] constraint operators (DBF → DBF): `add_reference` / `drop_reference` install or remove foreign-key-style references, `add_join_predicate` / `drop_join_predicate` install or remove arbitrary cross-relation `JoinPredicate`s. Together they let users assemble a DBF whose constraints fully describe a join in a pipeline-friendly, immutable, plan-extractable way
-- [x] `join` operator (DBF → RF, minimal POC): consumes a constraint-decorated DBF, runs `subdatabase` (Yannakakis) internally, and emits an RF indexed by row where each row is a **nested** TF `{relation_name: relation_tf}`. Relations enter each row **by reference**, not by copy — two rows whose reference chain lands on the same target tuple share it by FDM object identity, preserving zero-redundancy. Minimal scope covers single RFs, linear chains, and single-source stars (any tree rooted in a unique pure-source relation); multi-source graphs (JOB style `ci→t`, `mc→t`), diamonds, and `JoinPredicate` pushdown raise `NotImplementedError` and are the scope of a follow-up MR
-- [x] `flatten` operator (RF → RF): converts the FDM-native nested RF produced by `join` into SQL-style flat rows with dot-separated keys (`"relation.attribute"`). AF-valued attributes are expanded recursively to arbitrary depth; computed attributes are materialised as scalars; reference cycles raise `ValueError`. The FDM-native nested shape from `join` is unchanged and remains the default — `flatten` is an opt-in for SQL-shaped downstream consumers
-- [x] aggregation operators with built-in functions (Sum, Avg, Count, Min, Max, Median)
-- [x] partitioning: group_by, partition, group_by_aggregate, partition_by_aggregate
-- [x] set operators: union, intersect, minus/difference, cogroup
-- [x] ranking: rank_by, top-k via subset
-- [x] transforms: transform, transform_items
-- [x] structured predicates: Eq, Gt, Lt, Gte, Lte, Like, In, And, Or, Not — serializable, not opaque lambdas. `Ref(attr)` enables attribute-to-attribute comparisons (e.g. `Gt("users.age", Ref("departments.min_age"))`), which also work as `JoinPredicate` bodies
-- [x] logical plan IR: `to_plan()` and `explain()` extract operator pipelines without execution; JSON-serializable
-- [x] lazy operator execution and composable pipelines (`OperatorInput` type)
-
-**Persistence & Tooling:**
-
-- [x] store for AFs using SqliteDict as key/blob-store (query pushdown not yet implemented)
-- [x] automatic on-demand swizzling/unswizzling of references (reads only, TODO: writes)
-- [x] schema visualization to interactive HTML (Cytoscape.js) via `funqdb-viz` CLI
+See [`SPEC.md`](SPEC.md) for the current feature specification.
+The gold standard for a supported feature is a passing test.
 
 ### Project Goals
 
