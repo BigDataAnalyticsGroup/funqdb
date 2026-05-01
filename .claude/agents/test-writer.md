@@ -39,7 +39,16 @@ For every function, operator, or class you receive, write tests covering:
 ## Conventions
 
 - All test functions and classes get a docstring explaining what they test and why.
-- Use inline comments where the intent of a setup step is not obvious.
+- Every statement in the test body must carry an end-of-line comment explaining
+  what it does or asserts and why — this lets the reviewer verify each line without
+  running the code. Example:
+  ```python
+  af = AttributeFunction({"a": 1, "b": 2})  # two-element AF as baseline
+  result = af.rename({"a": "x"})             # rename key "a" to "x"
+  assert "x" in result                       # renamed key must be present
+  assert "a" not in result                   # original key must be gone
+  assert result["x"] == 1                    # value must be preserved
+  ```
 - Use type hints in test signatures and local variables where useful.
 - Do **not** mock the store — use a real `Store` instance (in-memory / tmp path
   via pytest's `tmp_path` fixture) so swizzling and persistence paths are

@@ -24,8 +24,7 @@ at this stage; clarity and faithfulness to the FDM/FQL ideas are.
   feature branch first. If in doubt whether a new branch is needed, ask.
 - During POC / iterative development it is fine to change files directly on
   the current feature branch (no sub-branches needed).
-- **Commit and push after every phase** (POC, checkpoint, iteration, final)
-  so progress is always saved remotely.
+- **Commit and push after every phase** (see `/develop`) so progress is always saved remotely.
 - **Run `black` before every push** on all changed `.py` files to ensure
   consistent formatting. The CI pipeline will reject unformatted code.
 
@@ -63,7 +62,7 @@ These come from `CONTRIBUTING.md` and the existing code — please respect them:
    logic. Existing code in `fdm/attribute_functions.py` is a good style reference.
 3. **Tests for every new feature or bug fix.** Tests double as tutorial examples, so
    write them readably.
-4. **One concern per PR** — don't mix unrelated changes.
+4. **One concern per PR** — don't mix unrelated changes; split large tasks into smaller independent MRs (see Surgical changes).
 5. **AGPL-3.0 license header** on new source files (see existing files for the exact
    header text).
 6. Prefer editing existing files over creating new ones; prefer small, focused changes.
@@ -72,6 +71,10 @@ These come from `CONTRIBUTING.md` and the existing code — please respect them:
    proper type exists, create one; also consider using FDM's DictionaryAttributeFunction and its subtypes
 
 ## AI-generated test marking
+
+Every statement in an AI-written or AI-modified test body must carry an end-of-line
+comment explaining what it does or asserts and why — so the reviewer can verify each
+line without running the code.
 
 Every test method that Claude adds or modifies **must** be flagged for human review.
 The CI job `no-unreviewed-tests` blocks the merge while any flagged test remains.
@@ -120,6 +123,21 @@ If the change is so pervasive that section comments would be more noise than
 signal (e.g. a complete rewrite), use `@pytest.mark.needs_review_new` instead
 (treat it as a new test).
 
+## Surgical changes
+
+Touch only what the task requires. Every changed line should trace directly to the request.
+
+- Don't improve adjacent code, comments, or formatting that isn't broken.
+- Match existing style even if you'd do it differently.
+- If you notice unrelated dead code or issues, mention them — don't fix them silently.
+- Remove only imports/variables/functions that *your* changes made unused.
+
+**Keep changes small.** Every line of code added is code the user must review and maintain.
+When a larger task can be split into semantically independent pieces, propose splitting it
+into separate MRs rather than delivering one large changeset. If in doubt, do less and ask.
+
+If multiple interpretations of a request exist, present them — don't pick silently.
+
 ## Things to be careful about
 
 - **Don't "fix" things that look SQL-ish by making them more SQL-ish.** The whole
@@ -131,57 +149,16 @@ signal (e.g. a complete rewrite), use `@pytest.mark.needs_review_new` instead
 - Swizzling/unswizzling currently works for **reads only**; writes are a known TODO.
 - `TODO.md` tracks known work items — check it before proposing new ones.
 
-## Subagent workflow — iterative development
+## Development workflows
 
-Three project-local subagents live in `.claude/agents/`. The workflow is **iterative
-and human-in-the-loop**: start minimal, get feedback early, then refine.
+The full workflow is documented in `.claude/WORKFLOW.md` — update it when skills or agents change.
+`SPEC.md` (project root) is the living feature specification — gold standard is a passing test.
 
-### Phase 1: POC — get the core idea working
+Always use the available skills and subagents — don't do their work inline.
 
-1. **Research (optional)** — use the `researcher` agent if you need to look up
-   library behaviour, best practices, or anything requiring web searches.
-2. **Implement a bare-bones POC** — focus only on the core functionality. Skip
-   edge cases, full docstrings, and polish. Apply basic conventions (type hints,
-   AGPL header on new files) but keep it minimal.
-3. **Write initial tests** — invoke the `test-writer` agent for happy-path tests
-   only. These prove the POC works and serve as executable documentation of the
-   intended behaviour.
-4. **Review** — invoke the `code-reviewer` agent on the POC. At this stage,
-   "PASS WITH NOTES" is expected and fine — the goal is to catch fundamental
-   design issues early, not to polish.
+Use `/plan` to design a feature before any code is written (explore → design → approval).
+Use `/develop` to implement an approved plan (POC → checkpoint → iterate).
+Use `/finish-mr` to finalize and push a completed feature branch.
 
-### Phase 2: Human checkpoint (mandatory)
-
-**Stop and present the POC to the user before proceeding.** Include:
-
-- A short summary of the approach taken and any design decisions made.
-- What works, what is deliberately left out, and what the known limitations are.
-- Specific questions or options where the user's input would steer the design
-  (e.g. "Should X be eager or lazy?", "Do you want Y to support Z?").
-
-**Do not continue to Phase 3 until the user gives explicit go-ahead.** If the
-user requests changes, loop back to Phase 1 with the revised direction.
-
-### Phase 3: Iterate to completion
-
-Once the user approves the direction:
-
-1. **Flesh out the implementation** — add edge-case handling, full docstrings,
-   inline comments, and any remaining conventions from `CONTRIBUTING.md`.
-2. **Extend tests** — invoke the `test-writer` agent again, now covering edge
-   cases, failure modes, and security-relevant paths.
-3. **Final review** — invoke the `code-reviewer` agent. Expect:
-    - **PASS** — proceed to presenting the result.
-    - **PASS WITH NOTES** — fix the noted items, then proceed.
-    - **NEEDS CHANGES** — fix all blocking issues and re-invoke the reviewer.
-4. **Update documentation/tutorial** as required.
-5. **Format, commit, and push** as the last step, the user will then review the code.
-
-### General principles
-
-- **Prefer small increments over big-bang delivery.** If a feature is large,
-  break it into multiple Phase 1→2→3 cycles rather than one huge cycle.
-- **When in doubt, ask.** A quick clarifying question is always cheaper than
-  reworking a wrong assumption.
-- **Never gold-plate silently.** If you see an improvement opportunity beyond
-  what was asked, mention it to the user instead of just doing it.
+The subagents in `.claude/agents/` (`researcher`, `test-writer`, `code-reviewer`) are
+invoked from within `/develop` and `/finish-mr` — don't bypass them.
