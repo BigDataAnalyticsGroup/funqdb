@@ -156,9 +156,11 @@ The full workflow is documented in `.claude/WORKFLOW.md` — update it when skil
 
 Always use the available skills and subagents — don't do their work inline.
 
-Use `/plan` to design a feature before any code is written (explore → design → approval).
+Use `/design` to design a feature before any code is written (explore → design → approval).
 Use `/develop` to implement an approved plan (POC → checkpoint → iterate).
+Use `/fix-bug` to reproduce, fix, and regression-test a bug (clarify → red test → fix → green).
 Use `/finish-mr` to finalize and push a completed feature branch.
 
-The subagents in `.claude/agents/` (`researcher`, `test-writer`, `code-reviewer`) are
-invoked from within `/develop` and `/finish-mr` — don't bypass them.
+The subagents in `.claude/agents/` (`researcher`, `test-writer`, `code-reviewer`,
+`plan-challenger`) are invoked from within `/design`, `/develop`, `/fix-bug`, and
+`/finish-mr` — don't bypass them.
