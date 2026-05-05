@@ -1,4 +1,7 @@
-# funqDB — Notes for Claude
+# funqDB — project-specific notes for Claude
+
+These notes complement the global config in `~/.claude/CLAUDE.md` with the
+parts that are specific to funqDB.
 
 ## What this project is
 
@@ -14,19 +17,6 @@ terminology like **attribute function (AF)**, **relationship function (RF)**,
 
 This is a proof of concept, not production code. Performance is explicitly a non-goal
 at this stage; clarity and faithfulness to the FDM/FQL ideas are.
-
-## Git workflow
-
-- **Never commit or push directly to `main`.** Always work on a feature branch
-  and create a merge request. This applies to all changes — code, CI, docs.
-- Create descriptive branch names (e.g. `feat/plan-extraction`, `ci/coverage-report`).
-- If you need to develop something and are currently on `main`, create a new
-  feature branch first. If in doubt whether a new branch is needed, ask.
-- During POC / iterative development it is fine to change files directly on
-  the current feature branch (no sub-branches needed).
-- **Commit and push after every phase** (see `/develop`) so progress is always saved remotely.
-- **Run `black` before every push** on all changed `.py` files to ensure
-  consistent formatting. The CI pipeline will reject unformatted code.
 
 ## Repository layout
 
@@ -44,31 +34,21 @@ at this stage; clarity and faithfulness to the FDM/FQL ideas are.
 - `examples/` — standalone example scripts (e.g. schema visualization)
 - `scripts/` — CLI tools (e.g. `funqdb-viz`)
 - `ci/` — CI helper scripts (coverage checks)
-- `.claude/` — Claude Code configuration and subagent definitions
+- `.claude/` — project-local Claude Code configuration
 
-## Tooling
+## Project-specific conventions
 
-- Python **>= 3.12**, managed via **Poetry** (`poetry install`)
-- Tests: **pytest** — run `pytest tests` or target individual files
-- Formatting: **black** (already a dev dependency — use it, don't hand-format)
-- Coverage: **coverage** (target is high, per `CONTRIBUTING.md`)
+In addition to the conventions in the global `CLAUDE.md`:
 
-## Conventions to follow
-
-These come from `CONTRIBUTING.md` and the existing code — please respect them:
-
-1. **Type hints everywhere** — function signatures, variables, return types.
-2. **Docstrings on all public functions and classes and __init__**, plus comments for non-trivial
-   logic. Existing code in `fdm/attribute_functions.py` is a good style reference.
-3. **Tests for every new feature or bug fix.** Tests double as tutorial examples, so
-   write them readably.
-4. **One concern per PR** — don't mix unrelated changes; split large tasks into smaller independent MRs (see Surgical changes).
-5. **AGPL-3.0 license header** on new source files (see existing files for the exact
-   header text).
-6. Prefer editing existing files over creating new ones; prefer small, focused changes.
-7. add/update the documentation/tutorial when changing/adding code
-8. if you need to pass complex a complex object to a function, use a proper type, i.e. a separate class, for it, if no
-   proper type exists, create one; also consider using FDM's DictionaryAttributeFunction and its subtypes
+1. **AGPL-3.0 license header** on every new source file (see existing files
+   in `fdm/`, `fql/`, `store/` for the exact header text).
+2. If you need to pass a complex object to a function and no proper type
+   exists, also consider FDM's `DictionaryAttributeFunction` and its
+   subtypes before creating a new ad-hoc class.
+3. Existing tests double as tutorial examples — write them readably, prefer
+   small self-contained examples over elaborate setup.
+4. Coverage target is high (≥ 90 %, see `CONTRIBUTING.md`). Don't let it
+   regress.
 
 ## AI-generated test marking
 
@@ -123,21 +103,6 @@ If the change is so pervasive that section comments would be more noise than
 signal (e.g. a complete rewrite), use `@pytest.mark.needs_review_new` instead
 (treat it as a new test).
 
-## Surgical changes
-
-Touch only what the task requires. Every changed line should trace directly to the request.
-
-- Don't improve adjacent code, comments, or formatting that isn't broken.
-- Match existing style even if you'd do it differently.
-- If you notice unrelated dead code or issues, mention them — don't fix them silently.
-- Remove only imports/variables/functions that *your* changes made unused.
-
-**Keep changes small.** Every line of code added is code the user must review and maintain.
-When a larger task can be split into semantically independent pieces, propose splitting it
-into separate MRs rather than delivering one large changeset. If in doubt, do less and ask.
-
-If multiple interpretations of a request exist, present them — don't pick silently.
-
 ## Things to be careful about
 
 - **Don't "fix" things that look SQL-ish by making them more SQL-ish.** The whole
@@ -149,18 +114,10 @@ If multiple interpretations of a request exist, present them — don't pick sile
 - Swizzling/unswizzling currently works for **reads only**; writes are a known TODO.
 - `TODO.md` tracks known work items — check it before proposing new ones.
 
-## Development workflows
+## Project-specific skills
 
-The full workflow is documented in `.claude/WORKFLOW.md` — update it when skills or agents change.
-`SPEC.md` (project root) is the living feature specification — gold standard is a passing test.
+- `/finish-mr` — finalize a feature branch (two reviewer rounds, `SPEC.md`
+  status update, `black`, full `pytest tests`, commit & push).
 
-Always use the available skills and subagents — don't do their work inline.
-
-Use `/design` to design a feature before any code is written (explore → design → approval).
-Use `/develop` to implement an approved plan (POC → checkpoint → iterate).
-Use `/fix-bug` to reproduce, fix, and regression-test a bug (clarify → red test → fix → green).
-Use `/finish-mr` to finalize and push a completed feature branch.
-
-The subagents in `.claude/agents/` (`researcher`, `test-writer`, `code-reviewer`,
-`plan-challenger`) are invoked from within `/design`, `/develop`, `/fix-bug`, and
-`/finish-mr` — don't bypass them.
+`SPEC.md` (project root) is the living feature specification — gold standard
+is a passing test.
