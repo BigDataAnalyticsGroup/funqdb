@@ -20,6 +20,7 @@
 
 
 import inspect
+import pickle
 import random
 from copy import copy
 import warnings
@@ -763,6 +764,24 @@ class DictionaryAttributeFunction[Key, Value](
         # default or computed (both stripped above). After deserialization the
         # caller must re-attach domain via set_domain() if needed.
         state_dict["domain"] = None
+        # Constraint sets may hold arbitrary user-supplied callables (bare
+        # lambdas, ad-hoc classes). On the read path, the default pickle
+        # decoder happily executes whatever those objects' __reduce__
+        # returns — a deserialization-gadget channel (see KNOWN_BUGS.md H3).
+        # Keep only objects whose class genuinely inherits from
+        # AttributeFunctionConstraint; the rest is ephemeral by design,
+        # like computed/default/domain above. Callers reattach custom
+        # constraints after deserialization.
+        state_dict["af_constraints"] = {
+            c
+            for c in state_dict["af_constraints"]
+            if isinstance(c, AttributeFunctionConstraint)
+        }
+        state_dict["values_constraints"] = {
+            c
+            for c in state_dict["values_constraints"]
+            if isinstance(c, AttributeFunctionConstraint)
+        }
         for key, value in state_dict["data"].items():
             if isinstance(value, AttributeFunction):
                 # replace the AttributeFunction with a AttributeFunctionSentinel:
@@ -778,6 +797,18 @@ class DictionaryAttributeFunction[Key, Value](
     def __setstate__(self, state):
         """This method defines how to restore the object when unpickling.
         TODO: Custom unpickling logic to restore observers."""
+        # Defense in depth: __getstate__ already filters the constraint sets,
+        # but a hand-crafted pickle stream can still embed other types.
+        # Refuse to materialise the AF if any constraint is not an
+        # AttributeFunctionConstraint, so we never reinstall a gadget into a
+        # live AF (see KNOWN_BUGS.md H3).
+        for field in ("af_constraints", "values_constraints"):
+            for c in tuple(state.get(field) or ()):
+                if not isinstance(c, AttributeFunctionConstraint):
+                    raise pickle.UnpicklingError(
+                        f"refusing to deserialize {field} entry of type "
+                        f"{type(c).__module__}.{type(c).__name__}"
+                    )
         self.__dict__.update(state)
 
     # Django ORM-style lookup operators for use in where() kwargs.
