@@ -175,6 +175,69 @@ def _star_schema_dbf() -> DBF:
     )
 
 
+def _two_relations_with_external_reference_dbf(
+    include_root: bool = False,
+) -> tuple[DBF, RF, RF, RF]:
+    """Reference chain C -> B -> A; whether A is part of the DBF is configurable.
+
+    Underlying data (independent of include_root):
+        A: a1, a2, a3                ; a3 is unreferenced by any B-tuple
+        B: b1->a1, b2->a2, b3->a1    ; B.references("a", A) ; b3 is unreferenced by C
+        C: c1->b1, c2->b2            ; C.references("b", B)
+
+    @param include_root:
+        - False (default): the DBF contains only {B, C}. A is referenced by B
+          (via .references()) but lives OUTSIDE the DBF, so the B -> A edge
+          targets a relation that is not in the DBF. Exercises the
+          "edge target not in DBF" branch of JoinGraph.from_dbf
+          (fql/plan/join_graph.py:127).
+        - True: the DBF contains {A, B, C}. All three reference edges are
+          intra-DBF, so the full Yannakakis cascade runs over the chain.
+
+    @return: (dbf, A, B, C) — the configured DBF and the three RFs (A is
+        returned in both modes regardless of DBF membership).
+    """
+    A: RF = RF(
+        {
+            "a1": TF({"name": "Alpha"}),
+            "a2": TF({"name": "Beta"}),
+            "a3": TF({"name": "Gamma"}),
+        },
+        frozen=False,
+    )
+
+    B: RF = RF(
+        {
+            "b1": TF({"label": "first", "a": A["a1"]}),
+            "b2": TF({"label": "second", "a": A["a2"]}),
+            "b3": TF({"label": "third", "a": A["a1"]}),
+        },
+        frozen=False,
+    ).references("a", A)
+
+    C: RF = RF(
+        {
+            "c1": TF({"value": 10, "b": B["b1"]}),
+            "c2": TF({"value": 20, "b": B["b2"]}),
+        },
+        frozen=False,
+    ).references("b", B)
+
+    A.freeze()
+    B.freeze()
+    C.freeze()
+
+    # A is included only when the caller asked for the full chain; the default
+    # (include_root=False) intentionally leaves A out so its incoming edge from
+    # B targets a relation that is not in the DBF.
+    dbf: DBF = (
+        DBF({"A": A, "B": B, "C": C}, frozen=True)  # full chain: A is the root
+        if include_root
+        else DBF({"B": B, "C": C}, frozen=True)  # A omitted: dangling B -> A
+    )
+    return dbf, A, B, C
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -263,6 +326,119 @@ def test_subdatabase_star_schema() -> None:
     assert {item.key for item in result.customers} == {"c1", "c2"}
     assert {item.key for item in result.products} == {"pr1", "pr2"}
     assert {item.key for item in result.orders} == {"o1", "o2"}
+
+
+def test_subdatabase_drops_reference_to_relation_outside_dbf() -> None:
+    """References pointing to a relation that is not in the DBF must be ignored.
+
+    Schema: C -> B -> A, but only {B, C} are in the DBF (A is referenced by B
+    via .references() but lives outside the DBF). The B -> A edge must be
+    excluded from the join graph (fql/plan/join_graph.py:127), so the
+    subdatabase reduction effectively runs on the single surviving edge C -> B.
+
+    Expected:
+      - JoinGraph from the DBF has 2 nodes {B, C} and exactly one edge C -> B
+      - After Yannakakis reduction:
+          * B is reduced to {b1, b2} (b3 is not referenced by any C-tuple)
+          * C is unchanged: {c1, c2} (both reference surviving B-tuples)
+    """
+    dbf, _A, _B, _C = _two_relations_with_external_reference_dbf(
+        include_root=False
+    )  # build the DBF where B's target relation A lives outside
+
+    graph: JoinGraph = JoinGraph.from_dbf(
+        dbf
+    )  # extract the join graph from the DBF under test
+    assert set(graph.nodes.keys()) == {
+        "B",
+        "C",
+    }  # only B and C are nodes; A is not in the DBF and must not appear
+    edge_tuples: set[tuple[str, str, str]] = (
+        {  # build a structural snapshot of edges as (source, target, ref_key) tuples
+            (e.source.name, e.target.name, e.ref_key)
+            for e in graph.edges  # collect one tuple per edge in the graph
+        }
+    )
+    assert edge_tuples == {
+        ("C", "B", "b")
+    }  # only the C -> B edge survives; B -> A is dropped because A is not in the DBF
+
+    result: DBF = subdatabase[DBF, DBF](
+        dbf
+    ).result  # run subdatabase end-to-end; reduction must succeed despite the dangling constraint
+
+    assert {item.key for item in _A} == {
+        "a1",
+        "a2",
+        "a3",
+    }  # A must be unchanged as it was not part of the DBF
+
+    assert {item.key for item in result.B} == {
+        "b1",
+        "b2",
+    }  # b3 has no referencing C-tuple, so Yannakakis must drop it
+    assert {item.key for item in result.C} == {
+        "c1",
+        "c2",
+    }  # C is unchanged: both c1 and c2 reference surviving B-tuples
+
+
+def test_subdatabase_drops_reference_to_relation_outside_dbf_w_root() -> None:
+    """Variant with A in the DBF: confirms the full chain reduces correctly.
+
+    Same underlying data as test_subdatabase_drops_reference_to_relation_outside_dbf,
+    but now {A, B, C} are all in the DBF, so the C -> B -> A chain is fully
+    visible to the join graph. This is the control case: it shows that the
+    fixture's dataset reduces sensibly when no edge is dangling, which makes
+    the asymmetry with the include_root=False variant a meaningful difference.
+
+    Expected:
+      - JoinGraph: 3 nodes {A, B, C}, 2 edges {B -> A, C -> B}
+      - After Yannakakis cascade:
+          * A is reduced to {a1, a2} (a3 has no referencing B-tuple)
+          * B is reduced to {b1, b2} (b3 has no referencing C-tuple)
+          * C is unchanged: {c1, c2}
+    """
+    dbf, _A, _B, _C = _two_relations_with_external_reference_dbf(
+        include_root=True
+    )  # build the DBF that includes A as the chain root
+
+    graph: JoinGraph = JoinGraph.from_dbf(
+        dbf
+    )  # extract the join graph from the DBF under test
+    assert set(graph.nodes.keys()) == {
+        "A",
+        "B",
+        "C",
+    }  # all three relations are nodes; A is now in the DBF, unlike the no-root variant
+    edge_tuples: set[tuple[str, str, str]] = (
+        {  # build a structural snapshot of edges as (source, target, ref_key) tuples
+            (e.source.name, e.target.name, e.ref_key)
+            for e in graph.edges  # collect one tuple per edge in the graph
+        }
+    )
+    assert edge_tuples == {
+        ("B", "A", "a"),
+        ("C", "B", "b"),
+    }  # both edges survive: nothing is dangling because A is in the DBF
+
+    result: DBF = subdatabase[DBF, DBF](
+        dbf
+    ).result  # run subdatabase end-to-end over the full chain C -> B -> A
+
+    assert {item.key for item in result.A} == {
+        "a1",
+        "a2",
+    }  # a3 has no referencing B-tuple, so Yannakakis must drop it
+
+    assert {item.key for item in result.B} == {
+        "b1",
+        "b2",
+    }  # b3 has no referencing C-tuple, so Yannakakis must drop it
+    assert {item.key for item in result.C} == {
+        "c1",
+        "c2",
+    }  # C is unchanged: both c1 and c2 reference surviving B-tuples
 
 
 def _four_relation_dbf() -> DBF:
