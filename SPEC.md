@@ -251,6 +251,9 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` ***cogroup** — group ≥2 AFs by shared key into a nested AF per key*  
   Takes ≥2 AFs (in an input DBF) and groups them by key. The output AF maps each distinct key to a nested AF whose keys are the input AF UUIDs and whose values are the originals from each input AF at that key. For each key, the nested AF shows which input AFs contained that key and their respective values.
 
+- `[✅]` ***cogroup** with per-relation grouping attributes — equi-join over chosen attributes* (feature 001)  
+  Optional `grouping_keys` mapping (a plain `dict` or an FDM AF) from input-relation name to the grouping attribute(s) — a single attribute name or a composite `tuple` — for that relation. When given, cogroup groups by the chosen attribute values instead of the item key, turning it into a classical equi-join (group keys from differently-named attributes co-group when their values are equal). Each leaf becomes a *set* of matching items keyed by their original item key, so duplicate matches within one relation are preserved (as in `group_by`). Missing attribute or missing relation entry fails fast (no SQL-NULL semantics). Default (`grouping_keys=None`) behaviour is unchanged.
+
 ### Reference Management
 
 - `[✅]` ***add_reference** — add a foreign-key reference between two RFs in a DBF (installs FVC + RFOC)*  

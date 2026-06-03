@@ -18,9 +18,10 @@
 #
 #
 
-from typing import Callable
+from typing import Callable, Mapping
 
 from fdm.API import AttributeFunction
+from fdm.attribute_functions import RF
 from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
@@ -97,14 +98,53 @@ class cogroup[
     """Co-group n>=2 attribute functions based on the AF's keys. This can naturally be extended to a classical join
     operation if the grouping keys can be customized to reflect the attributes used in an equi join predicate.
     Input is a single DBF containing the relations to co-group.
+
+    The grouping criterion is selected via ``grouping_keys``:
+
+    - ``grouping_keys is None`` (default): group by each item's identity key (``item.key``). For a given co-group key
+      every input relation contributes at most one item, so the leaf is the value directly, and the contributing
+      relation is identified by its uuid: ``output[item.key][input_af.uuid] = item.value``.
+    - ``grouping_keys`` is a mapping from input-relation name (the key under which the RF sits in the input DBF) to the
+      grouping attribute(s) for that relation -- a single attribute name (``str``) or a composite key
+      (``tuple[str, ...]``). This turns cogroup into an equi-join over the chosen (possibly differently named)
+      attributes. The contributing relation is identified by its *name* (its DBF key), so joined relations are
+      addressable by name. Because several items of one relation can share the same grouping value (an n:m match), the
+      leaf is a *set* of matching items, keyed by their original ``item.key``, so duplicates are preserved (mirroring
+      how ``group_by`` preserves them via ``partition``): ``output[group_key][relation_name][item.key] = item.value``.
+
+    Both a plain ``dict`` and an FDM ``AttributeFunction`` (e.g. an RF) are accepted for ``grouping_keys`` -- both
+    support ``grouping_keys[relation_name]`` indexing.
+
+    Preconditions for attribute mode (fail-fast, no SQL-NULL semantics -- a violation raises rather than producing a
+    "missing" group):
+
+    - every input relation must have an entry in ``grouping_keys``;
+    - each item value must support attribute indexing and carry the requested attribute(s);
+    - the per-relation extracted values must be comparable and of equal arity.
+
+    A missing relation entry or a missing attribute surfaces as a lookup error: ``KeyError`` when ``grouping_keys`` is a
+    plain ``dict``, and ``AttributeError`` when the lookup goes through an FDM ``AttributeFunction`` (the AF accessor,
+    and any ``item.value`` attribute lookup, raise ``AttributeError`` for absent keys).
+
+    Two edge cases worth noting for attribute mode:
+
+    - A single attribute name passed as a one-element tuple (``("name",)``) produces a one-tuple co-group key, whereas
+      the bare string ``"name"`` produces a scalar co-group key. The two do *not* co-group together, so every relation
+      that should equi-join must use the same scalar-vs-tuple form.
+    - Attribute names containing ``__`` are interpreted by ``TF.__getitem__`` as a nested sub-path accessor (e.g.
+      ``"department__name"`` resolves ``value["department"]["name"]``), not as a flat attribute lookup.
     """
 
     def __init__(
         self,
         input_function: OperatorInput[INPUT_AttributeFunction],
+        grouping_keys: (
+            Mapping[str, str | tuple[str, ...]] | AttributeFunction | None
+        ) = None,
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction],
         output_factory_nested: Callable[..., OUTPUT_AttributeFunction_Nested],
+        output_factory_leaf: Callable[..., AttributeFunction] = None,
     ):
         assert (
             output_factory is not None
@@ -115,8 +155,12 @@ class cogroup[
         ), "An output factory must be provided for the nested AFs in the output."
 
         self.input_function = input_function
+        self.grouping_keys = grouping_keys
         self.output_factory = output_factory
         self.output_factory_nested = output_factory_nested
+        # no `is not None` assert here: the default below is intentional, attribute mode mutates the leaf after creation
+        # (hence frozen=False), and the factory is only used when grouping_keys is provided.
+        self.output_factory_leaf = output_factory_leaf or (lambda _: RF(frozen=False))
 
     def _compute(self) -> OUTPUT_AttributeFunction:
         input_dbf = self._resolve_input(self.input_function)
@@ -129,18 +173,45 @@ class cogroup[
         # get result instance:
         output_function: OUTPUT_AttributeFunction = self.output_factory(None)
 
+        attribute_mode: bool = self.grouping_keys is not None
+
         input_function: AttributeFunction
         for relation in input_dbf:
             input_function = relation.value
-            # add a key/value mapping from the input function's key to a nested AF
-            # that nested AF has a key/value-mapping from the input function's uudid to the input function's value for
-            # that key
+
+            if attribute_mode:
+                # per-relation grouping attribute(s): a single name (str) or a composite key (tuple of names).
+                spec = self.grouping_keys[relation.key]
+
+            # add a key/value mapping from the co-group key to a nested AF that maps each contributing relation to its
+            # value(s) for that co-group key. The nested key is the input relation's name (its DBF key) in attribute
+            # mode and the input function's uuid in the default mode (the latter preserves the original contract).
             item: Item
             for item in input_function:
-                if item.key not in output_function:
-                    output_function[item.key] = self.output_factory_nested(None)
+                if attribute_mode:
+                    # derive the co-group key from the chosen attribute value(s):
+                    group_key = (
+                        tuple(item.value[attribute] for attribute in spec)
+                        if isinstance(spec, tuple)
+                        else item.value[spec]
+                    )
+                else:
+                    # default: group by the item's identity key.
+                    group_key = item.key
 
-                output_function[item.key][input_function.uuid] = item.value
+                if group_key not in output_function:
+                    output_function[group_key] = self.output_factory_nested(None)
+
+                if attribute_mode:
+                    # nested key is the relation name (DBF key), so joined relations are addressable by name; the leaf
+                    # is a set of all matching items keyed by their original key, so duplicates survive.
+                    if relation.key not in output_function[group_key]:
+                        output_function[group_key][relation.key] = (
+                            self.output_factory_leaf(None)
+                        )
+                    output_function[group_key][relation.key][item.key] = item.value
+                else:
+                    output_function[group_key][input_function.uuid] = item.value
 
         return output_function
 
