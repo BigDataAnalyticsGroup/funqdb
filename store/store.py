@@ -19,6 +19,7 @@
 #
 
 
+import uuid
 import atexit
 
 from sqlitedict import SqliteDict
@@ -54,6 +55,14 @@ class Store:
             self.file_name, tablename=attribute_function_space, autocommit=True
         )
 
+       # Internal registry to persist dependency relationships derived from AF subscriptions.
+       # This is not intended for direct user interaction.
+        self._registry_key = "__dependency_registry__"
+
+        if self._registry_key not in self.sqlite_dict:
+            self.sqlite_dict[self._registry_key] = {}
+            self.sqlite_dict.commit()
+
         # register to be called at exit:
         atexit.register(self.close)
 
@@ -76,18 +85,15 @@ class Store:
         (i.e. persisted).
         @param af: The AttributeFunction instance to register.
         """
+        uuid_str: str = str(af.uuid)
 
-        self.sqlite_dict[af.uuid] = af
+        self.sqlite_dict[uuid_str] = af
         self.sqlite_dict.commit()
         self.attribute_function_buffer[af.uuid] = af
 
     def load(self, afid: int) -> None:
-        """Load an afid from the persistent store into the buffer.
-        @param afid: The ID of the item to load.
-        """
-
         try:
-            af: AttributeFunction = self.sqlite_dict[afid]
+            af: AttributeFunction = self.sqlite_dict[str(afid)]
             if self.add_reference_to_store_on_read:
                 af.__dict__["store"] = self
 
@@ -95,8 +101,73 @@ class Store:
         except KeyError as e:
             raise KeyError(f"ID '{afid}' not found in the store.") from e
 
+    def _get_registry(self) -> dict[str, list[str]]:
+        return self.sqlite_dict.get(self._registry_key, {})
+
+    def put(self, af: AttributeFunction):
+        """Store an AttributeFunction in the persistent store."""
+        uuid_str: str = str(af.uuid)
+
+        self.sqlite_dict[uuid_str] = af
+        self.sqlite_dict.commit()
+        self.attribute_function_buffer[af.uuid] = af
+
+        if hasattr(af, "inputs"):
+            for parent_af in af.inputs:
+                if hasattr(parent_af, "uuid"):
+                    self.register_dependency(parent_af.uuid, af.uuid)
+
+        self._notify(af.uuid)
+
+    def register_dependency(self, parent_uuid: uuid.UUID, child_uuid: uuid.UUID):
+        """
+        Register a persistent dependency between two AttributeFunctions.
+
+        @param parent_uuid: The UUID of the AF being observed.
+        @param child_uuid: The UUID of the AF that depends on the parent.
+        """
+        registry: dict[str, list[str]] = self._get_registry()
+
+        p_uuid_str: str = str(parent_uuid)
+        c_uuid_str: str = str(child_uuid)
+
+        if p_uuid_str not in registry:
+            registry[p_uuid_str] = []
+
+        if c_uuid_str not in registry[p_uuid_str]:
+            registry[p_uuid_str].append(c_uuid_str)
+
+        self.sqlite_dict[self._registry_key] = registry
+        self.sqlite_dict.commit()
+
+    def _notify(self, parent_uuid: uuid.UUID):
+        registry = self._get_registry()
+        p_uuid_str = str(parent_uuid)
+
+        if p_uuid_str not in registry:
+            return
+
+        parent_af: AttributeFunction = self.get(parent_uuid)
+
+        dependent_id: str
+        for dependent_id in registry[p_uuid_str]:
+            try:
+                dependent_af: AttributeFunction = self.get(dependent_id)
+                if dependent_af and hasattr(dependent_af, "update"):
+                    dependent_af.update(other=parent_af)
+                    self.put(dependent_af)
+            except KeyError:
+                continue
+
     def __len__(self) -> int:
         """Return the number of items in the store.
         @return: The number of items in the store.
         """
-        return len(self.sqlite_dict)
+        size = len(self.sqlite_dict)
+
+        if self._registry_key in self.sqlite_dict:
+            size -= 1
+
+        return size
+
+
