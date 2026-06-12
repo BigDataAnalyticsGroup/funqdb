@@ -25,6 +25,9 @@ def test_aggregation_functions():
     f = Count("yob")
     assert f(users) == 3
 
+    f = Count()
+    assert f(users) == 3
+
     f = Sum("yob")
     assert f(users) == 5958
 
@@ -43,14 +46,14 @@ def test_aggregate_operator():
     rel: RF = _create_testdata(frozen=True).users
 
     for i in range(2):
-        # 7 aggregate_keys at the same time:
-        aggregated: TF | None = None
+        # 8 aggregate_keys at the same time:
         if i == 0:
             aggregated = aggregate(
                 rel,
                 min=Min("yob"),
                 max=Max("yob"),
                 count=Count("yob"),
+                count_star=Count(),
                 sum=Sum("yob"),
                 avg=Avg("yob"),
                 mean=Mean("yob"),
@@ -63,6 +66,7 @@ def test_aggregate_operator():
                 min=Min("yob"),
                 max=Max("yob"),
                 count=Count("yob"),
+                count_star=Count(),
                 sum=Sum("yob"),
                 avg=Avg("yob"),
                 mean=Mean("yob"),
@@ -70,10 +74,11 @@ def test_aggregate_operator():
             ).result
 
         assert type(aggregated) is TF
-        assert len(aggregated) == 7
+        assert len(aggregated) == 8
         assert aggregated.min == 1972
         assert aggregated.max == 2003
         assert aggregated.count == 3
+        assert aggregated.count_star == 3
         assert aggregated.sum == 5958
         assert aggregated.avg == 1986
         assert aggregated.mean == 1986

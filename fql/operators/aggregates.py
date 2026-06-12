@@ -25,11 +25,15 @@ from fql.operators.APIs import Operator, OperatorInput
 
 
 class AggregationFunction:
-    def __init__(self, aggregation_function: Callable[[Any], Any], attribute: str):
+    def __init__(
+        self, aggregation_function: Callable[[Any], Any], attribute: str | None = None
+    ):
         self.aggregation_function = aggregation_function
         self.attribute = attribute
 
     def __call__(self, rf: RF) -> Any:
+        if self.attribute is None:
+            return self.aggregation_function(rf)
         return self.aggregation_function([i.value[self.attribute] for i in rf])
 
 
@@ -44,7 +48,7 @@ class Min(AggregationFunction):
 
 
 class Count(AggregationFunction):
-    def __init__(self, attribute: str):
+    def __init__(self, attribute: str | None = None):
         super().__init__(len, attribute)
 
 
