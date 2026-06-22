@@ -22,6 +22,7 @@ import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.util import ReadOnlyError
+from tests.lib import _create_testdata
 
 
 def test_computed_attributes():
@@ -232,3 +233,118 @@ def test_computed_attribute_functions():
     assert db["users"][1].name == "Alice"
     assert len(db["logs"]) == 0  # generated empty RF
     assert len(db) == 1  # default not enumerable
+
+
+def test_add_computed_per_value_raises_readonly():
+    """
+    Tests if add_computed_per_value correctly raises a ReadOnlyError if a frozen relation is accessed
+    """
+    db: DBF = _create_testdata(frozen=True)  # build a frozen (read-only) test database
+    users: RF = db.users  # the frozen users relation we try to mutate
+
+    with pytest.raises(ReadOnlyError):  # mutating a frozen AF must be rejected
+        # the call must raise before adding the computed attribute:
+        users.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+
+def test_add_computed_per_value_raises_readonly_no_modification():
+    """
+    Tests if add_computed_per_value correctly raises a ReadOnlyError
+    if any of the values in the AF are frozen and no modification takes place.
+    """
+    user1: TF = TF({"name": "Charlie", "yob": 2005})  # mutable tuple, validated first
+    user2: TF = TF({"name": "Charlie", "yob": 2005}, frozen=True)  # frozen, raises here
+    user3: TF = TF({"name": "Charlie", "yob": 2005})  # mutable tuple, never mutated
+    users: RF = RF({1: user1, 2: user2, 3: user3})  # relation of mixed values
+
+    with pytest.raises(ReadOnlyError):  # the frozen value must abort the operation
+        # validation pass detects the frozen value before any mutation:
+        users.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+    for user in users.values():  # inspect every value in the relation
+        assert "yob_plus_five" not in user  # nothing was modified (atomic failure)
+
+
+def test_add_computed_per_value_raises_typeerror():
+    """
+    Tests if add_computed_per_value correctly raises a TypeError
+    if any value in the AF is not a DictionaryAttributeFunction
+    """
+    user: TF = TF({"name": "Charlie", "yob": 2005})  # a TF whose values are scalars
+
+    with pytest.raises(TypeError):  # scalar values cannot carry a computed attribute
+        # iterating the TF yields non-AF values, so validation must reject it:
+        user.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+
+def test_add_computed_per_value_raises_typeerror_no_modification():
+    """
+    Tests if add_computed_per_value correctly raises a TypeError
+    if any value in the AF is not a DictionaryAttributeFunction and no modification takes place.
+    """
+    user1: TF = TF({"name": "Charlie", "yob": 2005})  # valid AF value, validated first
+    user2 = "user"  # a non-AF value that must trigger the TypeError
+    user3: TF = TF({"name": "Charlie", "yob": 2005})  # valid AF value, never mutated
+    users: RF = RF({1: user1, 2: user2, 3: user3})  # relation with one invalid value
+
+    with pytest.raises(TypeError):  # the non-AF value must abort the operation
+        # validation pass detects the bad value before any mutation:
+        users.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+    for user in users.values():  # inspect every value in the relation
+        assert "yob_plus_five" not in user  # nothing was modified (atomic failure)
+
+
+def test_add_computed_per_value_raises_valueerror_no_modification():
+    """
+    Tests if add_computed_per_value correctly raises a ValueError
+    if any value in the AF has the key of the computed value and no modification takes place.
+    """
+    user1: TF = TF({"name": "Charlie", "yob": 2005})  # no collision, validated first
+    # this tuple already stores the key the computed attribute would use:
+    user2: TF = TF({"name": "Charlie", "yob": 2005, "yob_plus_five": "test"})
+    user3: TF = TF({"name": "Charlie", "yob": 2005})  # no collision, never mutated
+    users: RF = RF({1: user1, 2: user2, 3: user3})  # relation with one colliding value
+
+    with pytest.raises(ValueError):  # the stored-key collision must abort the operation
+        # validation pass detects the existing key before any mutation:
+        users.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+    assert "yob_plus_five" not in user1  # untouched sibling gained no computed attr
+    assert "yob_plus_five" not in user3  # untouched sibling gained no computed attr
+    assert user2["yob_plus_five"] == "test"  # colliding stored value left unchanged
+
+
+def test_add_computed_per_value():
+    """
+    Tests if add_computed_per_value correctly adds a computed value to each underlying AF.
+    """
+    db: DBF = _create_testdata(frozen=False)  # build a mutable test database
+    users: RF = db.users  # the users relation we add a computed attribute to
+
+    # add a computed attribute derived from each tuple's stored "yob":
+    users.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+    for user in users.values():  # every tuple in the relation must have gained it
+        assert "yob_plus_five" in user  # the computed attribute is present
+        assert user.yob_plus_five == user.yob + 5  # and evaluates from this tuple's yob
+
+
+def test_add_computed_per_value_chaining():
+    """
+    Tests if add_computed_per_value correctly supports chaining of multiple calls,
+    creating a computed attribute value for each underlying AF.
+    """
+    db: DBF = _create_testdata(frozen=False)  # build a mutable test database
+    users: RF = db.users  # the users relation we add two computed attributes to
+
+    # the method returns self, so two calls can be chained in one expression:
+    users.add_computed_per_value(
+        "yob_plus_ten", lambda tf: tf["yob"] + 10
+    ).add_computed_per_value("yob_minus_ten", lambda tf: tf["yob"] - 10)
+
+    for user in users.values():  # every tuple must have gained both attributes
+        assert "yob_plus_ten" in user  # first chained attribute is present
+        assert "yob_minus_ten" in user  # second chained attribute is present
+        assert user.yob_plus_ten == user.yob + 10  # evaluates from this tuple's yob
+        assert user.yob_minus_ten == user.yob - 10  # evaluates from this tuple's yob

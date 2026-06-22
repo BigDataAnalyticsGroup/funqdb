@@ -22,9 +22,10 @@
 import inspect
 import pickle
 import random
-from copy import copy
 import warnings
+from copy import copy
 from typing import Generator, Iterable, Callable, Any
+from typing import Self
 
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
@@ -38,7 +39,6 @@ from fql.util import (
     KeyDeletedSentinel,
     ChangeEvent,
 )
-
 from store.store import Store
 
 
@@ -215,6 +215,45 @@ class DictionaryAttributeFunction[Key, Value](
                 f"A key must be either stored or computed, not both."
             )
         self.__dict__["computed"][key] = func
+
+    def add_computed_per_value(self, key: Any, func: Callable[..., Any]) -> "Self":
+        """Convenience method to add a computed attribute to all values of the AF.
+
+        @param key: The attribute name. Must not collide with an existing stored key.
+        @param func: A callable(self) -> value, evaluated on every access.
+        @raises ReadOnlyError: If the AF or any value of the AF is frozen.
+        @raises TypeError: If any value in the AF is not a DictionaryAttributeFunction (i.e., cannot have a computed attribute added).
+        @raises ValueError: If key already exists as a stored attribute.
+        """
+        if self.__dict__["frozen"]:
+            raise ReadOnlyError(
+                f"Attempt to add computed attribute '{key}'. "
+                f"This DictionaryAttributeFunction is read-only."
+            )
+
+        # validation pass
+        for value in self.__dict__["data"].values():
+            if not isinstance(value, DictionaryAttributeFunction):
+                raise TypeError(
+                    f"AF.add_computed_per_value() requires DictionaryAttributeFunction values, "
+                    f"but found {type(value).__name__}."
+                )
+            if key in value.__dict__["data"]:
+                raise ValueError(
+                    f"Key '{key}' already exists as a stored attribute. "
+                    f"A key must be either stored or computed, not both."
+                )
+            if value.__dict__["frozen"]:
+                raise ReadOnlyError(
+                    f"Attempt to add computed attribute '{key}'. "
+                    f"This DictionaryAttributeFunction is read-only."
+                )
+
+        # mutation pass
+        for value in self.__dict__["data"].values():
+            value.add_computed(key, func)
+
+        return self
 
     def add_default(self, func: Callable[[Any], Any]) -> None:
         """Set a default fallback function for keys not in data or computed.
