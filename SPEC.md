@@ -210,7 +210,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
 ### Aggregation
 
 - `[✅]` ***aggregate** — apply named aggregation functions to an RF, returning a TF*  
-  Accepts an RF and one or more named aggregation functions, applies each to the RF, and returns a frozen TF with keys matching the aggregation names and values being the scalar results. For example, `aggregate(users, count=Count("id"), avg_age=Avg("age"))` returns a TF with two entries.
+  Accepts an RF and one or more named aggregation functions, applies each to the RF, and returns an unfrozen TF with keys matching the aggregation names and values being the scalar results. For example, `aggregate(users, count=Count("id"), avg_age=Avg("age"))` returns a TF with two entries.
 
 - `[✅]` *Built-in aggregators: **Max**, **Min**, **Count**, **Sum**, **Avg/Mean**, **Median***  
   Each aggregator is a callable class constructed with a single attribute name. When applied to an RF, it extracts that attribute from every item and computes the corresponding aggregate (maximum, minimum, count, sum, arithmetic mean, or median). Median performs a stable sort and handles both odd and even-sized inputs correctly.

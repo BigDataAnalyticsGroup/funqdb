@@ -34,7 +34,7 @@ complete. In Python, ```len(TF)``` returns the same result for the length case.
 
 ```output: TF = aggregate(input: RF)```
 
-Computes an aggregated TF based on the input RF.
+Computes an aggregated TF based on the input RF. In contrast to other operators, the output is not frozen, as it is a single TF.
 
 *For instance*, this could be used for **classical aggregation** like avg(), mean(), sum(), median(), count() and so
 forth that go beyond selecting a subset of the input RF, see [subset](subset.md) for a comparison.

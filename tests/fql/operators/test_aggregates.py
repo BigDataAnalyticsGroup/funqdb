@@ -74,6 +74,7 @@ def test_aggregate_operator():
             ).result
 
         assert type(aggregated) is TF
+        assert not aggregated.frozen  # aggregate should not freeze the output
         assert len(aggregated) == 8
         assert aggregated.min == 1972
         assert aggregated.max == 2003

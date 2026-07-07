@@ -98,10 +98,9 @@ class aggregate(Operator[RF, TF]):
 
     def _compute(self) -> TF:
         input_function = self._resolve_input(self.input_function)
-        output_function = TF(frozen=False)
+        output_function = TF(frozen=False)  # no freezing as this produces a simple TF
         for key, value in self.aggregates.items():
             output_function[key] = value(input_function)
-        output_function.freeze()
         return output_function
 
 
