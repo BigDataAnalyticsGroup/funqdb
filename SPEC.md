@@ -238,7 +238,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Returns a plain Python iterator (not an AF) over the input's items sorted by a key function. Unlike `rank_by`, this is intentionally a terminal operator signaling "leaving the FQL algebra for presentation" (printing, CSV export, pagination). The iterator is backed by an eagerly materialized sorted list.
 
 - `[✅]` ***subset** — top-k by ranking key or arbitrary predicate-based subset*  
-  Extracts a global subset of an AF in two modes: declarative top-k (via `ranking_key` and `k`) keeps the k items with the smallest ranking-key values (or largest if `reverse=True`); generic mode (via `subset_predicate`) accepts a function that receives the entire AF and returns an arbitrary subset. The two modes are mutually exclusive.
+  Extracts a global subset of an AF in two modes: declarative top-k (via `ranking_key` and `k`) keeps the k items (after an optional offset) with the smallest ranking-key values (or largest if `reverse=True`); generic mode (via `subset_predicate`) accepts a function that receives the entire AF and returns an arbitrary subset. The two modes are mutually exclusive.
 
 ### Set Operations
 

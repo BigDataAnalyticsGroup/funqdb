@@ -256,25 +256,31 @@ class AttributeFunction[Key, Value](PureFunction):
         """Rel algebra style naming for rename."""
         return self.rename(**kwargs)
 
-    def top(self, k: int, key: Callable[..., Any]) -> "AttributeFunction":
+    def top(
+        self, k: int, key: Callable[..., Any], offset: int = 0
+    ) -> "AttributeFunction":
         """Return the k items with the smallest key values (top-k ascending).
         @param k: Number of items to keep.
         @param key: A function mapping an Item to a comparable value for ranking.
-        @return: A new AttributeFunction containing the k smallest items.
+        @param offset: Number of items to skip from the start of the sorted list (default 0).
+        @return: A new AttributeFunction containing the k smallest items starting at offset.
         """
         from fql.operators.subsets import subset
 
-        return subset(self, ranking_key=key, k=k).result
+        return subset(self, ranking_key=key, k=k, offset=offset).result
 
-    def bottom(self, k: int, key: Callable[..., Any]) -> "AttributeFunction":
+    def bottom(
+        self, k: int, key: Callable[..., Any], offset: int = 0
+    ) -> "AttributeFunction":
         """Return the k items with the largest key values (top-k descending).
         @param k: Number of items to keep.
         @param key: A function mapping an Item to a comparable value for ranking.
-        @return: A new AttributeFunction containing the k largest items.
+        @param offset: Number of items to skip from the start of the sorted list (default 0).
+        @return: A new AttributeFunction containing the k largest items starting at offset.
         """
         from fql.operators.subsets import subset
 
-        return subset(self, ranking_key=key, k=k, reverse=True).result
+        return subset(self, ranking_key=key, k=k, reverse=True, offset=offset).result
 
     @abstractmethod
     def random_item(self) -> Any:

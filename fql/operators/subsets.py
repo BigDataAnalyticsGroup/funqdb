@@ -36,8 +36,10 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     Two modes of operation (mutually exclusive):
 
-    1. Declarative top-k: provide ranking_key and k (and optionally reverse).
-       Returns the k items with the smallest ranking_key values (or largest if reverse=True).
+    1. Declarative top-k: provide ranking_key and k (and optionally reverse and offset).
+       Sorts all items by ranking_key, skips the first `offset` items (default 0), then
+       returns the next k items.  Equivalent to ``sorted_items[offset : offset + k]``.
+       reverse=True sorts descending (largest first), so offset skips the largest.
 
     2. Generic subset: provide subset_predicate, a function that receives the entire input AF
        and returns a new AF containing only the qualifying items. This covers arbitrary global
@@ -48,16 +50,18 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self,
         input_function: OperatorInput[INPUT_AttributeFunction],
         *,
-        ranking_key: Callable[[Item], Any] = None,
-        k: int = None,
+        ranking_key: Callable[[Item], Any] | None = None,
+        k: int | None = None,
+        offset: int = 0,
         reverse: bool = False,
-        subset_predicate: Callable[..., "OUTPUT_AttributeFunction"] = None,
-        output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
+        subset_predicate: Callable[..., "OUTPUT_AttributeFunction"] | None = None,
+        output_factory: Callable[..., OUTPUT_AttributeFunction] | None = None,
     ):
         """Initialize the subset operator.
         @param input_function: The input AF to compute a subset of.
         @param ranking_key: A function that maps an Item to a comparable value used for sorting.
         @param k: The number of items to keep (top-k). Required when ranking_key is provided.
+        @param offset: An optional offset to skip the first n items after sorting. Default is 0.
         @param reverse: If True, keep the k largest instead of the k smallest. Only used with ranking_key.
         @param subset_predicate: A function that takes the entire input AF and returns a subset AF.
             Mutually exclusive with ranking_key/k.
@@ -69,10 +73,15 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         if ranking_key is not None:
             assert k is not None and k >= 1, "k must be >= 1 when using ranking_key."
+            if offset < 0:
+                raise ValueError("offset must be >= 0.")
+        elif offset != 0:
+            raise ValueError("offset is only valid in top-k mode (with ranking_key).")
 
         self.input_function = input_function
         self.ranking_key = ranking_key
         self.k = k
+        self.offset = offset
         self.reverse = reverse
         self.subset_predicate = subset_predicate
         self.output_factory = output_factory
@@ -90,7 +99,7 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         sorted_items: list[Item] = sorted(
             input_function, key=self.ranking_key, reverse=self.reverse
         )
-        top_k_items: list[Item] = sorted_items[: self.k]
+        top_k_items: list[Item] = sorted_items[self.offset : self.offset + self.k]
 
         # build output AF:
         if self.output_factory is None:

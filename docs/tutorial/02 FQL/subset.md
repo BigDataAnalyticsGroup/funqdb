@@ -7,8 +7,10 @@
 > can equivalently be expressed as `rank_by(...) | filter_keys(k < k_max)`.
 > Both stay in the codebase — `subset` for the declarative one-shot form,
 > `rank_by` when you want a ranked AF that you can compose further (e.g.
-> for pagination, median, percentile lookups). See [rank.md](rank.md) for
-> the FDM-faithful framing.
+> for median, percentile lookups). For simple pagination (page N of size k)
+> `subset(ranking_key=…, k=k, offset=n*k)` is the most direct expression;
+> for multi-step pipelines that reuse the ranked AF, prefer `rank_by`.
+> See [rank.md](rank.md) for the FDM-faithful framing.
 
 ### Generic Form: AF → AF
 
@@ -28,14 +30,96 @@ In other words:
 > evaluated for each item independently. For instance, a condition like 'k-smallest items with respect to their foo
 > value' cannot be evaluated independently: the outcome depends on the other items present in the input AF.
 
-### Parameters/Filters
+### Two modes of operation (mutually exclusive)
 
-The user has to specify how the subset should be formed. This can be done based on keys, values, or any combination of
-both.
+#### Mode 1 - Declarative top-k
 
-#### lambdas
+Provide `ranking_key` and `k` (and optionally `reverse` and `offset`).
 
-TODO
+```python
+from fdm.attribute_functions import RF, TF
+from fql.operators.subsets import subset
+
+users: RF = RF({
+    1: TF({"name": "Horst", "yob": 1972}),
+    2: TF({"name": "Tom",   "yob": 1983}),
+    3: TF({"name": "John",  "yob": 2003}),
+})
+
+# k-smallest: youngest 2 users
+top2 = subset(users, ranking_key=lambda i: i.value.yob, k=2).result
+# → { 1: Horst(1972), 2: Tom(1983) }
+
+# reverse=True: 2 oldest users
+bottom2 = subset(users, ranking_key=lambda i: i.value.yob, k=2, reverse=True).result
+# → { 3: John(2003), 2: Tom(1983) }
+```
+
+Internally: all items are sorted by `ranking_key`, then the slice
+`sorted_items[offset : offset + k]` is returned.  Original keys are
+preserved in the output AF.
+
+##### Parameters (top-k mode)
+
+| Parameter        | Type                    | Default | Description                                                                                       |
+|:-----------------|:------------------------|:--------|:--------------------------------------------------------------------------------------------------|
+| `ranking_key`    | `Callable[[Item], Any]` | -       | Maps each `Item` to a comparable value used for sorting.                                          |
+| `k`              | `int`                   | -       | Number of items to keep. Must be ≥ 1.                                                             |
+| `offset`         | `int`                   | `0`     | Number of items to skip from the start of the sorted list. Must be ≥ 0. Only valid in top-k mode. |
+| `reverse`        | `bool`                  | `False` | If `True`, sort descending (largest first).                                                       |
+| `output_factory` | `Callable`              | `None`  | Factory for the output AF. Defaults to `type(input_function)()`.                                  |
+
+##### Pagination with `offset`
+
+`offset` lets you retrieve a specific page of the sorted result without
+materialising a ranked AF first:
+
+```python
+PAGE_SIZE = 2
+
+# page 1: items 0..1 (positions 0-based)
+page1 = subset(users, ranking_key=lambda i: i.value.yob, k=PAGE_SIZE, offset=0).result
+
+# page 2: items 2..3
+page2 = subset(users, ranking_key=lambda i: i.value.yob, k=PAGE_SIZE, offset=PAGE_SIZE).result
+```
+
+If `offset` is at or beyond the length of the AF, the result is an empty
+AF (no error is raised - Python slice semantics). If `offset + k` exceeds
+the length, fewer than `k` items are returned.
+
+The convenience methods `AttributeFunction.top()` and `.bottom()` also
+expose `offset`:
+
+```python
+page2_top = users.top(k=2, key=lambda i: i.value.yob, offset=2)
+```
+
+#### Mode 2 - Generic subset predicate
+
+Provide `subset_predicate`: a callable that receives the entire input AF
+and returns a new AF containing only the qualifying items. This covers
+arbitrary global conditions that cannot be decomposed per item.
+
+```python
+def above_mean(af: RF) -> RF:
+    all_yobs = [item.value.yob for item in af]
+    mean_yob = sum(all_yobs) / len(all_yobs)
+    return af.where(lambda item: item.value.yob > mean_yob)
+
+result = subset(users, subset_predicate=above_mean).result
+# mean of {1972, 1983, 2003} = 1986 → only John (2003) survives
+```
+
+`offset` is **not** available in predicate mode (pass it and a
+`ValueError` is raised immediately).
+
+##### Parameters (predicate mode)
+
+| Parameter          | Type                              | Default | Description                                                      |
+|:-------------------|:----------------------------------|:--------|:-----------------------------------------------------------------|
+| `subset_predicate` | `Callable[[INPUT_AF], OUTPUT_AF]` | -       | Receives the full input AF, returns a subset AF.                 |
+| `output_factory`   | `Callable`                        | `None`  | Factory for the output AF. Defaults to `type(input_function)()`. |
 
 ### Special cases
 
