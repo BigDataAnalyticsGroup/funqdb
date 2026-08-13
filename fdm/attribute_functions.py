@@ -221,15 +221,10 @@ class DictionaryAttributeFunction[Key, Value](
 
         @param key: The attribute name. Must not collide with an existing stored key.
         @param func: A callable(self) -> value, evaluated on every access.
-        @raises ReadOnlyError: If the AF or any value of the AF is frozen.
+        @raises ReadOnlyError: If any value of the AF is frozen.
         @raises TypeError: If any value in the AF is not a DictionaryAttributeFunction (i.e., cannot have a computed attribute added).
         @raises ValueError: If key already exists as a stored attribute.
         """
-        if self.__dict__["frozen"]:
-            raise ReadOnlyError(
-                f"Attempt to add computed attribute '{key}'. "
-                f"This DictionaryAttributeFunction is read-only."
-            )
 
         # validation pass
         for value in self.__dict__["data"].values():

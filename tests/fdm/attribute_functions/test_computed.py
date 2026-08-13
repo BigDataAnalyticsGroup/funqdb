@@ -265,6 +265,28 @@ def test_add_computed_per_value_raises_readonly_no_modification():
         assert "yob_plus_five" not in user  # nothing was modified (atomic failure)
 
 
+def test_add_computed_per_value_doesnt_raise_readonly():
+    """
+    Tests if add_computed_per_value correctly does not raise a ReadOnlyError
+    if only the parent RF is frozen.
+    """
+    user1: TF = TF({"name": "Charlie", "yob": 2005})  # mutable tuple
+    user2: TF = TF({"name": "Charlie", "yob": 2005})  # mutable tuple
+    user3: TF = TF({"name": "Charlie", "yob": 2005})  # mutable tuple
+    users: RF = RF(
+        {1: user1, 2: user2, 3: user3}, frozen=True
+    )  # relation of mutable values, but frozen itself
+
+    # validation pass should allow the operation:
+    users.add_computed_per_value("yob_plus_five", lambda tf: tf["yob"] + 5)
+
+    for user in users.values():  # inspect every value in the relation
+        assert (
+            "yob_plus_five" in user
+        )  # the computed attribute was added (atomic success)
+        assert user.yob_plus_five == user.yob + 5  # and evaluates correctly
+
+
 def test_add_computed_per_value_raises_typeerror():
     """
     Tests if add_computed_per_value correctly raises a TypeError
