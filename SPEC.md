@@ -162,6 +162,9 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` ***transform_items** — map a function over each (key, value) item*  
   Returns a new AF whose items are the results of mapping a function over each `Item` in the input. The mapping function receives an `Item` and returns a transformed `Item`; returning `None` drops the item. Items are materialized before mapping to avoid modification during iteration.
 
+- `[✅]` ***key_to_value** — lift each item's key into its value under a named attribute* (feature 001)  
+  Returns a new AF with the same keys and concrete type, where every value gains an attribute holding that item's key. Intended before an operator that replaces the key domain (e.g. `rank_by`, which re-keys to ℕ): the key would otherwise be discarded, so copying it into the value first lets the identity survive the re-keying. The input AF is not mutated. Refuses to shadow an existing (stored, computed, or domain-backed) attribute (`ValueError`); a non-`DictionaryAttributeFunction` value raises `TypeError`. The `attribute` argument is either a single name (`str`), storing the whole key verbatim — a composite tuple key lands unchanged — or a **tuple of names**, spreading a composite tuple key component-wise (name `i` receives key component `i`; requires an equal-length tuple key). Spread names must be non-empty, unique, and non-shadowing; an empty name is rejected on both paths.
+
 ### Join
 
 - `[✅]` ***join** — materialise a reference-based join over an acyclic RF graph into nested TF rows*  

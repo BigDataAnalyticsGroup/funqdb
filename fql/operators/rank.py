@@ -52,8 +52,12 @@ has to "leave the model" just to express order.
 keys of the input are *not* preserved in the result. Any downstream
 operator that joins back on the original key (e.g. on a surrogate user
 id) will therefore not work against a ranked AF. If you need to keep
-the original key, project it into the value first (so it travels along
-as part of the value type) and then ``rank_by``.
+the original key, lift it into the value first (so it travels along
+as part of the value type) and then ``rank_by``. When the key *is* the
+identity you want to preserve — e.g. the group key produced by
+``group_by_aggregate`` — use ``key_to_value`` for exactly this:
+``key_to_value(af, "name")`` before ``rank_by`` keeps the group name as a
+value attribute after the domain is replaced by ℕ.
 
 Note that ordering is encoded **inside the domain of the resulting
 function** rather than as an external property of an AF — which is the
@@ -94,8 +98,9 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
     The input AF is not modified. The original keys of the input are
     intentionally **not** preserved in the result — if you need to recover
-    them, include them in your value type (e.g. via a ``project`` step)
-    so they travel along as part of the value before ranking.
+    them, include them in your value type before ranking (e.g. via a
+    ``key_to_value`` step, which lifts each key into its value) so they
+    travel along as part of the value.
     """
 
     def __init__(
