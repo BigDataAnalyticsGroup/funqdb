@@ -56,6 +56,39 @@ result["eng"].headcount     # → 2
 result["sales"].headcount   # → 1
 ```
 
+### Accessing and dropping the group key
+
+After ``group_by`` / ``group_by_aggregate`` the group identity is the **RF key**,
+not a value attribute. That is deliberate: the key is the single source of truth
+for the group. So it stays addressable for free…
+
+```python
+result["eng"].headcount   # group identity "eng" is the key
+```
+
+…and value-level ``project`` never touches it — projecting the aggregated RF keeps
+every group key:
+
+```python
+result.project("headcount")["eng"]   # still keyed by "eng"
+```
+
+To make the group identity a **droppable** value attribute — or to carry it through
+an operator that *replaces* the key domain, such as [`rank_by`](rank.md) (which
+re-keys to ℕ) — lift the key into the value first with ``key_to_value``:
+
+```python
+from fql.operators.transforms import key_to_value
+
+lifted = key_to_value(result, "dept").result   # copy each group key into its value under "dept"
+lifted.project("headcount")["eng"]              # value-level "dept" now dropped by the projection
+```
+
+``key_to_value(af, name)`` stores the whole key under ``name``; for a composite
+tuple key (from a multi-attribute ``group_by``) pass a tuple of names to spread it
+component-wise, e.g. ``key_to_value(result, ("dept", "salary"))``. It refuses to
+shadow an attribute that already resolves on a value.
+
 ### partition_by_aggregate
 
 Like ``group_by_aggregate``, but takes an arbitrary partitioning function

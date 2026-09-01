@@ -47,9 +47,14 @@ after deserialization:
 - ``default`` — default fallback function (lambda)
 - ``domain`` — active domain set
 - ``store`` — store reference (re-attached automatically on load)
+- ``af_constraints`` / ``values_constraints`` — reduced on pickling to only
+  genuine ``AttributeFunctionConstraint`` instances; user-supplied callable
+  constraints (bare lambdas, ad-hoc classes) are dropped and must be
+  re-attached. A defensive re-check on load rejects any other constraint type.
 
 This is by design: lambdas and closures are not safely serializable with
-standard ``pickle``.
+standard ``pickle`` — and executing arbitrary pickled callables would be a
+deserialization-gadget vector.
 
 ### Limitations
 

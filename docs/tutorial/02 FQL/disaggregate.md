@@ -1,5 +1,9 @@
 ## Disaggregate
 
+> **Not yet implemented.** This page is a conceptual design sketch — there is no
+> ``disaggregate`` operator in the codebase yet. The forms below describe the
+> intended semantics, not a callable API.
+
 This is the inverse of the [aggregate](aggregate.md) operator.
 
 ### Generic Form: AF → AF

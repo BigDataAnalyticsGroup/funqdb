@@ -35,6 +35,7 @@ output with copies of the scalar. The FDM-native nested shape from
 
 ```python
 from fdm.attribute_functions import TF, RF, DBF
+from fql.operators.constraints import add_reference
 from fql.operators.joins import join
 from fql.operators.flatten import flatten
 
@@ -42,9 +43,11 @@ departments = RF({"d1": TF({"name": "Dev"}),
                   "d2": TF({"name": "Sales"})}, frozen=True)
 users = RF({"u1": TF({"name": "Alice", "dept": departments["d1"]}),
             "u2": TF({"name": "Bob",   "dept": departments["d2"]})},
-           frozen=True).references("dept", departments)
+           frozen=True)
 
 dbf = DBF({"users": users, "departments": departments}, frozen=True)
+dbf = add_reference(dbf, source="users", ref_key="dept",
+                    target="departments").result
 
 out: RF = flatten(join(dbf)).result
 for row in out:
@@ -121,7 +124,7 @@ dot-path. Only acyclic reference graphs are supported:
 cyclic_tf = TF({"x": 1}, frozen=False)
 cyclic_tf["self"] = cyclic_tf     # cycle
 flatten(RF({0: TF({"r": cyclic_tf})}, frozen=True)).result
-# → ValueError: flatten: reference cycle detected at AF id=...
+# → ValueError: flatten: reference cycle detected at AF uuid=0 (prefix='r.self').
 ```
 
 ### When to use `flatten` vs. staying nested

@@ -21,7 +21,7 @@ users = RF({
 
 op = filter_values[RF, RF](users, filter_predicate=Eq("dept", "eng"))
 print(op.explain())
-# - filter_values(filter_predicate=Eq('dept', 'eng'))
+# - filter_values(filter_predicate=Eq('dept', 'eng'), output_factory=None)
 #   - leaf RF #<uuid>
 ```
 
@@ -184,7 +184,7 @@ print(op.explain())
 ```
 
 ```
-- subset(ranking_key=<opaque lambda>, k=1, reverse=True, subset_predicate=None, output_factory=None)
+- subset(ranking_key=<opaque lambda>, k=1, offset=0, reverse=True, subset_predicate=None, output_factory=None)
   - filter_values(filter_predicate=Eq('dept', 'eng'), output_factory=None)
     - leaf RF #3
 ```

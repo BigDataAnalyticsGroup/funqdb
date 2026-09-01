@@ -13,8 +13,8 @@ For example, let's define three **tuple functions** representing persons:
 
 ```python
 t1: TF = TF({"name": "Tom", "company": "sample company"})
-t2: TF = TF({"name": "Tom", "company": "example inc"}),
-t3: TF = TF({"name": "John", "company": "whatever gmbh"}),
+t2: TF = TF({"name": "Tom", "company": "example inc"})
+t3: TF = TF({"name": "John", "company": "whatever gmbh"})
 ```
 
 A **relation function** is a function mapping from tuple identifiers (formerly known as tuple-ids or row-ids) to tuple

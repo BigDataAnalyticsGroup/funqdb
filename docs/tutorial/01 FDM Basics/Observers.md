@@ -25,32 +25,43 @@ logger = Logger()
 users.add_observer(logger)
 
 users[2] = TF({"name": "Bob"})  # triggers notification
-# logger.log → [(ChangeEvent.INSERT, 2, TF({"name": "Bob"}))]
+# logger.log → [(ChangeEvent.UPDATE, 2, TF({"name": "Bob"}))]
 ```
 
 #### Change events
 
-The ``ChangeEvent`` enum distinguishes three mutation types:
+The ``ChangeEvent`` enum reserves three mutation types:
 
-| Event | Triggered by |
-|:------|:-------------|
+| Event | Meaning |
+|:------|:--------|
 | ``ChangeEvent.INSERT`` | Adding a new key |
 | ``ChangeEvent.UPDATE`` | Overwriting an existing key |
 | ``ChangeEvent.DELETE`` | Deleting a key |
 
+> **Current behaviour:** ``__setitem__`` emits ``ChangeEvent.UPDATE`` for *every*
+> assignment — a fresh key and an overwrite are not yet distinguished, and
+> ``INSERT`` / ``DELETE`` are reserved but not yet emitted. Treat the event kind
+> as "the AF changed" for now.
+
 #### Observing item values
 
 With ``observe_items=True``, an AF also registers as observer on its own
-``Observable`` values. This means changes to nested AFs (e.g. a TF inside an
-RF) propagate upward:
+``Observable`` values, so a change inside a nested AF (e.g. a TF inside an RF)
+reaches the outer AF:
 
 ```python
 users = RF({1: TF({"name": "Alice"})}, observe_items=True)
 users.add_observer(logger)
 
 users[1]["name"] = "Alicia"  # change inside the TF
-# logger receives notification about the change
+# the outer RF re-runs its constraint checks on the changed item
 ```
+
+> **Current behaviour:** the outer AF uses the propagated notification to
+> re-check its own constraints, but it does **not** yet forward the event to its
+> own observers — ``logger`` above stays empty. Forwarding nested changes to
+> outer observers is a known TODO (see ``receive_notification`` in
+> ``fdm/attribute_functions.py``).
 
 #### Constraints
 

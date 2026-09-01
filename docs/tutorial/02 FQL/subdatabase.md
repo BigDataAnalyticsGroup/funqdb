@@ -6,37 +6,63 @@
 
 ### Generic Form: DBF → DBF
 
-```output: DBF = subdatabase(input: DBF)```
+```output: DBF = subdatabase(input: DBF, *, root=None)```
 
-Reduces the ```input``` DBF to only those tuples that participate in a match across its relations under a given join
-predicate. The output DBF contains the same relations as the input, but each relation is reduced to its qualifying
-tuples. This is the FQL equivalent of the classical **Yannakakis reduction** (semi-join reduction).
+Reduces the ```input``` DBF to only those tuples that participate in the full join across its relations. The output DBF
+contains the same relation names as the input, but each relation is reduced to its qualifying tuples. This is the FQL
+equivalent of the classical **Yannakakis reduction** (semi-join reduction).
 
 The subdatabase operator is the foundation for join processing in FQL: rather than immediately flattening results into
 a single relation (as SQL joins do), it first computes the reduced database, preserving the original structure. A
-separate join operator can then flatten if needed.
+separate [join](join.md) operator can then flatten if needed.
+
+The join is **not** given as a black-box predicate. It is derived automatically from the reference structure of the
+input: every ```ForeignValueConstraint``` — set up with ```.references(ref_key, target)``` on an RF or with
+[`add_reference`](constraints.md) on the DBF — becomes an edge of the join graph. Internally the reduction is
+expressed as a cascade of ```semijoin``` operators, so the extracted logical plan (see [plan](plan.md)) can be
+shipped to a different backend. The input's constraints are preserved on the output. Only **acyclic** join graphs
+are supported.
 
 ### Parameters
 
-#### join_predicate
+#### root (optional)
 
-A callable that receives two items (one from each relation) and returns a boolean. The predicate is treated as a black
-box, supporting arbitrary join conditions (not limited to equi-joins).
+Name of the relation to use as the root of the join tree. When ```None``` (the default) the root is auto-selected as
+the relation with no incoming references. Any orientation of the same undirected tree yields the same reduction, so
+```root``` only affects the shape of the extracted plan, not the result.
 
-#### left / right
+### Minimal example
 
-Names of the two relations in the input DBF to join on. The current implementation is limited to two relations;
-generalizing to n relations is future work.
+```python
+from fdm.attribute_functions import TF, RF, DBF
+from fql.operators.subdatabases import subdatabase
 
-#### create_join_index
+departments = RF({"d1": TF({"name": "Dev"}),
+                  "d2": TF({"name": "Sales"}),
+                  "d3": TF({"name": "Research"})}, frozen=False)
+users = RF({1: TF({"name": "Horst", "dept": departments["d1"]}),
+            2: TF({"name": "Tom",   "dept": departments["d1"]}),
+            3: TF({"name": "John",  "dept": departments["d2"]})},
+           frozen=False).references("dept", departments)  # reference before freezing
 
-If true, the output DBF contains an additional ```join_index``` RF that records all matching (left_key, right_key)
-pairs. This index can be used by downstream operators (e.g. a join operator that flattens the result).
+users.freeze()
+departments.freeze()
+dbf = DBF({"departments": departments, "users": users}, frozen=True)
+
+reduced: DBF = subdatabase[DBF, DBF](dbf).result
+# d3 ('Research') has no referencing user, so it is dropped:
+assert {item.key for item in reduced.departments} == {"d1", "d2"}
+assert {item.key for item in reduced.users} == {1, 2, 3}   # all users survive
+```
+
+> **Note on `.references()` and freezing:** attach the reference while the RFs are still writable, *then* freeze them.
+> `.references()` also installs a reverse constraint on the target, which a frozen target would reject. To add a
+> reference to an already-frozen DBF instead, use [`add_reference`](constraints.md).
 
 ### Relationship to other operators
 
 - **vs [filter](filter.md)**: filter reduces a single AF based on a local predicate per item. Subdatabase reduces
-  *multiple* relations simultaneously based on a *cross-relation* predicate.
+  *multiple* relations simultaneously based on their *cross-relation* references.
 - **vs [partition](partition.md)**: partition splits one relation into groups. Subdatabase keeps the database structure
   but removes non-participating tuples.
 - Subdatabase is the basis for **join** operators: ```join = subdatabase + flatten```.
@@ -45,16 +71,12 @@ pairs. This index can be used by downstream operators (e.g. a join operator that
 
 #### Inner subdatabase
 
-> Reduce to tuples that have at least one match.
+> Reduce to tuples that participate in the full join.
 
-```output: DBF = subdatabase(input: DBF)```
+```output: DBF = subdatabase(input: DBF, *, root=None)```
 
-The default variant. Each relation in the output contains only tuples that have at least one matching partner in the
-other relation(s) under the join predicate. Equivalent to semi-join reduction.
-
-*For instance*, given a DBF with relations "users" and "customers", and a predicate matching on name equality, the
-output DBF contains only those users who are also customers and only those customers who are also users. Users without
-a matching customer (and vice versa) are removed.
+The default (and currently only implemented) variant, shown above. Each relation in the output contains only tuples
+that have a matching partner along every reference edge. Equivalent to semi-join reduction.
 
 #### Outer subdatabase (not yet implemented)
 
