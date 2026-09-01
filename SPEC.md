@@ -167,7 +167,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 ### Join
 
-- `[✅]` ***join** — materialise a reference-based join over an acyclic RF graph into nested TF rows*  
+- `[✅]` ***join** — materialise a reference-based join over an undirected-tree RF graph into nested TF rows*  
   Accepts a DBF decorated with `ForeignValueConstraint` metadata and materializes all surviving tuple combinations as an RF of nested rows. Each row is a TF mapping relation names to their tuple values. Referenced tuples are shared by object identity across rows — two rows whose reference chain leads to the same target TF share the exact same instance, preserving zero-redundancy. The join internally runs Yannakakis reduction to ensure only tuples participating in the full join are included.
 
 - `[✅]` *Supports trivial (single relation), linear chain, and star schema topologies*  
@@ -176,14 +176,37 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` *Shares target TF objects by identity across rows*  
   When multiple rows reference the same target tuple through a `ForeignValueConstraint`, all those rows receive the same TF instance (verifiable with Python's `is` operator). This eliminates redundant copying and ensures that modifications to the shared instance propagate to all referencing rows.
 
-- `[✅]` *Validates graph topology; rejects multi-source and disconnected graphs*  
-  The join operator inspects the reference graph extracted from `ForeignValueConstraint` metadata and raises `NotImplementedError` with an explicit hint if the graph has multiple pure-source relations, isolated relations with no references, or multiple disconnected components. These cases are out of scope for the current implementation.
+- `[✅]` *Validates graph topology; rejects non-tree, disconnected, and isolated-relation graphs*  
+  The join operator inspects the reference graph extracted from `ForeignValueConstraint` metadata and raises `NotImplementedError` with an explicit hint, in order, if the graph has isolated relations with no references, more than one connected component, or is not an undirected tree (a diamond / non-tree acyclic graph, a cycle, or a parallel / self reference). Multiple pure-source relations are **no longer** rejected — see the multi-source entry below.
+
+- `[✅]` ***multi-source** flattening join over any undirected-tree orientation* (feature 003)  
+  Lifts the "exactly one pure source" restriction: the join now walks the reference tree bidirectionally (forward via the inline FK pointer, backward from a hub tuple to its referencing source tuples via an object-identity scan of the reduced source), so a graph with several relations referencing a shared hub (e.g. JOB's `ci→t, mc→t`) flattens to the fan-in cross product. In scope: any connected graph that is an undirected tree in any edge orientation. Diamonds / non-tree, disconnected, and cyclic graphs still raise `NotImplementedError` (diamonds deferred to a follow-up 004). See `test_join_multi_source_fan_in_cross_product` and `test_join_flattens_all_edge_orientations`.
+
+- `[✅]` *Backlinks are reconstructed **after** Yannakakis reduction, never stored* (feature 003)  
+  The bidirectional walk needs, for every hub tuple, the source tuples that reference it — the "backward"
+  direction. These backlinks are not materialised anywhere; they are recomputed at walk time in two
+  clearly separated phases. **Phase 1 — reduction:** `join` runs `subdatabase` (Yannakakis semijoin
+  cascade) first, yielding a reduced DBF in which every surviving tuple provably extends to a full-join
+  row. **Phase 2 — backlink resolution:** the walk then scans the *reduced* source relation and matches by
+  **object identity** — a source tuple `s` references hub tuple `h` iff `s[ref_key] is h` (the `is`
+  operator, not `==`). Only the edge *structure* (which relation references which, via which `ref_key`)
+  is taken from the `JoinGraph`, and that graph is extracted from the **original** DBF, because
+  `subdatabase`/`semijoin` clone RFs with fresh UUIDs and a graph rebuilt from the reduced DBF would drop
+  edges. The identity test is sound because `semijoin` preserves each contained TF by object identity
+  (shallow-copies the data dict), so `s[ref_key]` on a reduced tuple is the same instance it was before
+  reduction. This is a **load-bearing invariant**: if `semijoin` ever deep-copies contained TFs, the
+  backlink scan silently finds nothing and the join breaks — see the invariant note in `join._compute`
+  (`fql/operators/joins.py`). Forward edges need no scan: they are followed directly through the inline FK
+  pointer `tf[ref_key]`.
 
 - `[⚠️]` *JoinPredicate pushdown during join (deferred)*  
   If the input DBF carries any `JoinPredicate` constraints, the join operator raises `NotImplementedError` rather than silently ignoring them. Predicate pushdown — applying user-supplied join conditions during the tuple combination phase — is deferred to a follow-up implementation.
 
 - `[⚠️]` *Non-tree acyclic graphs / diamond references (deferred)*  
-  The join operator assumes the reference graph forms a tree rooted at a single pure-source relation. If a relation is reachable via two or more distinct paths (a diamond pattern or non-tree acyclic graph), the operator raises `NotImplementedError`. Handling such graphs would require multiple accumulators per walk and is deferred to a follow-up implementation.
+  The join operator assumes the reference graph forms an undirected tree. If a relation is reachable via two or more distinct paths (a diamond pattern or non-tree acyclic graph), the operator raises `NotImplementedError`. Handling such graphs would require enumerating over a spanning tree plus a residual-edge consistency check and is deferred to a follow-up implementation (004).
+
+- `[✅]` *Edge direction independent: every orientation of a tree reference graph is joinable*  
+  Because the walk is bidirectional (feature 003), edge direction no longer decides joinability — it only decides which relation is embedded where. For the tree A-C, B-C, C-D all 2³ = 8 orientations flatten, each to the same full join (with one tuple per relation, a single row nesting all four). Multi-source orientations (two or more pure sources) are handled by entering the shared hub's other edges backward. See `test_join_flattens_all_edge_orientations`. This matches `subdatabase`, which is likewise direction-independent.
 
 ### Semijoin & Subdatabase
 
@@ -192,6 +215,9 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` ***subdatabase** — compute minimal subdatabase via Yannakakis semi-join reduction; extracts join graph from ForeignValueConstraints*  
   Accepts a DBF and returns a new DBF containing only tuples that participate in the full join across all relations, computed via the Yannakakis semi-join reduction algorithm. The join graph is extracted automatically from `ForeignValueConstraint` metadata. The reduction is expressed as a cascade of `semijoin` operators, making the computation inspectable via the plan IR. Only acyclic graphs are supported; input constraints are preserved in the output.
+
+- `[✅]` *Direction-independent: every orientation of an acyclic reference graph reduces identically*  
+  Unlike the flattening `join`, subdatabase does not care about edge direction. The join graph is traversed as undirected (Yannakakis's spanning-tree BFS needs both directions), so any orientation of an acyclic reference graph reduces to the same result. For the tree A-C, B-C, C-D all 2³ = 8 orientations are supported. See `test_subdatabase_works_for_all_edge_orientations`.
 
 ### Flatten
 

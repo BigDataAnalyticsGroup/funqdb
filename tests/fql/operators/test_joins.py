@@ -23,6 +23,10 @@ import pytest
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.constraints import add_join_predicate, add_reference
 from fql.operators.joins import join
+from tests.fql.operators.orientation_helpers import (
+    build_directed_tree,
+    orientation_params,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -146,16 +150,26 @@ def _orders_star_dbf() -> tuple[DBF, RF, RF, RF]:
 def _multi_source_star_dbf() -> DBF:
     """Two independent sources pointing at a shared target — JOB-style.
 
-    Shape: `ci → t` and `mc → t`, no edge between ci and mc. Used to
-    exercise the NotImplementedError path on multi-source graphs.
+    Shape: `ci → t` and `mc → t`, no edge between ci and mc — a multi-source
+    tree (two pure sources `ci`, `mc`; one hub `t`). Both sources fan in on
+    the single target `t1`: two `ci` tuples and two `mc` tuples all reference
+    it, so the full join is the 2 × 2 cross product through `t1`. Exercises
+    the bidirectional walk (both edges are entered backward from `t`) and the
+    fan-in row multiplicity.
     """
     t: RF = RF({"t1": TF({"title": "Movie"})}, frozen=False)
     ci: RF = RF(
-        {"ci1": TF({"note": "producer", "t": t["t1"]})},
+        {
+            "ci1": TF({"note": "producer", "t": t["t1"]}),
+            "ci2": TF({"note": "director", "t": t["t1"]}),
+        },
         frozen=False,
     ).references("t", t)
     mc: RF = RF(
-        {"mc1": TF({"company": "Acme", "t": t["t1"]})},
+        {
+            "mc1": TF({"company": "Acme", "t": t["t1"]}),
+            "mc2": TF({"company": "Globex", "t": t["t1"]}),
+        },
         frozen=False,
     ).references("t", t)
     ci.freeze()
@@ -501,11 +515,42 @@ def test_join_rejects_join_predicate_on_input() -> None:
         _ = join(augmented).result
 
 
-def test_join_multi_source_graph_raises_not_implemented() -> None:
-    """Multi-source reference graphs (e.g. JOB's ci→t, mc→t) raise."""
-    dbf: DBF = _multi_source_star_dbf()
-    with pytest.raises(NotImplementedError, match="pure-source"):
-        _ = join(dbf).result
+def test_join_multi_source_fan_in_cross_product() -> None:
+    """Multi-source star (ci→t, mc→t) flattens to the fan-in cross product.
+
+    Join graph (arrow = "references"; two pure sources fan in on hub t)::
+
+        ci ──┐
+             ├──▶ t
+        mc ──┘
+
+    Two pure sources both reference the single hub tuple t1, so the full join
+    is the 2 (ci) × 2 (mc) cross product = 4 rows, each pairing one ci and one
+    mc through the shared t1. This is the behaviour Feature 003 enables (it
+    used to raise NotImplementedError). Verifies (a) the exact set of pairings,
+    (b) the row count, and (c) that the hub is shared across all rows by object
+    identity — the zero-redundancy contract on the new backward-walk path.
+    """
+    dbf: DBF = _multi_source_star_dbf()  # ci→t, mc→t with 2 ci and 2 mc on hub t1
+    t: RF = dbf.t  # the hub relation, to assert shared-instance below
+
+    out: RF = join(dbf).result  # multi-source now flattens instead of raising
+
+    assert len(out) == 4  # 2 ci × 2 mc through the single shared hub t1
+    for item in out:  # every row nests exactly the three relations
+        assert {entry.key for entry in item.value} == {"ci", "mc", "t"}
+    pairings: set[tuple[str, str]] = {  # collect each row's (ci note, mc company)
+        (item.value["ci"]["note"], item.value["mc"]["company"]) for item in out
+    }
+    assert pairings == {  # the full 2×2 cross product, no missing/extra pairing
+        ("producer", "Acme"),
+        ("producer", "Globex"),
+        ("director", "Acme"),
+        ("director", "Globex"),
+    }
+    assert all(  # the hub t1 is the SAME instance in every row (shared, not copied)
+        item.value["t"] is t["t1"] for item in out
+    )
 
 
 def test_join_multi_rf_without_refs_raises_not_implemented() -> None:
@@ -517,7 +562,14 @@ def test_join_multi_rf_without_refs_raises_not_implemented() -> None:
 
 def test_join_diamond_raises_not_implemented() -> None:
     """A single-pure-source diamond (A→B, A→C, B→D, C→D) must refuse
-    rather than silently overwriting one path's target."""
+    rather than silently overwriting one path's target.
+
+    Join graph (arrow = "references"; D reached via two paths B and C)::
+
+            ┌──▶ B ──┐
+        A ──┤        ├──▶ D
+            └──▶ C ──┘
+    """
     dbf: DBF = _diamond_dbf()
     with pytest.raises(NotImplementedError, match="diamond"):
         _ = join(dbf).result
@@ -534,7 +586,12 @@ def test_join_isolated_relation_raises_not_implemented() -> None:
 def test_join_disconnected_components_raise_not_implemented() -> None:
     """Two disconnected reference pairs (R→S, T→U) raise with a
     dedicated error message — distinguishable from the multi-source
-    case where all nodes share a single component."""
+    case where all nodes share a single component.
+
+    Join graph (arrow = "references"; two separate components, no edge between)::
+
+        R ──▶ S     T ──▶ U
+    """
     dbf: DBF = _two_independent_pairs_dbf()
     with pytest.raises(NotImplementedError, match="disconnected components"):
         _ = join(dbf).result
@@ -615,3 +672,172 @@ def test_join_plan_extraction_names_operator() -> None:
     assert root.op == "join"
     # the plan serializes the configured root param (None by default here)
     assert root.params["root"] is None
+
+
+# ---------------------------------------------------------------------------
+# All 8 edge orientations of the tree A-C, B-C, C-D
+# ---------------------------------------------------------------------------
+#
+# The flattening join walks the reference tree bidirectionally (feature 003):
+# forward along an arrow via the inline pointer, backward against an arrow from
+# a hub tuple to the sources that reference it. Edge direction therefore only
+# decides which relation is embedded where, never whether the join runs — so
+# all 2**3 = 8 orientations flatten, including the multi-source ones (two or
+# more pure sources), which enter the shared hub's other edges backward. Like
+# subdatabase, which treats the graph as undirected (see test_subdatabases.py).
+
+
+@pytest.mark.parametrize("directed_edges", orientation_params())
+def test_join_flattens_all_edge_orientations(
+    directed_edges: list[tuple[str, str]],
+) -> None:
+    """Flattening join succeeds for every one of the 8 orientations of A-C, B-C, C-D.
+
+    With one tuple per relation and full connectivity the full join is a single
+    row nesting all four relations, whatever the edge directions — multi-source
+    orientations included, since the walk is bidirectional. (Fan-in / row
+    multiplicity is covered separately by the multi-source star test.)
+    """
+    dbf: DBF = build_directed_tree(
+        directed_edges
+    )  # build the 4-relation DBF for this orientation
+
+    out: RF = join(dbf).result  # runs for every orientation, no NotImplementedError
+
+    assert len(out) == 1  # single tuple per relation, fully connected -> one row
+    row: TF = out[0]  # the sole flattened row
+    assert {entry.key for entry in row} == {
+        "A",
+        "B",
+        "C",
+        "D",
+    }  # the row nests all four relations, one tuple each
+    for name in ("A", "B", "C", "D"):  # each nested tuple is the ORIGINAL instance...
+        assert (
+            row[name] is dbf[name][name.lower() + "1"]
+        )  # ...shared by object identity (e.g. row["A"] is dbf["A"]["a1"]), not a copy
+
+
+# ---------------------------------------------------------------------------
+# Cyclic reference graph (out of scope) and mixed fan-in + forward chain
+# ---------------------------------------------------------------------------
+
+
+def _cyclic_dbf() -> DBF:
+    """Two relations referencing each other: A → B and B → A (a 2-cycle).
+
+    Built by embedding B's tuple into A's after both exist, so the references
+    form a directed cycle. Used to prove the join rejects cyclic graphs (they
+    are non-trees) rather than looping.
+    """
+    a: RF = RF({"a1": TF({"lbl": "A"})}, frozen=False)  # start without the back-ref
+    b: RF = RF(
+        {"b1": TF({"lbl": "B", "a": a["a1"]})},  # B → A
+        frozen=False,
+    ).references("a", a)
+    a["a1"]["b"] = b["b1"]  # close the cycle: A → B, after b1 exists
+    a = a.references("b", b)  # declare the A → B foreign-value constraint
+    a.freeze()
+    b.freeze()
+    return DBF({"a": a, "b": b}, frozen=True)
+
+
+def test_join_cyclic_graph_raises_not_implemented() -> None:
+    """A cyclic reference graph (A → B → A) is a non-tree and must raise.
+
+    Join graph (arrow = "references"; A and B reference each other, a 2-cycle)::
+
+        A ──▶ B
+        A ◀── B
+
+    The undirected-tree gate rejects it before any traversal (a cycle has as
+    many edges as nodes, not n-1), so the join refuses cleanly instead of
+    walking the cycle forever. Cyclic graphs are deferred like diamonds.
+    """
+    dbf: DBF = _cyclic_dbf()  # A ⇄ B, a 2-cycle
+    with pytest.raises(
+        NotImplementedError, match="tree"
+    ):  # rejected by the non-tree gate, message names the tree requirement
+        _ = join(dbf).result  # must not loop or silently truncate
+
+
+def _mixed_fan_in_forward_chain_dbf() -> tuple[DBF, RF]:
+    """Tree A→C, B→C, C→D combining a backward fan-in with a forward chain.
+
+    C is the hub: A and B reference it (walked backward from C), and C
+    references D (walked forward). A and B each have two tuples pointing at the
+    single hub c1, while c1 → d1. Starting at pure source A, each A-tuple
+    reaches c1, then fans in over B's tuples and folds in the single d1 — so
+    the full join is |A| × |B| = 4 rows, all sharing c1 and d1. Exercises the
+    product of a backward fan-in with an onward forward edge in one walk.
+
+    @return: (dbf, D) — the DBF and the D relation, to assert the shared d1.
+    """
+    d: RF = RF({"d1": TF({"kind": "dept"})}, frozen=False)
+    c: RF = RF(
+        {"c1": TF({"hub": "c", "d": d["d1"]})},  # C → D (forward from C)
+        frozen=False,
+    ).references("d", d)
+    a: RF = RF(
+        {
+            "a1": TF({"n": "a1", "c": c["c1"]}),
+            "a2": TF({"n": "a2", "c": c["c1"]}),
+        },
+        frozen=False,
+    ).references(
+        "c", c
+    )  # A → C (backward from C)
+    b: RF = RF(
+        {
+            "b1": TF({"n": "b1", "c": c["c1"]}),
+            "b2": TF({"n": "b2", "c": c["c1"]}),
+        },
+        frozen=False,
+    ).references(
+        "c", c
+    )  # B → C (backward from C)
+    a.freeze()
+    b.freeze()
+    c.freeze()
+    d.freeze()
+    return DBF({"a": a, "b": b, "c": c, "d": d}, frozen=True), d
+
+
+def test_join_mixed_fan_in_and_forward_chain() -> None:
+    """Backward fan-in (A,B → C) times a forward chain (C → D) enumerates correctly.
+
+    Join graph (arrow = "references", A/B fan in on hub C, C chains on to D)::
+
+        A ──┐
+            ├──▶ C ──▶ D
+        B ──┘
+
+    A holds two tuples (a1, a2), B holds two (b1, b2); both reference the single
+    hub c1, and c1 in turn references the single d1. The full join is therefore
+    the 2 × 2 A×B cross product, every row also carrying c1 and d1. Verifies the
+    row count, the exact A×B pairings, that every row nests all four relations,
+    and that the hub c1 and the forward-chained d1 are shared by object identity.
+    """
+    dbf, d = _mixed_fan_in_forward_chain_dbf()  # tree A→C,B→C,C→D with fan-in at C
+    c_hub: TF = dbf.c["c1"]  # the single hub tuple, shared across all rows
+
+    out: RF = join(dbf).result  # bidirectional walk: backward to A/B, forward to D
+
+    assert len(out) == 4  # 2 (A) × 2 (B), the single c1/d1 folding in as factors of 1
+    for item in out:  # every row nests all four relations
+        assert {entry.key for entry in item.value} == {"a", "b", "c", "d"}
+    pairings: set[tuple[str, str]] = {  # each row's (A tuple, B tuple) labels
+        (item.value["a"]["n"], item.value["b"]["n"]) for item in out
+    }
+    assert pairings == {  # the full 2×2 cross product, nothing missing or spurious
+        ("a1", "b1"),
+        ("a1", "b2"),
+        ("a2", "b1"),
+        ("a2", "b2"),
+    }
+    assert all(
+        item.value["c"] is c_hub for item in out
+    )  # the hub c1 is the same instance in every row
+    assert all(
+        item.value["d"] is d["d1"] for item in out
+    )  # the forward-chained d1 is likewise shared by identity

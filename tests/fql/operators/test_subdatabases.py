@@ -25,6 +25,10 @@ from fql.operators.subdatabases import (
     subdatabase,
 )
 from fql.plan.join_graph import Node, JoinNode, Edge, JoinGraph
+from tests.fql.operators.orientation_helpers import (
+    build_directed_tree,
+    orientation_params,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers – small, self-contained datasets for each test scenario
@@ -682,3 +686,64 @@ def test_join_graph_iter_yields_relation_names() -> None:
         [Edge(Node("Alpha"), Node("Bravo"), "r")],
     )
     assert list(graph) == ["Alpha", "Bravo", "Charlie"]
+
+
+# ---------------------------------------------------------------------------
+# All 8 edge orientations of the tree A-C, B-C, C-D
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("directed_edges", orientation_params())
+def test_subdatabase_works_for_all_edge_orientations(
+    directed_edges: list[tuple[str, str]],
+) -> None:
+    """subdatabase must succeed for every one of the 8 orientations of A-C, B-C, C-D.
+
+    Undirected join graph (fixed shape; C is the hub, D hangs off it)::
+
+        A ── C ── D
+             │
+             B
+
+    Each of the three edges A-C, B-C, C-D can be oriented either way (which
+    relation embeds which), giving 2**3 = 8 directed variants — e.g. ``A→C,
+    B→C, C→D`` (everything points at the hub / at D) or ``C→A, C→B, C→D`` (the
+    hub points outward). `directed_edges` is one such orientation, supplied by
+    `orientation_params`; `build_directed_tree` turns it into the DBF.
+
+    Direction only decides embedding, never connectivity: the undirected shape
+    stays the tree above in all 8 cases, so the join graph is always connected
+    and acyclic. Hence, Yannakakis reduction must run without error in every
+    orientation, and — since each relation holds exactly one tuple and every
+    reference hits that single tuple, so nothing dangles — no tuple is reduced
+    away: all four survive.
+
+    Asserts, for every orientation: the graph has 4 nodes and 3 edges and passes
+    the acyclicity check, subdatabase runs end-to-end without raising, and the
+    surviving keys are exactly {a1, b1, c1, d1}.
+    """
+    dbf: DBF = build_directed_tree(
+        directed_edges
+    )  # build the 4-relation DBF for this orientation
+
+    graph: JoinGraph = JoinGraph.from_dbf(
+        dbf
+    )  # extract the join graph the operator will traverse
+    assert len(graph.nodes) == 4  # all four relations become nodes
+    assert len(graph.edges) == 3  # the three reference edges are all present
+    graph.check_acyclicity()  # every orientation of a tree is acyclic — must not raise
+
+    result: DBF = subdatabase[DBF, DBF](
+        dbf
+    ).result  # run subdatabase end-to-end; must not raise in any orientation
+
+    surviving: dict[str, set[str]] = {
+        name: {item.key for item in getattr(result, name)}  # keys left after reduction
+        for name in ("A", "B", "C", "D")
+    }
+    assert surviving == {
+        "A": {"a1"},
+        "B": {"b1"},
+        "C": {"c1"},
+        "D": {"d1"},
+    }  # fully-connected single tuples survive regardless of edge direction

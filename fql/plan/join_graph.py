@@ -53,10 +53,16 @@ class Edge:
 
 @dataclass(frozen=True)
 class Neighbor:
-    """An entry in an undirected adjacency list: a neighbor connected via ref_key."""
+    """An entry in an adjacency list: a neighbor relation connected via ref_key.
 
-    name: str
-    ref_key: str
+    Shared value type for `outgoing_adjacency()` (neighbor is the edge target),
+    `incoming_adjacency()` (neighbor is the edge source), and the undirected
+    adjacency built inside `build_semijoin_cascade`. `ref_key` is always the
+    attribute on the *source* tuple, regardless of which map the entry is in.
+    """
+
+    name: RelationName
+    ref_key: AttributeName
 
 
 @dataclass
@@ -184,9 +190,9 @@ class JoinGraph:
 
         A "pure source" is the natural Kahn's-algorithm seed (in-degree
         zero in a node that actually participates in at least one
-        edge). Used by `join._pick_walk_start` as the only legal walk
-        origin in the minimal POC, and useful any time the calling
-        code wants the start set for a topological sort on the
+        edge). `join._pick_walk_start` starts its (bidirectional) walk at
+        `sorted(pure_sources)[0]`, and the set is useful any time the
+        calling code wants the start set for a topological sort on the
         directed reference graph.
         """
         incoming: set[str] = {edge.target.name for edge in self.edges}
@@ -252,6 +258,50 @@ class JoinGraph:
                 Neighbor(name=edge.target.name, ref_key=edge.ref_key)
             )
         return adjacency
+
+    def incoming_adjacency(self) -> dict[RelationName, list[Neighbor]]:
+        """Incoming-edge adjacency map keyed by *target* relation name.
+
+        Mirror of `outgoing_adjacency()`: each value lists the
+        `Neighbor(name=source_relation, ref_key=attribute_on_source)` for
+        every edge pointing *at* this relation. Where `outgoing_adjacency`
+        lets a walk follow a reference forward via the inline pointer
+        (`source_tf[ref_key] is target_tf`), this map lets it walk an edge
+        **backward** — from a referenced (hub) tuple to the source tuples
+        that reference it — which the forward pointer cannot express. Reuses
+        `Neighbor`; the direction is implicit in which map a neighbor came
+        from, so no extra field is needed.
+
+        Built once per call from the edges list — O(|edges|).
+        """
+        adjacency: dict[RelationName, list[Neighbor]] = {}
+        for edge in self.edges:
+            adjacency.setdefault(edge.target.name, []).append(
+                Neighbor(name=edge.source.name, ref_key=edge.ref_key)
+            )
+        return adjacency
+
+    def is_tree(self) -> bool:
+        """True iff the undirected reference graph is a single tree.
+
+        A tree is weakly connected (exactly one connected component) and has
+        exactly ``len(nodes) - 1`` edges. This is the shape the flattening
+        `join` accepts in any edge orientation; anything else (a diamond, a
+        cycle, a parallel reference, a self-reference, or a disconnected
+        graph) has a different edge count or component count and returns
+        False.
+
+        Note this is deliberately **not** `check_acyclicity()`: that tests
+        *directed* acyclicity, but a diamond (``A->B, A->C, B->D, C->D``) is
+        directed-acyclic while being undirected-cyclic. The edge-count test
+        here is the correct undirected-tree test. On a multigraph (parallel
+        or self edges) the edge count exceeds ``n - 1``, so those are
+        rejected too.
+        """
+        return (
+            len(self.connected_components()) == 1
+            and len(self.edges) == len(self.nodes) - 1
+        )
 
     def connected_components(self) -> list[set[str]]:
         """Weakly-connected components of the reference graph.

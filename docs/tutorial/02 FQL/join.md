@@ -1,9 +1,10 @@
 ## Join
 
-> **Status:** Minimal POC (MR 2 of the join-rework). Reference-based
-> joins on acyclic graphs with exactly one pure source. Arbitrary
-> `JoinPredicate` pushdown and multi-source / non-tree graphs raise
-> `NotImplementedError` with a pointer at the follow-up MR.
+> **Status:** POC (feature 003 of the join-rework). Reference-based joins on any
+> connected graph that is an **undirected tree** in any edge orientation —
+> zero, one, or several pure sources. Arbitrary `JoinPredicate` pushdown and
+> diamond / non-tree / disconnected / cyclic graphs raise `NotImplementedError`
+> with a pointer at the follow-up MR (004).
 
 ### Form: DBF → RF
 
@@ -94,16 +95,13 @@ out: RF = join(
 
 ### Glossary: pure source
 
-The minimal POC requires the reference graph of the input DBF to have
-exactly one **pure source** — a relation with at least one outgoing
-`ForeignValueConstraint` and no incoming ones. In graph terms: a node
-with in-degree 0 and out-degree ≥ 1 in the directed reference DAG.
-
-Why this matters: FDM references are traversable forward in O(1) via
-object identity (`source_tf[ref_key] is target_tf`), but walking
-*backward* ("which sources reference this target?") requires scanning
-the source RF or building a reverse index. Starting from a pure source
-and walking outgoing edges only avoids that cost entirely.
+A **pure source** is a relation with at least one outgoing
+`ForeignValueConstraint` and no incoming ones — a node with in-degree 0 and
+out-degree ≥ 1 in the directed reference DAG. `join` starts its walk at one
+(deterministically `sorted(pure_sources)[0]`, or an explicit `root=`), but the
+graph may have **any number** of them: the walk is bidirectional, so a shared
+hub referenced by several sources is reached by entering its other edges
+backward.
 
 Examples:
 
@@ -121,14 +119,37 @@ Examples:
   Multi-source (JOB-style: ci → t, mc → t)
       ci          out=1, in=0   ← pure source
       mc          out=1, in=0   ← pure source
-      t           out=0, in=2   (shared sink)
-      → TWO pure sources: raises NotImplementedError in this MR.
+      t           out=0, in=2   (shared hub)
+      → TWO pure sources: flattens to the ci × mc fan-in cross product.
 ```
 
-Under the hood `join` first runs [`subdatabase`](subdatabase.md) to
-Yannakakis-reduce the DBF (so only tuples participating in the full
-join survive), then walks from the pure source to materialize one row
-per surviving start-tuple.
+### How it works: reduce first, reconstruct backlinks second
+
+`join` runs in two clearly separated phases:
+
+1. **Yannakakis reduction.** `join` first runs [`subdatabase`](subdatabase.md)
+   to reduce the DBF, so only tuples that participate in the full join survive.
+2. **Bidirectional walk.** It then walks the reduced reference tree from the
+   start relation. Each edge is followed in one of two ways:
+   - **forward** (this tuple is the source): follow the inline pointer
+     `source_tf[ref_key]` in O(1) to the single referenced tuple;
+   - **backward** (this tuple is the hub): find the source tuples that
+     reference it. These *backlinks are not stored anywhere* — they are
+     reconstructed on the spot by scanning the reduced source relation and
+     matching on **object identity**: `source_tf[ref_key] is hub_tf` (the `is`
+     operator, not `==`). This one-to-many step is what produces a fan-in's
+     multiple rows.
+
+Two subtleties make the identity scan sound:
+
+- The edge *structure* (which relation references which, via which `ref_key`)
+  is read from the join graph of the **original** DBF, not the reduced one:
+  `subdatabase` clones RFs with fresh UUIDs, so a graph rebuilt from the reduced
+  DBF would drop edges.
+- The `is` test works because `subdatabase`'s semijoin preserves each contained
+  tuple by object identity — a reduced tuple's `source_tf[ref_key]` is the very
+  same instance it was before reduction. (Load-bearing: if that ever became a
+  deep copy, the backlink scan would silently find nothing.)
 
 ### Scope and deferred follow-ups
 
@@ -136,8 +157,12 @@ In-scope for this MR:
 
 - Zero-edge fallback: a single-RF DBF passes each tuple through as a
   one-entry row.
-- Linear chains, single-source stars, and any tree rooted in a unique
-  pure source.
+- Any connected graph that is an **undirected tree** in any edge
+  orientation — linear chains, single-source stars, and multi-source
+  fan-ins (JOB-style `ci → t, mc → t`) alike, with zero, one, or several
+  pure sources. All 2³ = 8 orientations of a given tree flatten to the
+  same full join (edge direction only decides which relation is embedded
+  where).
 - Yannakakis reduction via `subdatabase` (references drive the
   reduction).
 
@@ -145,16 +170,17 @@ Explicitly raises `NotImplementedError` on:
 
 - **`JoinPredicate` on the input DBF** — predicate pushdown is
   deferred. See [constraints.md](constraints.md#evaluation-model--who-consumes-a-joinpredicate-and-who-ignores-it).
-- **Multi-source reference graphs** — e.g. the JOB shape where two
-  independent sources share a target.
-- **Diamonds and other non-tree acyclic graphs** — same code path.
-- Multi-RF DBFs with zero references at all (that would be a
-  Cartesian product; also deferred).
+- **Diamonds and other non-tree acyclic graphs** — a relation reachable
+  via two or more distinct paths (deferred to follow-up 004).
+- **Disconnected reference graphs** — that would be a Cartesian product
+  across components.
+- **Cyclic reference graphs** — rejected by the undirected-tree gate.
+- Multi-RF DBFs with zero references at all (also a Cartesian product).
 
-The follow-up MR will add `JoinPredicate` pushdown during the walk
+The follow-up MR (004) will add `JoinPredicate` pushdown during the walk
 (firing predicates as soon as every participating relation is in the
-accumulator) plus multi-source / diamond support via a BFS spanning
-tree with an on-the-fly reverse index.
+accumulator) plus diamond / non-tree support via a spanning tree with a
+residual-edge consistency check.
 
 ### Relationship to the `subdatabase` operator
 
@@ -164,7 +190,7 @@ but return different shapes:
 | Operator | Form | What survives |
 |:---------|:-----|:--------------|
 | [subdatabase](subdatabase.md) | DBF → DBF | Yannakakis-reduced DBF — every relation keeps its own RF, only non-participating tuples are pruned. Nothing materialized per row. |
-| [join](join.md) | DBF → RF  | One row per surviving tuple combination of the pure source's tuples and their transitive targets. |
+| [join](join.md) | DBF → RF  | One row per surviving tuple combination across all relations, reached by the bidirectional walk (including fan-in cross products at shared hubs). |
 
 When all you need is the reduced database, stay at `subdatabase` — it
 preserves the full normalized structure. Use `join` when a downstream

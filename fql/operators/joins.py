@@ -18,7 +18,7 @@
 #
 #
 
-"""FQL join operator — minimal POC (MR 2 of the join-rework).
+"""FQL join operator — reference-based flattening join (feature 003).
 
 Consumes a constraint-decorated DBF (assembled via `add_reference` or
 eager `RF.references()`) and materializes the surviving tuple
@@ -33,15 +33,19 @@ Relations enter each row **by reference**, not by copy. Two rows whose
 reference chains lead to the same target tuple share that tuple by
 object identity — no SQL-style denormalization.
 
-Minimal scope: only reference-based joins on acyclic reference graphs
-with exactly one **pure source** (a relation with outgoing references
-but no incoming ones). `JoinPredicate`s on the DBF and multi-source /
-non-tree shapes raise `NotImplementedError` with a pointer at the
-follow-up MR.
+Scope: reference-based joins on any connected reference graph that is an
+**undirected tree** in any edge orientation (0..n pure sources). The walk
+is bidirectional — a reference is followed forward via the inline pointer
+(`source_tf[ref_key] is target_tf`) or backward, from a referenced hub
+tuple to the source tuples that reference it. `JoinPredicate`s on the DBF,
+diamonds / non-tree graphs, disconnected graphs, and cyclic graphs raise
+`NotImplementedError` with a pointer at the follow-up MR.
 """
 
 from __future__ import annotations
 
+import itertools
+from collections.abc import Iterator
 from typing import Any
 
 from fdm.attribute_functions import TF, RF, DBF
@@ -53,10 +57,10 @@ from fql.plan.join_graph import JoinGraph, Neighbor
 # Follow-up MR pointer — shared between the two NotImplementedError sites so
 # that users who hit either know where to look.
 _FOLLOWUP_HINT: str = (
-    "Minimal POC only supports reference-based joins on acyclic graphs "
-    "with exactly one pure source. JoinPredicate pushdown, multi-source "
-    "graphs (e.g. JOB's `ci->t`, `mc->t`), and non-tree acyclic graphs "
-    "are the scope of the next MR."
+    "This POC supports reference-based joins on connected undirected trees "
+    "in any orientation (multi-source included). JoinPredicate pushdown, "
+    "diamonds / non-tree acyclic graphs, disconnected graphs (Cartesian "
+    "across components), and cyclic graphs are the scope of a follow-up MR."
 )
 
 
@@ -65,21 +69,24 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 ):
     """Materialize a constraint-decorated DBF as an RF of tuple combinations.
 
-    Runs `subdatabase` (Yannakakis reduction) on the input first, then
-    walks the reduced reference tree from the DBF's unique pure-source
-    relation following outgoing `ForeignValueConstraint` edges. Emits
-    one row per surviving tuple combination; each row is a TF whose
-    top-level keys are the relation names and whose values are the
-    original relation TFs shared by object identity across rows.
+    Runs `subdatabase` (Yannakakis reduction) on the input first, then walks
+    the reduced reference tree **bidirectionally** to enumerate the full
+    (natural) join: a reference is followed forward via the inline pointer
+    (`source_tf[ref_key] is target_tf`) or backward, from a referenced hub
+    tuple to the source tuples that reference it. Emits one row per surviving
+    tuple combination; each row is a TF whose top-level keys are the relation
+    names and whose values are the original relation TFs shared by object
+    identity across rows.
 
-    Scope — explicit limitations of this minimal POC:
+    Scope — the in-scope graph is any connected reference graph that is an
+    **undirected tree** in any edge orientation (0..n pure sources). The
+    following are out of scope and raise `NotImplementedError` (honest errors,
+    not silent mis-behaviour):
 
-    * Requires exactly **one** pure-source relation (no incoming
-      references). Multi-source graphs raise `NotImplementedError`.
-    * `JoinPredicate` on the input DBF raises `NotImplementedError` —
-      predicate pushdown is deferred to a follow-up MR.
-
-    Both limitations are honest errors, not silent mis-behaviour.
+    * diamonds / non-tree acyclic graphs (deferred to a follow-up MR),
+    * disconnected reference graphs (Cartesian across components),
+    * cyclic reference graphs,
+    * a `JoinPredicate` on the input DBF (predicate pushdown deferred).
     """
 
     def __init__(
@@ -91,9 +98,10 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         """Initialize the join operator.
 
         @param input_function: A DBF (or an Operator producing one).
-        @param root: Optional explicit pure-source relation to start the
-            walk from. If None, auto-picked as the unique relation with
-            no incoming references.
+        @param root: Optional explicit relation to start the walk from. It
+            must be a pure source (a known limitation — under the bidirectional
+            walk a hub would work too). If None, the start is picked
+            deterministically as the first pure source, `sorted(pure_sources)[0]`.
         """
         self.input_function = input_function
         self.root = root
@@ -154,10 +162,10 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                 f"references between them. {_FOLLOWUP_HINT}"
             )
 
-        # Pick the pure source to start the walk from. Enforces the
-        # minimal-POC invariants: no isolated relations, graph is
-        # connected (single component), and exactly one pure source.
-        # Respects self.root if set; see _pick_walk_start.
+        # Pick the relation to start the walk from. Enforces the in-scope
+        # shape (no isolated relations, single connected component, undirected
+        # tree) and returns sorted(pure_sources)[0]. Respects self.root if set;
+        # see _pick_walk_start.
         start: str = self._pick_walk_start(graph)
 
         # Yannakakis reduction (reference-based) — reuses existing
@@ -167,72 +175,97 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         # errors take precedence over subdatabase's internal ones.
         reduced: DBF = subdatabase[DBF, DBF](dbf).result
 
-        # Outgoing-edge adjacency, delegated to `JoinGraph` so the
-        # graph class owns the construction (see JoinGraph class
-        # docstring). Used by `_build_combination` to follow references
-        # forward via FDM object identity
-        # (`source_tf[neighbor.ref_key] is neighbor_tf`, where
-        # `neighbor.name` is the target relation).
-        #
-        # Shape of the returned map for users -> departments:
-        #     {"users": [Neighbor(name="departments", ref_key="dept")]}
-        # For the orders star (orders -> customers, orders -> products):
-        #     {"orders": [Neighbor(name="customers", ref_key="customer"),
-        #                 Neighbor(name="products",  ref_key="product")]}
-        adjacency: dict[str, list[Neighbor]] = graph.outgoing_adjacency()
+        # Forward adjacency (source -> target, followed via the inline FK
+        # pointer) and backward adjacency (target/hub -> its referencing
+        # sources, followed via an object-identity scan of the reduced
+        # source relation), both delegated to `JoinGraph` so the graph class
+        # owns the construction. The bidirectional walk needs both because a
+        # multi-source tree has edges that must be entered against their
+        # arrow from any start relation.
+        forward_adj: dict[str, list[Neighbor]] = graph.outgoing_adjacency()
+        backward_adj: dict[str, list[Neighbor]] = graph.incoming_adjacency()
 
-        # Row materialization. Iterate every surviving tuple of the
-        # start relation (already Yannakakis-reduced, so every such
-        # tuple is guaranteed to participate in the full join), then
-        # DFS-walk from there to build one `{relation_name: tf}`
-        # accumulator per start tuple. Each accumulator becomes exactly
-        # one row in the output RF:
-        #
-        #   for u1 (Alice, dept=d1):   accumulator = {users: u1, departments: d1}
-        #   for u2 (Bob,   dept=d2):   accumulator = {users: u2, departments: d2}
-        #   for u3 (Carol, dept=d1):   accumulator = {users: u3, departments: d1}
-        #
-        # `d1` / `d2` are the **original** department TFs (identity
-        # preserved across the reduction) — so row u1 and row u3 share
-        # the same `d1` instance, the property the zero-redundancy
-        # contract rests on.
-        #
-        # Output keys are sequential integers starting at 0 — no
-        # tuple-shaped composite keys, which would complicate the
-        # type of the RF for no benefit at this stage.
+        # Row materialization. Iterate every surviving tuple of the start
+        # relation (already Yannakakis-reduced, so every such tuple extends
+        # to at least one full-join row) and enumerate all combinations
+        # reachable from it. A single start tuple now yields *several* rows
+        # whenever a hub is referenced by more than one source tuple (fan-in),
+        # so one monotonic counter across the whole enumeration assigns the
+        # sequential integer output keys. Relations enter each row by
+        # reference (identity preserved across reduction), so rows sharing a
+        # hub share the same instance — the zero-redundancy contract.
         result: RF = RF(frozen=False)
         counter: int = 0
         for item in reduced[start]:
-            combination: dict[str, TF] = {}
-            _build_combination(
+            for combination in _combinations(
                 node_name=start,
                 node_tf=item.value,
-                adjacency=adjacency,
-                accumulator=combination,
-            )
-            result[counter] = _wrap_combination(combination)
-            counter += 1
+                came_from=None,
+                forward_adj=forward_adj,
+                backward_adj=backward_adj,
+                reduced=reduced,
+            ):
+                result[counter] = _wrap_combination(combination)
+                counter += 1
         result.freeze()
         return result
 
     def _pick_walk_start(self, graph: JoinGraph) -> str:
-        """Return the unique pure-source relation, or raise a helpful error.
+        """Validate the graph shape and return the relation to start the walk from.
 
-        A **pure source** is a relation with at least one outgoing
-        `ForeignValueConstraint` and zero incoming references. Starting
-        the walk there lets us follow every tree edge forward via FDM
-        object identity, O(1) per step, without a reverse index. An
-        isolated relation (no edges at all) is *not* a pure source —
-        it is reported separately so the error message stays readable.
+        In-scope graphs are connected **undirected trees** in any edge
+        orientation (0..n pure sources). The bidirectional walk reaches every
+        node from any start, so the start need only be deterministic; we use
+        the first pure source, `sorted(pure_sources)[0]`.
 
-        The graph-level definitions live on `JoinGraph`
-        (`pure_sources` / `isolated_nodes`); this method encodes only
-        the policy (exactly one pure source, no isolated relations)
-        and the explicit-root short-circuit.
+        The three out-of-scope shapes are rejected in this order, each with its
+        own message, and all **before** the start is picked (so the tree gate
+        also guarantees `pure_sources` is non-empty — a cyclic graph, which has
+        none, is rejected first):
+
+        1. isolated relations (no edges at all),
+        2. disconnected reference graph (more than one component),
+        3. non-tree graph (diamond, cycle, parallel or self reference).
+
+        Topology queries live on `JoinGraph` (`isolated_nodes`,
+        `connected_components`, `is_tree`, `pure_sources`); this method encodes
+        only the policy and the explicit-`root` handling. An explicit `root`
+        still has to be a pure source (a known limitation — a hub would be a
+        valid root too under bidirectional walking).
         """
-        pure_sources: set[str] = graph.pure_sources()
         isolated: set[str] = graph.isolated_nodes()
+        if isolated:
+            raise NotImplementedError(
+                f"join: DBF has isolated relations with no references "
+                f"at all: {sorted(isolated)}. A Cartesian fallback is "
+                f"out of scope for this POC. {_FOLLOWUP_HINT}"
+            )
 
+        # Disconnected reference graph — e.g. R→S plus T→U with no link
+        # between them. Semantically the join is the Cartesian product of the
+        # component-wise joins; its own message so the cause is not
+        # misattributed to a non-tree shape (a single-component property).
+        components: list[set[str]] = graph.connected_components()
+        if len(components) > 1:
+            raise NotImplementedError(
+                f"join: DBF reference graph has {len(components)} "
+                f"disconnected components: "
+                f"{[sorted(c) for c in components]}. A Cartesian "
+                f"product across components is out of scope for this "
+                f"POC. {_FOLLOWUP_HINT}"
+            )
+
+        # Non-tree: connected but with more than n-1 edges — a diamond, a
+        # cycle, or a parallel/self reference. Enumerating these needs a
+        # residual-edge consistency check that is deferred; caught here rather
+        # than mid-walk so the bidirectional generator can assume a tree.
+        if not graph.is_tree():
+            raise NotImplementedError(
+                f"join: reference graph is not a tree (diamond, cycle, "
+                f"parallel reference, or self-reference). {_FOLLOWUP_HINT}"
+            )
+
+        pure_sources: set[str] = graph.pure_sources()
         if self.root is not None:
             if self.root not in graph.nodes:
                 raise ValueError(
@@ -247,32 +280,7 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                 )
             return self.root
 
-        if isolated:
-            raise NotImplementedError(
-                f"join: DBF has isolated relations with no references "
-                f"at all: {sorted(isolated)}. A Cartesian fallback is "
-                f"out of scope for the minimal POC. {_FOLLOWUP_HINT}"
-            )
-        # Disconnected reference graph — e.g. R→S plus T→U with no
-        # link between them. Semantically the join is the Cartesian
-        # product of the component-wise joins; flagged with its own
-        # error so the message doesn't misattribute the cause to a
-        # multi-source shape (which is a single-component property).
-        components: list[set[str]] = graph.connected_components()
-        if len(components) > 1:
-            raise NotImplementedError(
-                f"join: DBF reference graph has {len(components)} "
-                f"disconnected components: "
-                f"{[sorted(c) for c in components]}. A Cartesian "
-                f"product across components is out of scope for the "
-                f"minimal POC. {_FOLLOWUP_HINT}"
-            )
-        if len(pure_sources) != 1:
-            raise NotImplementedError(
-                f"join: expected exactly one pure-source relation, got "
-                f"{sorted(pure_sources)}. {_FOLLOWUP_HINT}"
-            )
-        return next(iter(pure_sources))
+        return sorted(pure_sources)[0]
 
     @staticmethod
     def _wrap_single_relation(reduced: DBF, relation_name: str) -> RF:
@@ -286,53 +294,105 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return result
 
 
-def _build_combination(
+def _combinations(
     *,
     node_name: str,
     node_tf: TF,
-    adjacency: dict[str, list[Neighbor]],
-    accumulator: dict[str, TF],
-) -> None:
-    """DFS walk following outgoing FVC edges via FDM object identity.
+    came_from: str | None,
+    forward_adj: dict[str, list[Neighbor]],
+    backward_adj: dict[str, list[Neighbor]],
+    reduced: DBF,
+) -> Iterator[dict[str, TF]]:
+    """Yield every full-join combination reachable from ``(node_name, node_tf)``.
 
-    Assumes the reference graph is a **tree** rooted at the pure
-    source. Because every edge is a `ForeignValueConstraint`, each
-    source tuple reaches exactly one target tuple per outgoing edge
-    (`source_tf[ref_key] is target_tf`), so the walk never needs a
-    Cartesian product: for one start tuple there is exactly one
-    combined row. This minimises the algorithm to a single accumulator
-    passed through the whole traversal and mutated in place.
+    Functional generator over a reference **tree** (the caller has already
+    rejected non-trees via `is_tree`). Each yielded value is a fresh
+    ``{relation_name: tf}`` dict for one full-join row — nothing is mutated in
+    place, so sibling branches cannot corrupt each other.
 
-    Diamond detection: if a relation name is reached via two distinct
-    walk paths, the accumulator would be overwritten — we raise
-    `NotImplementedError` with the follow-up-MR hint instead of
-    silently dropping one path's target. Diamonds / reverse edges
-    would need this to become a generator yielding multiple
-    combinations; deferred to the follow-up MR.
+    The graph is walked in **both** directions:
+
+    * **Forward** (this node is the edge source, from `forward_adj`): follow
+      the inline foreign-value pointer `node_tf[ref_key]` to the single
+      referenced tuple. Exactly one target — a factor of size 1.
+    * **Backward** (this node is the referenced hub, from `backward_adj`):
+      every reduced source tuple whose reference *is* this hub tuple. Object
+      identity (`item.value[ref_key] is node_tf`) is the match — semijoin
+      preserves the contained TF instance across reduction (see the invariant
+      documented in `join._compute`), so it is exactly the right test. This is
+      a one-to-many fan-in — the factor that can exceed size 1.
+
+    ``came_from`` is the relation name of the edge already consumed and is
+    skipped; on a tree that single guard prevents walking back to the parent,
+    and no stronger visited-set is needed.
+
+    Each incident edge (except `came_from`) is first **recursed** into a list
+    of completed sub-dicts, then the Cartesian **product across the neighbours'
+    result lists** is taken and merged with ``{node_name: node_tf}``. Taking
+    the product over fully-expanded results (not over raw neighbour tuples) is
+    what makes a backward fan-in and any onward forward chain multiply
+    correctly. A leaf (no incident edge other than the parent) yields the
+    single ``{node_name: node_tf}``.
 
     @param node_name: Relation name of the current node.
     @param node_tf: Concrete tuple at this node in the current walk.
-    @param adjacency: Outgoing edges per source relation name; each
-        value is a list of `Neighbor(name=target_relation,
-        ref_key=attribute_on_source)` — `name` is emphatically the
-        relation name, `ref_key` the attribute on the source TF.
-    @param accumulator: Mutated in place; afterwards contains every
-        `relation_name -> tf` entry reachable from the starting tuple.
+    @param came_from: Relation name of the parent (already-consumed) edge, or
+        None at the walk root.
+    @param forward_adj: `JoinGraph.outgoing_adjacency()` — source -> targets.
+    @param backward_adj: `JoinGraph.incoming_adjacency()` — target -> sources.
+    @param reduced: The Yannakakis-reduced DBF, scanned for backward matches.
+    @return: An iterator of ``{relation_name: tf}`` row dicts.
     """
-    if node_name in accumulator:
-        raise NotImplementedError(
-            f"join: relation '{node_name}' is reached via more than one "
-            f"walk path (diamond / non-tree reference graph). "
-            f"{_FOLLOWUP_HINT}"
+    # One entry per incident edge (except the parent), each a list of the
+    # completed sub-dicts obtainable by descending through that edge.
+    per_neighbor: list[list[dict[str, TF]]] = []
+
+    for neighbor in forward_adj.get(node_name, []):
+        if neighbor.name == came_from:
+            continue
+        # forward: exactly one referenced tuple via the inline pointer
+        per_neighbor.append(
+            list(
+                _combinations(
+                    node_name=neighbor.name,
+                    node_tf=node_tf[neighbor.ref_key],
+                    came_from=node_name,
+                    forward_adj=forward_adj,
+                    backward_adj=backward_adj,
+                    reduced=reduced,
+                )
+            )
         )
-    accumulator[node_name] = node_tf
-    for neighbor in adjacency.get(node_name, []):
-        _build_combination(
-            node_name=neighbor.name,
-            node_tf=node_tf[neighbor.ref_key],
-            adjacency=adjacency,
-            accumulator=accumulator,
-        )
+
+    for neighbor in backward_adj.get(node_name, []):
+        if neighbor.name == came_from:
+            continue
+        # backward: every reduced source tuple pointing at this hub tuple
+        sub: list[dict[str, TF]] = []
+        for item in reduced[neighbor.name]:
+            if item.value[neighbor.ref_key] is node_tf:
+                sub.extend(
+                    _combinations(
+                        node_name=neighbor.name,
+                        node_tf=item.value,
+                        came_from=node_name,
+                        forward_adj=forward_adj,
+                        backward_adj=backward_adj,
+                        reduced=reduced,
+                    )
+                )
+        per_neighbor.append(sub)
+
+    if not per_neighbor:
+        # leaf: only this node contributes to the row
+        yield {node_name: node_tf}
+        return
+
+    for combo in itertools.product(*per_neighbor):
+        row: dict[str, TF] = {node_name: node_tf}
+        for sub_dict in combo:
+            row.update(sub_dict)
+        yield row
 
 
 def _wrap_combination(accumulator: dict[str, TF]) -> TF:
