@@ -172,6 +172,13 @@ Explicitly raises `NotImplementedError` on:
   deferred. See [constraints.md](constraints.md#evaluation-model--who-consumes-a-joinpredicate-and-who-ignores-it).
 - **Diamonds and other non-tree acyclic graphs** — a relation reachable
   via two or more distinct paths (deferred to follow-up 004).
+- **Parallel references** — a relation carrying two references to the
+  *same* target (e.g. `movie_link.movie_id → title` and
+  `movie_link.linked_movie_id → title`) makes the graph a non-tree. If the
+  query joins along only one of them, **blacklist the unused edge** with
+  [`drop_reference`](constraints.md#blacklisting-a-parallel-reference-before-a-join)
+  before the join. (Joining along *both* is a two-alias self-join — a
+  separate deferred feature.)
 - **Disconnected reference graphs** — that would be a Cartesian product
   across components.
 - **Cyclic reference graphs** — rejected by the undirected-tree gate.

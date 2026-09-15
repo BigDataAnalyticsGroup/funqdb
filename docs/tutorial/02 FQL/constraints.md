@@ -83,6 +83,33 @@ scoped to the given `ref_key`). Raises `ValueError` if the DBF does
 not contain `source`, does not contain `target`, or does not carry a
 matching FVC — silent no-ops on typos are rejected by design.
 
+### Blacklisting a parallel reference before a join
+
+The FDM carries *every* schema reference, and `join` turns each into a
+mandatory edge. When one relation carries two references to the **same**
+target — e.g. `movie_link.movie_id → title` and
+`movie_link.linked_movie_id → title` — the join graph has a *parallel edge*
+and `join` rejects it as a non-tree
+([see join.md](join.md#scope-and-deferred-follow-ups)). If the query joins
+along only one of them, drop the unused edge first:
+
+```python
+# movie_link references title twice (movie_id, linked_movie_id);
+# this query joins only along linked_movie_id, so blacklist the other edge.
+db = drop_reference(
+    db, source="movie_link", ref_key="movie_id", target="title"
+).result
+result: RF = join(db).result
+```
+
+This is the opt-out dual of SQL's opt-in: SQL names each join it wants,
+whereas FQL inherits every schema reference and the query subtracts the
+ones it does not join along. Dropping an edge the query does not use
+restores the query's intended (looser) join without changing its result.
+(If the query genuinely joins along *both* references, that is a self-join
+of the target under two aliases — a separate, deferred feature, not a
+blacklist.)
+
 ## add_join_predicate
 
 Arbitrary cross-relation predicates live alongside references as
