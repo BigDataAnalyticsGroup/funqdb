@@ -30,6 +30,10 @@ filter_keys(db, lambda k: k in ["users", "departments"])
 
 All three variants return a new AF of the same type containing only the qualifying items.
 
+The filtered AF keeps the input's outgoing **references** (foreign keys, i.e. `ForeignValueConstraint`s), so a
+filtered relation stays joinable — you can filter first and still `join`/`semijoin` on the result. The reverse-side
+`ReverseForeignObjectConstraint` (the delete guard on a referenced relation) is not carried onto a filtered subset.
+
 #### where-clauses
 
 The convenience method ```where()``` on attribute functions supports two styles of predicates:

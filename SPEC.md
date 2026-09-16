@@ -38,7 +38,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   `copy.copy(af)` is implemented via `__copy__` and returns a shallow copy that reuses the same UUID. No dedicated test exists for this behaviour; only the deep-copy path (`af.copy()`) is explicitly tested.
 
 - `[✅]` *Filter items by predicate (`where()` / `𝛔`) — accepts callables and Predicate objects*  
-  Call `af.where(predicate)` or `af.𝛔(predicate)` to filter items by a condition. Plain callables receive an Item object and return True/False. Structured Predicate objects are applied to item values. Also accepts Django ORM-style kwargs (e.g., `salary__gte=50000`) as conjunctive filters. Returns a new AF of the same type containing only matching items.
+  Call `af.where(predicate)` or `af.𝛔(predicate)` to filter items by a condition. Plain callables receive an Item object and return True/False. Structured Predicate objects are applied to item values. Also accepts Django ORM-style kwargs (e.g., `salary__gte=50000`) as conjunctive filters. Returns a new AF of the same type containing only matching items. The result keeps the input's outgoing `ForeignValueConstraint`s (foreign keys) so a filtered relation stays joinable; the reverse-side `ReverseForeignObjectConstraint` is not carried onto the filtered subset.
 
 - `[✅]` *Project to a subset of keys (`project()` / `π`) — flat and path-based keys*  
   Call `af.project(*keys)` or `af.π(*keys)` to retain only specified attributes in each value. Keys can be flat (e.g., `"name"`) or dot-separated paths (e.g., `"department.name"`). Path keys traverse intermediate segments and store the final value under the last segment name. Missing paths are silently skipped. Returns a new AF of the same type with projected values.
@@ -146,7 +146,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Returns a new AF containing only items whose keys pass a given predicate. The predicate receives the key directly and may be any callable or a structured `Predicate` object. The output AF is of the same type as the input.
 
 - `[✅]` ***filter_items** — keep items where the full (key, value) pair satisfies a predicate*  
-  Returns a new AF containing only items where the full (key, value) pair passes a predicate. The predicate receives an `Item` object containing both `key` and `value` fields. Items are materialized before filtering to avoid iterator mutation. The output AF is of the same type as the input.
+  Returns a new AF containing only items where the full (key, value) pair passes a predicate. The predicate receives an `Item` object containing both `key` and `value` fields. Items are materialized before filtering to avoid iterator mutation. The output AF is of the same type as the input. Outgoing `ForeignValueConstraint`s (foreign keys) are copied onto the output so a filtered relation stays joinable; the reverse-side `ReverseForeignObjectConstraint` is not. The `filter_values` / `filter_keys` / `filter_items_scan_complement` subclasses inherit this via `_compute`.
 
 - `[✅]` ***filter_items_scan_complement** — inverse of filter_items (complement set)*  
   Returns a new AF containing all items that would be excluded by `filter_items` — that is, all items for which the predicate returns false. This is the set complement: if `filter_items(af, p)` keeps items where `p(item)` is true, then `filter_items_scan_complement(af, p)` keeps items where `p(item)` is false.

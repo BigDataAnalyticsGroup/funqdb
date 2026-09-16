@@ -43,6 +43,9 @@
 - [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [x] semijoin/subdatabase: should output RFs carry over constraints (ForeignValueConstraint etc.) from the input?
+- [ ] `__setitem__` / `__delitem__` roll back only on `ConstraintViolationError`; a values-constraint that
+  raises another exception (e.g. `ForeignValueConstraint` on a value missing the ref key raises `AttributeError`)
+  leaves a half-applied write. Pre-existing; newly reachable via unfrozen `where()` results that now carry FKs.
 - [ ] semijoin: auto-detect ref_key when there is only one ForeignValueConstraint between the two relations
 - [ ] semijoin: `_find_ref_direction` matches constraints by ref_key only
   and silently picks the first hit. That enforces a hidden invariant that

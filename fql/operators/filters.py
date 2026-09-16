@@ -22,6 +22,7 @@
 from collections.abc import Mapping
 from typing import Callable, Any, Iterable
 
+from fdm.schema import ForeignValueConstraint
 from fql.operators.APIs import Operator, OperatorInput
 from fql.predicates.predicates import Predicate
 from fql.util import Item
@@ -82,6 +83,17 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         # (2.) enter values in output_function:
         for key, value in buffer.items():
             output_function[key] = value
+
+        # (3.) carry over the outgoing foreign-key constraints so that a filtered
+        # relation keeps its references (e.g. for a downstream semijoin/join). Only
+        # ForeignValueConstraints are copied: the reverse-side ReverseForeignObjectConstraint
+        # points back at the full, unfiltered source and would be wrong on a filtered subset.
+        # Copied after population so no per-write validation is triggered — the same
+        # post-population timing semijoin uses (semijoin copies all constraints; here we
+        # deliberately copy only the ForeignValueConstraints).
+        for constraint in input_function.__dict__["values_constraints"]:
+            if isinstance(constraint, ForeignValueConstraint):
+                output_function.add_values_constraint(constraint)
 
         output_function.freeze()
         return output_function

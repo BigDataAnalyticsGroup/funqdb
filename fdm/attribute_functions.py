@@ -894,6 +894,10 @@ class DictionaryAttributeFunction[Key, Value](
         Plain field=value is equivalent to field__exact=value.
 
         @return: A new DictionaryAttributeFunction instance containing only the items that satisfy the filtering conditions.
+            The result carries over this AF's outgoing ForeignValueConstraints (foreign keys) so that a filtered
+            relation stays joinable. Unlike the ``filter_items`` operator, the result is returned unfrozen, so a
+            later write to it is now checked against those foreign keys (a write whose reference value is absent from
+            the target raises ``ConstraintViolationError``).
         """
         result: DictionaryAttributeFunction = type(
             self
@@ -903,6 +907,9 @@ class DictionaryAttributeFunction[Key, Value](
         # the following triggers errors in some unit tests,
         # result: DictionaryAttributeFunction = self.copy()
         # result.unfreeze()
+        # NB: a copy constructor would also carry over the reverse-side
+        # ReverseForeignObjectConstraint, which must NOT survive onto a filtered
+        # subset — see the ForeignValueConstraint-only carry-over loop below.
 
         # TODO: delegate to FQL operator
 
@@ -938,6 +945,19 @@ class DictionaryAttributeFunction[Key, Value](
 
             if match:
                 result[item.key] = item.value
+
+        # Carry over the outgoing foreign-key constraints so that a filtered relation
+        # keeps its references (e.g. for a downstream semijoin/join). Only
+        # ForeignValueConstraints are copied: the reverse-side ReverseForeignObjectConstraint
+        # points back at the full, unfiltered source and would be wrong on a filtered subset.
+        # Copied after the item loop so no per-write validation is triggered.
+        # Local import: fdm.schema imports this module, so a top-level import would be circular.
+        from fdm.schema import ForeignValueConstraint
+
+        # Read the raw set (same access pattern as references()/_find_ref_direction).
+        for constraint in self.__dict__["values_constraints"]:
+            if isinstance(constraint, ForeignValueConstraint):
+                result.add_values_constraint(constraint)
 
         return result
 
