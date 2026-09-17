@@ -19,13 +19,12 @@
 #
 
 
+import logging
 from typing import Callable, Any, Iterable
 
 from fdm.attribute_functions import DictionaryAttributeFunction
 from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
-
-import logging
 
 logger = logging.Logger(__name__)
 
@@ -122,8 +121,8 @@ class key_to_value[INPUT_AttributeFunction](
     subtypes whose constructor needs arguments, e.g. a tensor with a
     dimensions argument, are not supported, same limitation as ``rank_by``).
     The input AF is not mutated: each value is copied before the attribute is
-    added. Output values are frozen (matching the other partitioning /
-    grouping operators, whose results are read-only).
+    added. Each output value is frozen iff the input value it was copied from
+    was frozen; the output AF itself is always frozen.
 
     Refuses to silently shadow an existing attribute: if ``attribute`` already
     resolves on a value — as a stored, computed, or domain-backed default key —
@@ -205,8 +204,9 @@ class key_to_value[INPUT_AttributeFunction](
 
             Copies the value (so the input stays unmodified), unfreezes the
             copy long enough to add the key under ``self.attribute``, then
-            re-freezes it. Raises ``TypeError`` for non-DAF values and
-            ``ValueError`` if a target name would shadow an existing key or if a
+            re-freezes it only if the value it was copied from was frozen.
+            Raises ``TypeError`` for non-DAF values and ``ValueError``
+            if a target name would shadow an existing key or if a
             tuple of names does not match the key's tuple shape.
             """
             value = item.value
@@ -231,6 +231,7 @@ class key_to_value[INPUT_AttributeFunction](
                 assignments = [(self.attribute, item.key)]
 
             new_value = value.copy()
+            was_frozen = new_value.frozen
             new_value.unfreeze()
             for name, component in assignments:
                 # __contains__ covers stored, computed, and domain-backed
@@ -240,7 +241,8 @@ class key_to_value[INPUT_AttributeFunction](
                         f"key_to_value would shadow existing attribute '{name}'"
                     )
                 new_value[name] = component
-            new_value.freeze()
+            if was_frozen:
+                new_value.freeze()
             return Item(item.key, new_value)
 
         return transform_items(

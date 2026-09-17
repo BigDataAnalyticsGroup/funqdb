@@ -431,3 +431,40 @@ def test_key_to_value_spread_rejects_empty_str_name():
         key_to_value(
             rf, ("", "company")
         ).result  # triggers computation and the per-name empty-name guard
+
+
+def test_key_to_value_respects_frozen_state():
+    """Each output value keeps the frozen state of the input value it was copied from.
+    Would fail if the operator ignored the per-value frozen state, e.g. by always freezing
+    (the old behaviour), by never freezing, or by deciding from the input AF's own state.
+    """
+    rf_frozen: RF = RF(
+        {"Tom": TF({"c": 1}, frozen=True)}
+    )  # a frozen value inside an (unfrozen) RF
+    result_frozen: RF = key_to_value(
+        rf_frozen, "name"
+    ).result  # lift the key into the value
+    assert all(
+        value.frozen for value in result_frozen.values()
+    )  # a frozen input value must yield a frozen output value
+
+    rf_unfrozen: RF = RF(
+        {"Tom": TF({"c": 1}, frozen=False)}
+    )  # the same shape, but the value is writable
+    result_unfrozen: RF = key_to_value(
+        rf_unfrozen, "name"
+    ).result  # lift the key into the value
+    assert not any(
+        value.frozen for value in result_unfrozen.values()
+    )  # an unfrozen input value must yield a writable output value
+
+    rf_mixed: RF = RF(
+        {"Tom": TF({"c": 1}, frozen=True), "Ann": TF({"c": 2}, frozen=False)}
+    )  # both states in one AF, so the decision cannot come from the AF as a whole
+    result_mixed: RF = key_to_value(
+        rf_mixed, "name"
+    ).result  # lift the key into both values
+    assert result_mixed["Tom"].frozen  # the frozen input value stays frozen
+    assert not result_mixed["Ann"].frozen  # the unfrozen input value stays writable
+    # the output AF itself is always frozen, whatever its values are
+    assert result_mixed.frozen
