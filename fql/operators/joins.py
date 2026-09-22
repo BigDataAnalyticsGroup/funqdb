@@ -49,7 +49,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from fdm.attribute_functions import TF, RF, DBF
-from fdm.schema import ForeignValueConstraint, JoinPredicate
+from fdm.schema import JoinPredicate
 from fql.operators.APIs import Operator, OperatorInput
 from fql.operators.subdatabases import subdatabase
 from fql.plan.join_graph import JoinGraph, Neighbor
@@ -176,14 +176,16 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         reduced: DBF = subdatabase[DBF, DBF](dbf).result
 
         # Forward adjacency (source -> target, followed via the inline FK
-        # pointer) and backward adjacency (target/hub -> its referencing
-        # sources, followed via an object-identity scan of the reduced
-        # source relation), both delegated to `JoinGraph` so the graph class
-        # owns the construction. The bidirectional walk needs both because a
-        # multi-source tree has edges that must be entered against their
-        # arrow from any start relation.
+        # pointer) and backward edges (target/hub -> its referencing sources,
+        # followed via a per-edge index over the reduced source relation).
+        # The bidirectional walk needs both because a multi-source tree has
+        # edges that must be entered against their arrow from any start
+        # relation.
         forward_adj: dict[str, list[Neighbor]] = graph.outgoing_adjacency()
-        backward_adj: dict[str, list[Neighbor]] = graph.incoming_adjacency()
+        backward_edges: dict[str, list[_BackwardEdge]] = {
+            hub: [_BackwardEdge(neighbor, reduced) for neighbor in neighbors]
+            for hub, neighbors in graph.incoming_adjacency().items()
+        }
 
         # Row materialization. Iterate every surviving tuple of the start
         # relation (already Yannakakis-reduced, so every such tuple extends
@@ -202,8 +204,7 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                 node_tf=item.value,
                 came_from=None,
                 forward_adj=forward_adj,
-                backward_adj=backward_adj,
-                reduced=reduced,
+                backward_edges=backward_edges,
             ):
                 result[counter] = _wrap_combination(combination)
                 counter += 1
@@ -294,14 +295,52 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         return result
 
 
+class _BackwardEdge:
+    """A reference walked against its arrow: from a referenced (hub) tuple to
+    the reduced source tuples that reference it.
+
+    Built in one pass over the reduced source relation, so each backward step
+    is a single lookup. Tuples are keyed by `id()` because the match is object
+    identity - semijoin preserves the contained TF instance across reduction
+    (see the invariant documented in `join._compute`); the referenced tuples
+    stay alive for the index's lifetime because the indexed sources hold them.
+
+    `id()` rather than `AttributeFunction.uuid`: this is the O(1) form of the
+    original `is` match, so it must key on object identity, not logical
+    equality. `.uuid` would buy nothing here - `copy()` reassigns the uuid, so
+    a copied hub would miss the index either way - and it would be less safe:
+    the global uuid counter can collide across an in-memory / store-loaded mix
+    (see `AttributeFunction.global_uuid`), whereas `id()` never collides among
+    simultaneously live objects. The join runs entirely in memory over
+    `reduced`, so uuid's only edge (surviving serialization) does not apply.
+    """
+
+    def __init__(self, neighbor: Neighbor, reduced: DBF):
+        self.source_name: str = neighbor.name
+        sources_by_target_id: dict[int, list[TF]] = {}
+
+        for item in reduced[neighbor.name]:
+            sources_by_target_id.setdefault(
+                id(item.value[neighbor.ref_key]), []
+            ).append(item.value)
+
+        # Freeze the lists to tuples so the index is immutable
+        self._sources_by_target_id: dict[int, tuple[TF, ...]] = {
+            target_id: tuple(sources)
+            for target_id, sources in sources_by_target_id.items()
+        }
+
+    def sources_of(self, target_tf: TF) -> tuple[TF, ...]:
+        return self._sources_by_target_id.get(id(target_tf), ())
+
+
 def _combinations(
     *,
     node_name: str,
     node_tf: TF,
     came_from: str | None,
     forward_adj: dict[str, list[Neighbor]],
-    backward_adj: dict[str, list[Neighbor]],
-    reduced: DBF,
+    backward_edges: dict[str, list[_BackwardEdge]],
 ) -> Iterator[dict[str, TF]]:
     """Yield every full-join combination reachable from ``(node_name, node_tf)``.
 
@@ -315,11 +354,9 @@ def _combinations(
     * **Forward** (this node is the edge source, from `forward_adj`): follow
       the inline foreign-value pointer `node_tf[ref_key]` to the single
       referenced tuple. Exactly one target — a factor of size 1.
-    * **Backward** (this node is the referenced hub, from `backward_adj`):
-      every reduced source tuple whose reference *is* this hub tuple. Object
-      identity (`item.value[ref_key] is node_tf`) is the match — semijoin
-      preserves the contained TF instance across reduction (see the invariant
-      documented in `join._compute`), so it is exactly the right test. This is
+    * **Backward** (this node is the referenced hub, from `backward_edges`):
+      every reduced source tuple whose reference *is* this hub tuple, looked
+      up in the edge's identity index (`_BackwardEdge.sources_of`). This is
       a one-to-many fan-in — the factor that can exceed size 1.
 
     ``came_from`` is the relation name of the edge already consumed and is
@@ -339,8 +376,8 @@ def _combinations(
     @param came_from: Relation name of the parent (already-consumed) edge, or
         None at the walk root.
     @param forward_adj: `JoinGraph.outgoing_adjacency()` — source -> targets.
-    @param backward_adj: `JoinGraph.incoming_adjacency()` — target -> sources.
-    @param reduced: The Yannakakis-reduced DBF, scanned for backward matches.
+    @param backward_edges: Indexed `JoinGraph.incoming_adjacency()` — target
+        -> sources.
     @return: An iterator of ``{relation_name: tf}`` row dicts.
     """
     # One entry per incident edge (except the parent), each a list of the
@@ -358,29 +395,26 @@ def _combinations(
                     node_tf=node_tf[neighbor.ref_key],
                     came_from=node_name,
                     forward_adj=forward_adj,
-                    backward_adj=backward_adj,
-                    reduced=reduced,
+                    backward_edges=backward_edges,
                 )
             )
         )
 
-    for neighbor in backward_adj.get(node_name, []):
-        if neighbor.name == came_from:
+    for edge in backward_edges.get(node_name, []):
+        if edge.source_name == came_from:
             continue
         # backward: every reduced source tuple pointing at this hub tuple
         sub: list[dict[str, TF]] = []
-        for item in reduced[neighbor.name]:
-            if item.value[neighbor.ref_key] is node_tf:
-                sub.extend(
-                    _combinations(
-                        node_name=neighbor.name,
-                        node_tf=item.value,
-                        came_from=node_name,
-                        forward_adj=forward_adj,
-                        backward_adj=backward_adj,
-                        reduced=reduced,
-                    )
+        for source_tf in edge.sources_of(node_tf):
+            sub.extend(
+                _combinations(
+                    node_name=edge.source_name,
+                    node_tf=source_tf,
+                    came_from=node_name,
+                    forward_adj=forward_adj,
+                    backward_edges=backward_edges,
                 )
+            )
         per_neighbor.append(sub)
 
     if not per_neighbor:
