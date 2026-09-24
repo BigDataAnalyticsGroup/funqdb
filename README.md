@@ -25,7 +25,8 @@
 ### Installation
 
 For the moment there is the option to clone or download a zip of the repository and install the dependencies
-through [poetry](https://python-poetry.org/), e.g. through `poetry install` in the project directory.
+through [uv](https://docs.astral.sh/uv/), i.e. through `uv sync` in the project directory. Run commands inside the
+project environment with `uv run`, e.g. `uv run pytest`.
 
 ### Tutorial
 

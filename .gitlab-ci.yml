@@ -25,8 +25,10 @@ formatting:
   tags:
     - test
   script:
+    # Install the locked environment (incl. black)
+    - uv sync --frozen
     # Use black to verify the correct formatting of all files
-    - black --check .
+    - uv run black --check .
   interruptible: true
 
 pytest:
@@ -34,10 +36,10 @@ pytest:
   tags:
     - test
   script:
-    # Use most recent version from Pipfile
-    - poetry install --no-root
+    # Install exactly what uv.lock pins (--frozen never re-resolves)
+    - uv sync --frozen
     # Run all unit tests with coverage
-    - poetry run coverage run -m pytest
+    - uv run coverage run -m pytest
     # Cobertura XML for MR diff line-by-line coverage visualization.
     # Produced **first** so that it exists even when the `--fail-under`
     # checks below abort the job — otherwise GitLab would have no
@@ -46,14 +48,14 @@ pytest:
     # the XML are repo-relative (pyproject.toml `[tool.coverage.run]
     # relative_files = true`) so GitLab can match them to the diff.
     # The -o target matches the `reports.coverage_report.path` below.
-    - coverage xml -o coverage/cobertura-coverage.xml
+    - uv run coverage xml -o coverage/cobertura-coverage.xml
     # Generate human-readable reports; both enforce the 80% floor.
-    - coverage html --fail-under=80
+    - uv run coverage html --fail-under=80
     - cp -r htmlcov htmlcov-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
-    - coverage json --fail-under=80
+    - uv run coverage json --fail-under=80
     - cp coverage.json coverage-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA.json
     # Print total line so GitLab can parse the coverage percentage for the badge
-    - coverage report
+    - uv run coverage report
   # Regex for GitLab to extract the coverage percentage from the job log
   coverage: '/(?i)total.*?(\d+(?:\.\d+)?)%/'
   interruptible: true
@@ -80,14 +82,14 @@ no-unreviewed-tests:
   tags:
     - test
   script:
-    - poetry install --no-root
+    - uv sync --frozen
     # Collect (--co) all tests marked needs_review_new or needs_review_modified
     # without running them. If any exist, the MR still contains AI-generated or
     # AI-modified tests that have not been reviewed — fail the pipeline.
     - |
       BLOCKED=0
 
-      NEW=$(poetry run pytest -m needs_review_new --co -q 2>/dev/null | grep '::' || true)
+      NEW=$(uv run pytest -m needs_review_new --co -q 2>/dev/null | grep '::' || true)
       if [ -n "$NEW" ]; then
         echo "ERROR: The following AI-generated tests need full review (needs_review_new):"
         echo "$NEW"
@@ -95,7 +97,7 @@ no-unreviewed-tests:
         BLOCKED=1
       fi
 
-      MODIFIED=$(poetry run pytest -m needs_review_modified --co -q 2>/dev/null | grep '::' || true)
+      MODIFIED=$(uv run pytest -m needs_review_modified --co -q 2>/dev/null | grep '::' || true)
       if [ -n "$MODIFIED" ]; then
         echo "ERROR: The following AI-modified tests need review (needs_review_modified)."
         echo "Check the '# -- begin/end AI-modified --' sections in each method:"

@@ -2,3 +2,6 @@
 **/__pycache__/
 .claude/projects/
 
+
+# uv-managed virtual environment
+.venv/

@@ -7,15 +7,20 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.12"
+dependencies = [
+    "pytest>=9.0.2,<10.0.0",
+    "black>=26.1.0,<27.0.0",
+    "sqlitedict>=2.1.0,<3.0.0",
+    "sphinx==9.1.0",
+    "coverage[toml]==7.10.6",
+    "faker>=40.8.0,<41.0.0",
+    "toolz>=1.1.0,<2.0.0",
+]
 
-[tool.poetry.dependencies]
-pytest = ">=9.0.2, <10.0.0"
-black = ">=26.1.0, <27.0.0"
-sqlitedict = ">=2.1.0, <3.0.0"
-sphinx = "=9.1.0, <10.0.0"
-coverage = { extras = ["toml"], version = "7.10.6" }
-faker = "^40.8.0"
-toolz = "^1.1.0"
+[tool.uv]
+# funqDB is used from the checkout (packages fdm/, fql/, store/ on the working
+# directory); it is not installed as a package (formerly `poetry install --no-root`).
+package = false
 
 [tool.pytest.ini_options]
 markers = [
@@ -32,7 +37,3 @@ markers = [
 # "Changes" tab. With `relative_files = true` the XML carries plain
 # `fql/operators/joins.py` and GitLab renders the diff correctly.
 relative_files = true
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"

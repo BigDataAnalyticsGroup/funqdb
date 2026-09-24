@@ -44,7 +44,7 @@ import sys
 from pathlib import Path
 
 # Make the funqDB package importable when this script is run directly from
-# a checkout (i.e. without ``poetry run``).
+# a checkout (i.e. without ``uv run``).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
