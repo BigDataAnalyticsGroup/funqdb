@@ -186,7 +186,7 @@ class DictionaryAttributeFunction[Key, Value](
                 schema_types[key] = value
         self.add_values_constraint(SchemaConstraint(schema_types))
 
-    def add_computed(self, key: Any, func: Callable[..., Any]) -> None:
+    def add_computed(self, key: Any, func: Callable[..., Any]) -> "Self":
         """Add a computed attribute that is evaluated on every access (not cached).
 
         The callable receives this AF instance as its sole argument at *access time*,
@@ -215,6 +215,7 @@ class DictionaryAttributeFunction[Key, Value](
                 f"A key must be either stored or computed, not both."
             )
         self.__dict__["computed"][key] = func
+        return self
 
     def add_computed_per_value(self, key: Any, func: Callable[..., Any]) -> "Self":
         """Convenience method to add a computed attribute to all values of the AF.

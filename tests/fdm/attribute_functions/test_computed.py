@@ -155,6 +155,22 @@ def test_computed_attributes():
     assert len(company) == 3
 
 
+def test_add_computed_chaining():
+    """
+    Tests if add_computed returns the AF itself, so that several calls can be chained.
+    """
+    point: TF = TF({"x": 5})  # mutable tuple to add two computed attributes to
+
+    # the method returns self, so two calls can be chained in one expression:
+    result: TF = point.add_computed("x_squared", lambda tf: tf["x"] ** 2).add_computed(
+        "x_doubled", lambda tf: tf["x"] * 2
+    )
+
+    assert result is point  # the chain returns the same AF, not a copy
+    assert point.x_squared == 25  # first chained attribute evaluates from stored x
+    assert point.x_doubled == 10  # second chained attribute evaluates from stored x
+
+
 def test_computed_attribute_functions():
     """Test computed attribute functions — paper Sec 2.6: any AF with a default
     function can generate values on the fly for keys not explicitly stored."""
