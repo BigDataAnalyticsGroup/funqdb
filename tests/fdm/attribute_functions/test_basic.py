@@ -20,11 +20,13 @@
 
 import pytest
 
+from fdm.API import AttributeFunction
 from fdm.attribute_functions import DictionaryAttributeFunction, DBF, RF
 from tests.lib import _create_testdata
 
 
 def test_DictionaryAttributeFunction():
+    next_uuid = AttributeFunction.global_uuid  # global: earlier tests advanced it
     daf = DictionaryAttributeFunction(data={"x": 0, "y": 0, 42: "answer"})
 
     # accessing a non-existing attribute raises AttributeError
@@ -43,7 +45,7 @@ def test_DictionaryAttributeFunction():
     assert daf.x == 0
     assert daf.y == 0
 
-    assert daf.uuid == 0
+    assert daf.uuid == next_uuid  # the counter's value when daf was created
 
     # check assigning to an existing attribute:
     daf.x = 42
