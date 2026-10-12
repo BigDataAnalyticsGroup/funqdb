@@ -27,6 +27,12 @@
 - [ ] in-place FQL operators (paper Sec 4.3): INSERT/UPDATE/DELETE as composable
   FQL operators, not just `__setitem__`/`__delitem__`. The paper envisions
   in-place usage across the entire Table 1 landscape, not limited to RF→RF.
+- [ ] undefined-attribute handling in `partition` / `group_by`: `partition.py:90`
+  reads `item.value[attribute]` for the grouping key and still raises on a tuple
+  that does not map it (same for `set_operations.py` grouping extraction). Sibling
+  of feature 004 (undefined-attribute semantics for predicates / `where` /
+  aggregates / join, see `docs/changes/004-undefined-attribute-semantics/`).
+  Open question: a missing grouping key forms its own group vs. the tuple is dropped.
 - [ ] flattening joins — follow-up MR to lift the two NotImplementedError
   paths that MR 2's minimal POC explicitly declines: (a) JoinPredicate
   pushdown during the join walk, firing predicates as soon as all their

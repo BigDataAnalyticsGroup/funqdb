@@ -841,3 +841,23 @@ def test_join_mixed_fan_in_and_forward_chain() -> None:
     assert all(
         item.value["d"] is d["d1"] for item in out
     )  # the forward-chained d1 is likewise shared by identity
+
+
+def test_join_drops_source_tuples_missing_the_reference() -> None:
+    """An undefined foreign key (JOB `cast_info.person_role_id`) is a missing reference, so the tuple joins nothing.
+
+    Join graph::
+
+        users ──dept──▶ departments      (u1->d1, u2 has no dept)
+    """
+    departments: RF = RF({"d1": TF({"name": "Dev"})}, frozen=False)  # the target
+    users: RF = RF(  # u2 lacks the `dept` reference
+        {"u1": TF({"dept": departments["d1"]}), "u2": TF({"name": "Carol"})},
+        frozen=False,
+    ).references("dept", departments)
+
+    dbf: DBF = DBF({"users": users, "departments": departments})  # the join input
+    out: RF = join(dbf).result  # join along `dept`
+
+    assert len(out) == 1  # only u1 has a partner; u2 is dropped, not an error
+    assert out[0]["users"] is users["u1"]  # the one row carries u1 by reference

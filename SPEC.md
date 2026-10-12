@@ -38,7 +38,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   `copy.copy(af)` is implemented via `__copy__` and returns a shallow copy that reuses the same UUID. No dedicated test exists for this behaviour; only the deep-copy path (`af.copy()`) is explicitly tested.
 
 - `[✅]` *Filter items by predicate (`where()` / `𝛔`) — accepts callables and Predicate objects*  
-  Call `af.where(predicate)` or `af.𝛔(predicate)` to filter items by a condition. Plain callables receive an Item object and return True/False. Structured Predicate objects are applied to item values. Also accepts Django ORM-style kwargs (e.g., `salary__gte=50000`) as conjunctive filters. Returns a new AF of the same type containing only matching items. The result keeps the input's outgoing `ForeignValueConstraint`s (foreign keys) so a filtered relation stays joinable; the reverse-side `ReverseForeignObjectConstraint` is not carried onto the filtered subset.
+  Call `af.where(predicate)` or `af.𝛔(predicate)` to filter items by a condition. Plain callables receive an Item object and return True/False. Structured Predicate objects are applied to item values. Also accepts Django ORM-style kwargs (e.g., `salary__gte=50000`) as conjunctive filters. Returns a new AF of the same type containing only matching items. The result keeps the input's outgoing `ForeignValueConstraint`s (foreign keys) so a filtered relation stays joinable; the reverse-side `ReverseForeignObjectConstraint` is not carried onto the filtered subset. A predicate that reads an attribute a tuple does not map does not select that tuple — absence is not a NULL value and never raises (a lambda's `AttributeError` on a missing attribute is caught and treated as no match; see *Undefined attributes* below).
 
 - `[✅]` *Project to a subset of keys (`project()` / `π`) — flat and path-based keys*  
   Call `af.project(*keys)` or `af.π(*keys)` to retain only specified attributes in each value. Keys can be flat (e.g., `"name"`) or dot-separated paths (e.g., `"department.name"`). Path keys traverse intermediate segments and store the final value under the last segment name. Missing paths are silently skipped. Returns a new AF of the same type with projected values.
@@ -151,6 +151,17 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` ***filter_items_scan_complement** — inverse of filter_items (complement set)*  
   Returns a new AF containing all items that would be excluded by `filter_items` — that is, all items for which the predicate returns false. This is the set complement: if `filter_items(af, p)` keeps items where `p(item)` is true, then `filter_items_scan_complement(af, p)` keeps items where `p(item)` is false.
 
+### Undefined attributes (missing key/value mappings)
+
+- `[✅]` *Absence of a mapping is not a NULL value*  
+  Across FQL, an attribute a tuple does not map is *undefined* — there is no (key, value) pair — rather than present with a NULL value. FDM has no NULL and no three-valued logic. An operator that reads an undefined attribute treats the tuple uniformly: it contributes nothing / is not selected, instead of raising. A stored `None` is a real value and participates like any other. See `docs/changes/004-undefined-attribute-semantics/DECISION.md`.
+
+- `[✅]` ***Exists** / **Missing** — predicates testing whether an attribute is mapped*  
+  `Exists("path")` is true iff the tuple maps the (possibly nested) path; `Missing("path")` is its complement. Because absence is structural, these make definedness directly queryable and recover what SQL needs three-valued logic for — e.g. `And(Exists("name"), Not(Eq("name", "Hugo")))` selects tuples whose name is present and not "Hugo", excluding name-less tuples. Both serialize to the plan IR. A stored `None` counts as present.
+
+- `[✅]` *Two-valued predicate semantics over undefined attributes*  
+  Comparison / `Like` / `In` predicates return False on an undefined attribute; `And` / `Or` / `Not` stay ordinary boolean, so `Not(<undefined>)` is True (the deliberate divergence from SQL). Resolution of the attribute path is exception-free (a per-segment `key in af` membership test). See `test_predicate_on_missing_attribute_is_not_satisfied` and `test_negated_predicate_on_missing_attribute_is_satisfied`.
+
 ### Projection & Transformation
 
 - `[✅]` ***project** — select named attributes; supports flat and path-based (dot-notation) keys*  
@@ -168,7 +179,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
 ### Join
 
 - `[✅]` ***join** — materialise a reference-based join over an undirected-tree RF graph into nested TF rows*  
-  Accepts a DBF decorated with `ForeignValueConstraint` metadata and materializes all surviving tuple combinations as an RF of nested rows. Each row is a TF mapping relation names to their tuple values. Referenced tuples are shared by object identity across rows — two rows whose reference chain leads to the same target TF share the exact same instance, preserving zero-redundancy. The join internally runs Yannakakis reduction to ensure only tuples participating in the full join are included.
+  Accepts a DBF decorated with `ForeignValueConstraint` metadata and materializes all surviving tuple combinations as an RF of nested rows. Each row is a TF mapping relation names to their tuple values. Referenced tuples are shared by object identity across rows — two rows whose reference chain leads to the same target TF share the exact same instance, preserving zero-redundancy. The join internally runs Yannakakis reduction to ensure only tuples participating in the full join are included. A source tuple whose reference (foreign key) is undefined has no edge and is dropped by that reduction, so it joins nothing (inner-join semantics; no SQL NULL / outer join). See `test_join_drops_source_tuples_missing_the_reference`.
 
 - `[✅]` *Supports trivial (single relation), linear chain, and star schema topologies*  
   The join operator correctly handles three reference graph shapes: a single isolated relation (trivial, no references), a linear chain where each relation references exactly one other, and a star schema where one central relation is referenced by multiple leaf relations. All three preserve the zero-redundancy contract through shared TF object identity.
@@ -242,7 +253,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Accepts an RF and one or more named aggregation functions, applies each to the RF, and returns an unfrozen TF with keys matching the aggregation names and values being the scalar results. For example, `aggregate(users, count=Count("id"), avg_age=Avg("age"))` returns a TF with two entries.
 
 - `[✅]` *Built-in aggregators: **Max**, **Min**, **Count**, **Sum**, **Avg/Mean**, **Median***  
-  Each aggregator is a callable class constructed with a single attribute name. When applied to an RF, it extracts that attribute from every item and computes the corresponding aggregate (maximum, minimum, count, sum, arithmetic mean, or median). Median performs a stable sort and handles both odd and even-sized inputs correctly.
+  Each aggregator is a callable class constructed with a single attribute name. When applied to an RF, it extracts that attribute from every item and computes the corresponding aggregate (maximum, minimum, count, sum, arithmetic mean, or median). Median performs a stable sort and handles both odd and even-sized inputs correctly. Aggregation folds only over tuples that map the attribute; an undefined attribute contributes no value (a stored `None` is a real value and does participate). Over an empty bag of values the aggregate is undefined and its key is omitted from the output TF (including `Sum` — absent, not `0`). `Count` is the exception: `Count("attr")` counts mapped values (like SQL `COUNT(col)`) and `Count()` counts tuples (`COUNT(*)`); zero is a valid count.
 
 ### Partition & Grouping
 

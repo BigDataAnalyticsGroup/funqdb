@@ -320,6 +320,10 @@ class _BackwardEdge:
         sources_by_target_id: dict[int, list[TF]] = {}
 
         for item in reduced[neighbor.name]:
+            # A source tuple with an undefined ref_key has no reference, so it
+            # contributes no backward edge (exception-free membership check).
+            if neighbor.ref_key not in item.value:
+                continue
             sources_by_target_id.setdefault(
                 id(item.value[neighbor.ref_key]), []
             ).append(item.value)
@@ -387,6 +391,11 @@ def _combinations(
     for neighbor in forward_adj.get(node_name, []):
         if neighbor.name == came_from:
             continue
+        # A forward edge is mandatory for a complete join row. If this tuple's
+        # ref_key is undefined it has no target, so no complete row runs through
+        # this node -- the generator yields nothing (exception-free check).
+        if neighbor.ref_key not in node_tf:
+            return
         # forward: exactly one referenced tuple via the inline pointer
         per_neighbor.append(
             list(

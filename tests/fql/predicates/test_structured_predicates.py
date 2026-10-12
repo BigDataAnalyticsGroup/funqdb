@@ -36,8 +36,8 @@ import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.filters import filter_values
-from fql.plan import LogicalPlan, Opaque, PlanNode, extract_plan
-from fql.plan.ir import PlanChild, _value_from_dict, _value_to_dict
+from fql.plan import LogicalPlan, Opaque, PlanNode
+from fql.plan.ir import PlanChild
 from fql.predicates.predicates import (
     Predicate,
     Ref,
@@ -48,6 +48,8 @@ from fql.predicates.predicates import (
     Lte,
     Like,
     In,
+    Exists,
+    Missing,
     And,
     Or,
     Not,
@@ -585,3 +587,58 @@ def test_and_or_not_from_dict_repr():
     not_restored: Not = Not._from_dict(not_pred.to_dict())
     assert isinstance(not_restored.predicate, Eq)
     assert "Not(" in repr(not_pred)
+
+
+@pytest.mark.parametrize(
+    "predicate",
+    [
+        Eq("note", "(voice)"),  # JOB 9b
+        Lt("episode_nr", 100),  # JOB 16a
+        Like("note", "%(presents)%"),  # JOB 1a
+        In("note", ["(voice)", "(voice: English version)"]),  # JOB 18a
+        Eq("person_role.name", "Queen"),  # path through a missing reference, JOB 29a
+    ],
+    ids=repr,
+)
+def test_predicate_on_missing_attribute_is_not_satisfied(predicate: Predicate):
+    """A non-negated tuple condition over a missing attribute is not satisfied."""
+    assert predicate(TF({})) is False  # the empty TF lacks every attribute
+
+
+def test_negated_predicate_on_missing_attribute_is_satisfied():
+    """Two-valued (not SQL three-valued) semantics: negating a condition over a
+    missing attribute selects the tuple. The inner Like is a plain False on the
+    missing attribute, so Not(...) is True -- no NULL/UNKNOWN is introduced."""
+    predicate: Not = Not(Like("note", "%(presents)%"))  # negated condition on note
+    assert predicate(TF({})) is True  # empty TF: inner Like False -> Not -> True
+
+
+def test_exists_and_missing_query_definedness_directly():
+    """Absence is structural in FDM, so definedness is directly queryable via
+    Exists/Missing -- recovering what SQL needs three-valued logic for, without
+    introducing NULL/UNKNOWN. A stored None counts as present (a real value)."""
+    present: TF = TF({"name": "Hugo"})  # tuple that maps the attribute "name"
+    none_valued: TF = TF({"name": None})  # maps "name" to the real value None
+    absent: TF = TF({})  # tuple that does not map "name" at all
+
+    assert Exists("name")(present) is True  # mapped -> exists
+    assert Exists("name")(none_valued) is True  # None is a value, so still exists
+    assert Exists("name")(absent) is False  # no mapping -> does not exist
+
+    assert Missing("name")(present) is False  # mapped -> not missing
+    assert Missing("name")(absent) is True  # no mapping -> missing
+    assert Missing("name")(none_valued) is False  # None present -> not missing
+
+
+def test_exists_disambiguates_absent_from_nonmatching():
+    """The two-valued gap: Eq("name","Hugo") is False both when name differs and
+    when name is absent. And(Exists, Not(Eq)) recovers "present but not Hugo"."""
+    hugo: TF = TF({"name": "Hugo"})  # present and equal to the compared value
+    egon: TF = TF({"name": "Egon"})  # present but a different value
+    absent: TF = TF({})  # no name mapping at all
+
+    predicate: And = And(Exists("name"), Not(Eq("name", "Hugo")))  # present & != Hugo
+
+    assert predicate(hugo) is False  # present but equals Hugo -> excluded
+    assert predicate(egon) is True  # present and differs -> selected
+    assert predicate(absent) is False  # absent -> excluded (Exists is False)

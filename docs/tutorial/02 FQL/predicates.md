@@ -8,7 +8,7 @@ dispatchers to translate filter conditions without executing Python code.
 ### Import
 
 ```python
-from fql.predicates import Eq, Gt, Lt, Gte, Lte, Like, In, And, Or, Not, Ref
+from fql.predicates import Eq, Gt, Lt, Gte, Lte, Like, In, Exists, Missing, And, Or, Not, Ref
 ```
 
 ### Comparison predicates
@@ -76,6 +76,46 @@ All predicates support nested attribute paths using dot or ``__`` notation:
 users.where(Eq("department.name", "Dev"))
 users.where(Eq("department__name", "Dev"))
 ```
+
+### Undefined attributes (missing key/value mappings)
+
+In FDM an attribute a tuple does not map is **undefined** — there is no
+(key, value) pair. This is *not* a NULL value; FDM has no NULL and no
+three-valued logic. A predicate over an undefined attribute is simply **not
+satisfied** (two-valued):
+
+```python
+people = RF({
+    1: TF({"name": "Hugo"}),
+    2: TF({"name": "Egon"}),
+    3: TF({}),                 # no "name" mapping at all
+})
+
+people.where(Eq("name", "Hugo"))       # Hugo only
+```
+
+Comparison / ``Like`` / ``In`` return ``False`` on an undefined attribute, while
+``And`` / ``Or`` / ``Not`` stay ordinary boolean — so a negation *selects* a
+tuple that lacks the attribute (this is the deliberate difference from SQL):
+
+```python
+people.where(Not(Eq("name", "Hugo")))  # Egon AND the name-less tuple 3
+```
+
+To distinguish "absent" from "present but different", test definedness directly
+with ``Exists`` / ``Missing`` — absence is structural, so it is queryable without
+any three-valued logic:
+
+```python
+people.where(Exists("name"))           # Hugo, Egon (tuple 3 dropped)
+people.where(Missing("name"))          # tuple 3 only
+
+# "name is present and not Hugo":
+people.where(And(Exists("name"), Not(Eq("name", "Hugo"))))  # Egon only
+```
+
+A stored ``None`` is a real value, so it counts as present:
+``Exists("x")`` is ``True`` for ``TF({"x": None})``.
 
 ### Why use structured predicates?
 

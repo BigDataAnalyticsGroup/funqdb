@@ -129,6 +129,9 @@ Examples:
 
 1. **Yannakakis reduction.** `join` first runs [`subdatabase`](subdatabase.md)
    to reduce the DBF, so only tuples that participate in the full join survive.
+   A source tuple whose reference (foreign key) is *undefined* has no edge, so it
+   cannot match and is dropped here — it joins nothing. This is inner-join
+   behaviour framed as "no mapping, no edge"; there is no NULL and no outer join.
 2. **Bidirectional walk.** It then walks the reduced reference tree from the
    start relation. Each edge is followed in one of two ways:
    - **forward** (this tuple is the source): follow the inline pointer

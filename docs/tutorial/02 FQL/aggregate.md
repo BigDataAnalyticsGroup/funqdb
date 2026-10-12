@@ -35,6 +35,30 @@ totals.total  # → 170   totals.avg → 85.0   totals.n → 2
 To aggregate **per group** rather than over the whole RF, combine with
 [group_by](group_by.md) via ``group_by_aggregate``.
 
+#### Undefined attributes
+
+An aggregator folds only over the tuples that actually map its attribute — a
+tuple that does not map it is *undefined* there (no NULL, no error) and
+contributes nothing:
+
+```python
+aggregate(
+    RF({1: TF({"salary": 90}), 2: TF({"name": "no salary"})}),
+    total=Sum("salary"), n=Count("salary"),
+).result  # total → 90, n → 1   (tuple 2 contributes nothing)
+```
+
+If **no** tuple maps the attribute the aggregate is undefined, so its key is
+left out of the output TF entirely — ``Sum`` included (absent, not ``0``):
+
+```python
+"total" in aggregate(RF({1: TF({})}), total=Sum("salary")).result  # → False
+```
+
+``Count`` is the exception: zero is a valid count, so ``Count("attr")`` (mapped
+values, like SQL ``COUNT(col)``) and ``Count()`` (all tuples, ``COUNT(*)``) keep
+their key. A stored ``None`` is a real value and participates like any other.
+
 ### Special cases
 
 #### TF → Value (not yet implemented)

@@ -926,10 +926,22 @@ class DictionaryAttributeFunction[Key, Value](
             # if predicate exists, evaluate it:
             if predicate is not None:
                 if is_structured:
+                    # Structured predicates check definedness without exceptions
+                    # (a missing attribute yields False, not an error).
                     if not predicate(item.value):
                         continue
-                elif not predicate(item):
-                    continue
+                else:
+                    # Plain callable (e.g. a lambda): reading a missing attribute
+                    # off item.value raises AttributeError. Two-valued semantics:
+                    # the tuple has no value to test, so it does not match and is
+                    # dropped, rather than the whole filter raising. An opaque
+                    # callable cannot be pre-checked, so we catch here.
+                    try:
+                        keep: bool = bool(predicate(item))
+                    except AttributeError:
+                        keep = False
+                    if not keep:
+                        continue
 
             # if kwargs conditions exist, evaluate them (Django ORM-style conjunct):
             match: bool = True

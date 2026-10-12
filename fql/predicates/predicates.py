@@ -58,18 +58,34 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
+# Sentinel returned by ``_resolve_attr_path`` when a path segment is not mapped
+# by the attribute function. Distinct from a stored ``None`` value: absence of a
+# (key, value) mapping is not a value (FDM has no NULL). Predicates translate this
+# into "does not match" so the tuple is simply not selected.
+_UNDEFINED: Any = object()
+
+
 def _resolve_attr_path(obj: Any, path: str) -> Any:
     """Traverse a dot-separated or dunder-separated attribute path on a value.
 
-    ``"department.name"`` and ``"department__name"`` both resolve to
-    ``getattr(getattr(obj, "department"), "name")``. This works on TF values
-    because ``DictionaryAttributeFunction.__getattr__`` delegates to
-    ``__getitem__``.
+    ``"department.name"`` and ``"department__name"`` both resolve to the value
+    stored under ``department`` then ``name``.
+
+    The traversal is exception-free: at each segment it first asks the attribute
+    function whether the key is mapped (``key in af`` — a plain dict membership
+    test, no ``try/except``) and only then reads it. A missing mapping (or a
+    non-AF intermediate value) yields the ``_UNDEFINED`` sentinel instead of
+    raising ``AttributeError``. A stored ``None`` is a real value and is returned
+    as-is.
 
     @param obj: The object to resolve the path on (typically a TF value).
     @param path: Dot-separated or ``__``-separated attribute path.
-    @return: The resolved value.
+    @return: The resolved value, or ``_UNDEFINED`` if the path is not mapped.
     """
+    # Local import avoids a circular import: fdm.attribute_functions imports this
+    # module (for ``Predicate``), so this module cannot import it at top level.
+    from fdm.attribute_functions import DictionaryAttributeFunction
+
     normalized: str = path.replace("__", ".")
     current: Any = obj
     for segment in normalized.split("."):
@@ -78,7 +94,14 @@ def _resolve_attr_path(obj: Any, path: str) -> Any:
                 f"Empty segment in attribute path {path!r} "
                 f"(normalized: {normalized!r})"
             )
-        current = getattr(current, segment)
+        # Only attribute functions can be traversed further; anything else (a
+        # scalar leaf, or a missing key) means the path is not mapped here.
+        if (
+            not isinstance(current, DictionaryAttributeFunction)
+            or segment not in current
+        ):
+            return _UNDEFINED
+        current = current[segment]  # membership passed -> no exception possible
     return current
 
 
@@ -248,11 +271,20 @@ class ComparisonPredicate(Predicate):
         self.value: Any = value
 
     def __call__(self, obj: Any) -> bool:
-        """Evaluate the comparison on the given object."""
+        """Evaluate the comparison on the given object.
+
+        An unmapped attribute path means the tuple has no value to compare, so
+        the predicate does not match (the tuple is not selected). This is not
+        NULL semantics: there is simply no (key, value) mapping to test.
+        """
         lhs: Any = _resolve_attr_path(obj, self.attr)
         rhs: Any = (
             self.value.resolve(obj) if isinstance(self.value, Ref) else self.value
         )
+        # Either side unmapped -> nothing to compare -> not selected (two-valued:
+        # no NULL, no UNKNOWN; a negation over this simply sees a plain False).
+        if lhs is _UNDEFINED or rhs is _UNDEFINED:
+            return False
         return self._compare(lhs, rhs)
 
     @abstractmethod
@@ -358,6 +390,8 @@ class Like(Predicate):
     def __call__(self, obj: Any) -> bool:
         """Evaluate the LIKE match on the given object."""
         val: Any = _resolve_attr_path(obj, self.attr)
+        if val is _UNDEFINED:  # no mapping -> nothing to match -> not selected
+            return False
         return _like_match(str(val), self.pattern)
 
     def to_dict(self) -> dict:
@@ -408,6 +442,8 @@ class In(Predicate):
     def __call__(self, obj: Any) -> bool:
         """Evaluate the membership test on the given object."""
         val: Any = _resolve_attr_path(obj, self.attr)
+        if val is _UNDEFINED:  # no mapping -> nothing to test -> not selected
+            return False
         return val in self.values
 
     def to_dict(self) -> dict:
@@ -426,6 +462,84 @@ class In(Predicate):
 
     def __repr__(self) -> str:
         return f"In({self.attr!r}, {self.values!r})"
+
+
+# ---------------------------------------------------------------------------
+# Existence predicates
+# ---------------------------------------------------------------------------
+
+
+class Exists(Predicate):
+    """True iff the attribute path is mapped by the tuple.
+
+    In FDM absence of a (key, value) mapping is structural — not a NULL value —
+    so definedness is a first-class, directly queryable condition. Together with
+    the two-valued comparison predicates this recovers everything SQL needs
+    three-valued logic for, without introducing UNKNOWN::
+
+        # "name is present and not Hugo" (namelesss tuples excluded):
+        And(Exists("name"), Not(Eq("name", "Hugo")))
+
+    A stored ``None`` counts as present (it is a real value).
+
+    Example::
+
+        Exists("person_role.name")  # tuple references a role that has a name
+    """
+
+    def __init__(self, attr: str) -> None:
+        """Initialize an existence predicate.
+
+        @param attr: Dot- or ``__``-separated attribute path to test.
+        """
+        self.attr: str = attr
+
+    def __call__(self, obj: Any) -> bool:
+        """True iff the path resolves to a mapping (does not raise on absence)."""
+        return _resolve_attr_path(obj, self.attr) is not _UNDEFINED
+
+    def to_dict(self) -> dict:
+        """Serialize to a plan-IR dict."""
+        return {"type": "predicate", "op": "exists", "attr": self.attr}
+
+    @classmethod
+    def _from_dict(cls, data: dict) -> Exists:
+        """Reconstruct from a dict produced by ``to_dict``."""
+        return cls(attr=data["attr"])
+
+    def __repr__(self) -> str:
+        return f"Exists({self.attr!r})"
+
+
+class Missing(Predicate):
+    """True iff the attribute path is not mapped by the tuple.
+
+    The complement of :class:`Exists` (``Missing(a)`` == ``Not(Exists(a))``),
+    provided as its own predicate so "the attribute is absent" reads directly.
+    """
+
+    def __init__(self, attr: str) -> None:
+        """Initialize a missing-attribute predicate.
+
+        @param attr: Dot- or ``__``-separated attribute path to test.
+        """
+        self.attr: str = attr
+
+    def __call__(self, obj: Any) -> bool:
+        """True iff the path does not resolve to a mapping."""
+        return _resolve_attr_path(obj, self.attr) is _UNDEFINED
+
+    def to_dict(self) -> dict:
+        """Serialize to a plan-IR dict."""
+        return {"type": "predicate", "op": "missing", "attr": self.attr}
+
+    @classmethod
+    def _from_dict(cls, data: dict) -> Missing:
+        """Reconstruct from a dict produced by ``to_dict``."""
+        return cls(attr=data["attr"])
+
+    def __repr__(self) -> str:
+        return f"Missing({self.attr!r})"
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +671,8 @@ Predicate._REGISTRY = {
     "lte": Lte,
     "like": Like,
     "in": In,
+    "exists": Exists,
+    "missing": Missing,
     "and": And,
     "or": Or,
     "not": Not,

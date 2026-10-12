@@ -22,6 +22,14 @@ from typing import Callable, Any
 
 from fdm.attribute_functions import RF, TF
 from fql.operators.APIs import Operator, OperatorInput
+from fql.predicates.predicates import _resolve_attr_path, _UNDEFINED
+
+# Sentinel returned by an aggregation over an empty bag of values. It signals to
+# the ``aggregate`` operator that the aggregate is undefined, so no (key, value)
+# mapping is written to the output TF -- absence of an input attribute propagates
+# to absence in the result (FDM has no NULL). ``Count`` is the exception: it
+# counts mappings, so zero is a real answer and it never returns ``_ABSENT``.
+_ABSENT: Any = object()
 
 
 class AggregationFunction:
@@ -31,10 +39,38 @@ class AggregationFunction:
         self.aggregation_function = aggregation_function
         self.attribute = attribute
 
+    def _defined_values(self, rf: RF) -> list:
+        """Collect the values the attribute function actually maps for this
+        attribute, skipping tuples that have no mapping for it.
+
+        Reuses the predicate path resolver, so ``attribute`` may be a nested
+        path (e.g. ``"person_role__name"``) and the lookup is exception-free: an
+        unmapped attribute (or a missing reference along the path) yields no
+        value rather than raising. A stored ``None`` is a real value and is
+        collected like any other.
+
+        @param rf: The relation whose tuples are scanned.
+        @return: The list of mapped values (may be empty).
+        """
+        values: list = []
+        for i in rf:
+            value: Any = _resolve_attr_path(i.value, self.attribute)
+            if value is not _UNDEFINED:  # no mapping -> no element in the bag
+                values.append(value)
+        return values
+
     def __call__(self, rf: RF) -> Any:
+        """Aggregate over the mapped values of the attribute.
+
+        Note: direct callers (bypassing the ``aggregate`` operator) may receive
+        the ``_ABSENT`` sentinel when no tuple maps the attribute.
+        """
         if self.attribute is None:
             return self.aggregation_function(rf)
-        return self.aggregation_function([i.value[self.attribute] for i in rf])
+        data: list = self._defined_values(rf)
+        if not data:  # empty bag -> aggregate undefined -> absent from output
+            return _ABSENT
+        return self.aggregation_function(data)
 
 
 class Max(AggregationFunction):
@@ -51,6 +87,17 @@ class Count(AggregationFunction):
     def __init__(self, attribute: str | None = None):
         super().__init__(len, attribute)
 
+    def __call__(self, rf: RF) -> int:
+        """Count tuples (``Count()``) or mapped values (``Count("attr")``).
+
+        Unlike the other aggregates, Count never returns ``_ABSENT``: zero is a
+        valid count. ``Count("attr")`` counts only tuples that map the attribute
+        (like SQL ``COUNT(col)``); ``Count()`` counts all tuples (``COUNT(*)``).
+        """
+        if self.attribute is None:
+            return len(rf)
+        return len(self._defined_values(rf))
+
 
 class Sum(AggregationFunction):
     def __init__(self, attribute: str):
@@ -62,10 +109,12 @@ class Avg(AggregationFunction):
         super().__init__(len, attribute)
 
     def __call__(self, rf: RF) -> Any:
-        data: list = [i.value[self.attribute] for i in rf]
+        data: list = self._defined_values(rf)
         # here we draw the values only once, whereas if we used Sum and Count, we would draw the values twice, once
         # for Sum and once for Count. So this is more efficient.
-        return sum(data) / len(data) if len(data) > 0 else None
+        if not data:  # no mapped values -> average undefined -> absent from output
+            return _ABSENT
+        return sum(data) / len(data)
 
 
 class Median(AggregationFunction):
@@ -73,10 +122,10 @@ class Median(AggregationFunction):
         super().__init__(len, attribute)
 
     def __call__(self, rf: RF) -> Any:
-        data: list = sorted([i.value[self.attribute] for i in rf])
+        data: list = sorted(self._defined_values(rf))
         n = len(data)
-        if n == 0:
-            raise ValueError("Cannot compute median of empty data")
+        if n == 0:  # no mapped values -> median undefined -> absent from output
+            return _ABSENT
         elif n % 2 == 1:
             return data[n // 2]
         else:
@@ -99,8 +148,10 @@ class aggregate(Operator[RF, TF]):
     def _compute(self) -> TF:
         input_function = self._resolve_input(self.input_function)
         output_function = TF(frozen=False)  # no freezing as this produces a simple TF
-        for key, value in self.aggregates.items():
-            output_function[key] = value(input_function)
+        for key, aggregation in self.aggregates.items():
+            result: Any = aggregation(input_function)
+            if result is not _ABSENT:  # undefined aggregate -> no mapping in output
+                output_function[key] = result
         return output_function
 
 

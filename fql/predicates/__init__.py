@@ -28,6 +28,8 @@ from fql.predicates.predicates import (
     Lte,
     Like,
     In,
+    Exists,
+    Missing,
     And,
     Or,
     Not,

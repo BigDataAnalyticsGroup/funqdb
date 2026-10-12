@@ -120,14 +120,23 @@ class semijoin[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             # keep reduce tuples whose ref_key points to a TF still in by_rf
             by_uuids: set[int] = {item.value.uuid for item in by_rf}
             for item in reduce_rf:
-                if item.value[self.ref_key].uuid in by_uuids:
+                # A source tuple whose ref_key is undefined has no reference, so
+                # it points at no target and cannot survive the semijoin. Checked
+                # by key membership (exception-free), not try/except.
+                if (
+                    self.ref_key in item.value
+                    and item.value[self.ref_key].uuid in by_uuids
+                ):
                     reduced_rf[item.key] = item.value
         elif direction is RefDirection.BY:
             # by is source: by_tuple[ref_key] -> reduce (target)
             # keep reduce tuples that are referenced by at least one by-tuple
             referenced_uuids: set[int] = set()
             for item in by_rf:
-                referenced_uuids.add(item.value[self.ref_key].uuid)
+                # A by-source tuple with an undefined ref_key references nothing,
+                # so it contributes no referenced target.
+                if self.ref_key in item.value:
+                    referenced_uuids.add(item.value[self.ref_key].uuid)
             for item in reduce_rf:
                 if item.value.uuid in referenced_uuids:
                     reduced_rf[item.key] = item.value

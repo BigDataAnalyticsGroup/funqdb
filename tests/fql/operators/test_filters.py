@@ -254,7 +254,7 @@ def test_filter_items_create_lineage_not_implemented():
     db: DBF = _create_testdata(frozen=True)
     users: RF = db.users
     with pytest.raises(NotImplementedError):
-        filter_items[RF, RF](
+        _ = filter_items[RF, RF](
             users,
             filter_predicate=lambda i: True,
             output_factory=lambda _: RF(),
@@ -281,3 +281,14 @@ def test_filter_items_scan_complement():
     assert "Horst" not in result_names
     assert "Tom" not in result_names
     assert len(result) > 0, "complement must not be empty"
+
+
+def test_where_drops_tuples_missing_the_filtered_attribute():
+    """A tuple without `note` cannot satisfy a condition on `note`, so it is filtered out (JOB 1a)."""
+    companies: RF = RF(  # tuple 2 has no `note` attribute (absent, not a NULL value)
+        {1: TF({"note": "(presents)"}), 2: TF({})}
+    )
+    filtered: RF = companies.where(  # the rendered form of JOB 1a's LIKE on `note`
+        lambda i: "(presents)" in i.value.note
+    )
+    assert {item.key for item in filtered} == {1}  # tuple 2 is dropped, not an error
