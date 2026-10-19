@@ -21,7 +21,7 @@ users = RF({
 
 op = filter_values[RF, RF](users, filter_predicate=Eq("dept", "eng"))
 print(op.explain())
-# - filter_values(filter_predicate=Eq('dept', 'eng'), output_factory=None)
+# - filter_values(filter_predicate=Eq('dept', 'eng'))
 #   - leaf RF #<uuid>
 ```
 
@@ -90,15 +90,15 @@ print(op.explain())
 ```
 
 ```
-- filter_values(filter_predicate=Eq('dept', 'eng'), output_factory=None)
+- filter_values(filter_predicate=Eq('dept', 'eng'))
   - leaf RF #3
 ```
 
-The predicate is fully inspectable in the JSON:
+The predicate is fully inspectable in the JSON (shortened):
 
 ```json
 {
-  "ir_version": 1,
+  "ir_version": 2,
   "root": {
     "type": "node",
     "op": "filter_values",
@@ -125,7 +125,7 @@ print(op.explain())
 ```
 
 ```
-- filter_values(filter_predicate=<opaque lambda>, output_factory=None)
+- filter_values(filter_predicate=<opaque lambda>)
   - leaf RF #3
 ```
 
@@ -152,7 +152,7 @@ print(op.explain())
 ```
 
 ```
-- filter_values(filter_predicate=And(Eq('dept', 'eng'), Gt('salary', 80)), output_factory=None)
+- filter_values(filter_predicate=And(Eq('dept', 'eng'), Gt('salary', 80)))
   - leaf RF #3
 ```
 
@@ -184,8 +184,8 @@ print(op.explain())
 ```
 
 ```
-- subset(ranking_key=<opaque lambda>, k=1, offset=0, reverse=True, subset_predicate=None, output_factory=None)
-  - filter_values(filter_predicate=Eq('dept', 'eng'), output_factory=None)
+- subset(ranking_key=<opaque lambda>, k=1, offset=0, reverse=True, subset_predicate=None)
+  - filter_values(filter_predicate=Eq('dept', 'eng'))
     - leaf RF #3
 ```
 
@@ -201,7 +201,7 @@ print(op.explain())
 ```
 
 ```
-- group_by(partitioning_function=<opaque lambda>, output_factory=<opaque lambda>)
+- group_by(aggregate_keys=['dept'])
   - leaf RF #3
 ```
 
@@ -211,12 +211,27 @@ print(op.explain())
 ```
 
 ```
-- aggregate(aggregates={'total': ..., 'avg': ...})
+- aggregate(aggregates={'total': Sum('salary'), 'avg': Avg('salary')})
   - leaf RF #3
 ```
 
-Aggregation functions and partitioning functions are currently opaque in the
-plan IR. Making them structured (like predicates) is future work.
+The built-in aggregation functions (``Count``, ``Sum``, ``Min``, ``Max``,
+``Avg``/``Mean``, ``Median``) are structured like predicates and survive the
+JSON roundtrip (``Mean`` comes back as ``Avg``). Excerpt of the JSON:
+
+```json
+"aggregates": {
+  "total": { "type": "aggregation", "op": "sum", "attr": "salary" },
+  "avg":   { "type": "aggregation", "op": "avg", "attr": "salary" }
+}
+```
+
+A self-built ``AggregationFunction(my_function, "salary")`` stays opaque, as do
+custom partitioning functions passed to ``partition``. ``group_by`` shows its
+grouping keys instead of the internal partitioning function.
+
+Factory parameters such as ``output_factory`` never appear in the plan: they
+only choose the class of the result AF, not what the query computes.
 
 ### Opaque vs structured
 

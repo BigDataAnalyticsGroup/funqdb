@@ -19,7 +19,7 @@
 #
 
 
-from typing import Callable, Any
+from typing import Callable, Any, Mapping
 
 from fdm.attribute_functions import RF, DBF, CompositeForeignObject
 from fql.operators.APIs import Operator, OperatorInput
@@ -76,7 +76,7 @@ class group_by(partition):
 
     # TODO: generic type: this operator can also partition an entire database...
 
-    def __init__(self, input_function: OperatorInput[RF], *aggregate_keys):
+    def __init__(self, input_function: OperatorInput[RF], *aggregate_keys: str):
 
         assert (
             len(aggregate_keys) > 0
@@ -92,3 +92,11 @@ class group_by(partition):
                 else item.value[aggregate_keys[0]]
             ),
         )
+        self.aggregate_keys: tuple[str, ...] = aggregate_keys
+
+    def _plan_params(self) -> Mapping[str, Any]:
+        """Hide the internal partitioning lambda; ``aggregate_keys`` reaches the
+        plan via the default public-attribute scan."""
+        params: dict[str, Any] = dict(super()._plan_params())
+        del params["partitioning_function"]
+        return params

@@ -18,6 +18,8 @@
 #
 #
 
+from typing import Any, Mapping
+
 from fql.operators.APIs import OperatorInput
 from fql.operators.transforms import transform
 
@@ -44,3 +46,11 @@ class project[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             # redirect the transformation function to the projection function:
             transformation_function=lambda af: af.project(*attributes),
         )
+        self.attributes: tuple[str, ...] = attributes
+
+    def _plan_params(self) -> Mapping[str, Any]:
+        """Hide the internal projection lambda; ``attributes`` reaches the plan
+        via the default public-attribute scan."""
+        params: dict[str, Any] = dict(super()._plan_params())
+        del params["transformation_function"]
+        return params

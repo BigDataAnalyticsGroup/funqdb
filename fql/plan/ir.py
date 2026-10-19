@@ -45,8 +45,11 @@ and backend-agnostic:
   forward-compatibility.
 
 Nothing in this module depends on any runtime Operator or AttributeFunction
-state; it is pure data. The only place that knows how to *build* an IR from
-an operator tree is ``fql.plan.extract``.
+state; it is pure data. The only exception is (de)serializing structured
+parameter values: ``Predicate``s and built-in aggregation functions are
+imported lazily from ``fql.predicates`` and ``fql.operators.aggregates`` to
+convert them to and from their dict form. The only place that knows how to
+*build* an IR from an operator tree is ``fql.plan.extract``.
 """
 
 from __future__ import annotations
@@ -62,7 +65,7 @@ from typing import Any, Literal, Union
 #: Bump this when the on-wire IR format changes in a way that older readers
 #: cannot handle, so that future consumers can refuse or migrate old plans
 #: instead of silently misinterpreting them.
-IR_VERSION: int = 1
+IR_VERSION: int = 2
 
 
 # -- Nodes --------------------------------------------------------------------
@@ -186,8 +189,10 @@ class PlanNode:
 
     #: JSON-ish keyword parameters. Values are one of: primitive
     #: (str/int/float/bool/None), tuple/list of those, a nested dict of
-    #: those, or an ``Opaque`` marker. The extractor is responsible for
-    #: ensuring this invariant holds; see ``fql.plan.extract._serialize_param``.
+    #: those, a structured ``Predicate``, a built-in aggregation function
+    #: (``Count``, ``Sum``, ...), or an ``Opaque`` marker. The extractor is
+    #: responsible for ensuring this invariant holds; see
+    #: ``fql.plan.extract._serialize_param``.
     params: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -226,6 +231,11 @@ def _value_to_dict(value: Any) -> Any:
     from fql.predicates.predicates import Predicate
 
     if isinstance(value, Predicate):
+        return value.to_dict()
+    # Built-in aggregation functions serialize to {"type": "aggregation", ...}.
+    from fql.operators.aggregates import AggregationFunction
+
+    if isinstance(value, AggregationFunction) and value.is_serializable():
         return value.to_dict()
     if isinstance(value, (LeafRef, PlanNode)):
         return value.to_dict()
@@ -279,7 +289,7 @@ class LogicalPlan:
         """
         version = data.get("ir_version", IR_VERSION)
         if version != IR_VERSION:
-            # v1: accept only our own version. A later revision can add real
+            # Accept only our own version. A later revision can add real
             # migrations here.
             raise ValueError(
                 f"Unsupported IR version: {version} (expected {IR_VERSION})"
@@ -333,6 +343,10 @@ def _value_from_dict(value: Any) -> Any:
             from fql.predicates.predicates import Predicate
 
             return Predicate.from_dict(value)
+        if t == "aggregation":
+            from fql.operators.aggregates import AggregationFunction
+
+            return AggregationFunction.from_dict(value)
         if t in ("leaf", "node"):
             return _child_from_dict(value)
         if t == "literal":
@@ -378,4 +392,6 @@ def _short_param(value: Any) -> str:
         return repr(value)
     if isinstance(value, (LeafRef, PlanNode)):
         return f"<{value.__class__.__name__}>"
+    # Built-in aggregation functions (also inside dicts such as ``aggregates``)
+    # render via their own ``__repr__``, e.g. ``Count()``.
     return repr(value)

@@ -376,8 +376,11 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` *Structured predicates serialise inline; lambdas become Opaque*  
   Structured `Predicate` instances are detected during serialization and included as-is via their `to_dict()` method (appearing as `{"type": "predicate", "op": ...}` in the IR). Unstructured callables become `Opaque` markers. A plan can contain a mix of both.
 
+- `[✅]` *No accidental `Opaque`: factories omitted, `project`/`group_by` attributes and built-in aggregations structured*  
+  Factory parameters (`output_factory`, `output_factory_nested`, `output_factory_leaf`) are left out of the plan because they only choose the result AF class. `project` exposes `attributes` and `group_by` exposes `aggregate_keys` instead of internal lambdas. Built-in aggregation functions (`Count`, `Sum`, `Min`, `Max`, `Avg`/`Mean`, `Median`) serialize as `{"type": "aggregation", "op": ..., "attr": ...}` and roundtrip through JSON; `Mean` restores as `Avg`; user-built aggregations stay `Opaque`. Decision: `docs/changes/006-structured-plan-params/`.
+
 - `[✅]` *Serialise to JSON string and deserialise back (`from_json` / `from_dict`)*  
-  `LogicalPlan.to_json()` calls `to_dict()` then `json.dumps()` with optional indentation. `LogicalPlan.from_json(s)` calls `json.loads(s)` then `from_dict()`. Deserialization reconstructs `Opaque`, `Predicate`, `PlanNode`, and `LeafRef` instances from their dict representations, preserving the full tree structure.
+  `LogicalPlan.to_json()` calls `to_dict()` then `json.dumps()` with optional indentation. `LogicalPlan.from_json(s)` calls `json.loads(s)` then `from_dict()`. Deserialization reconstructs `Opaque`, `Predicate`, built-in aggregation function (`Count`, `Sum`, ...), `PlanNode`, and `LeafRef` instances from their dict representations, preserving the full tree structure.
 
 - `[✅]` *Validate IR version on deserialisation*  
   An `IR_VERSION` constant is stamped into every serialized plan. On deserialization, `from_dict()` reads `"ir_version"` and raises `ValueError` if it does not match the expected version, preventing silent misinterpretation of future format changes.

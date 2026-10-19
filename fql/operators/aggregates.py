@@ -18,7 +18,7 @@
 #
 #
 
-from typing import Callable, Any
+from typing import Callable, Any, Mapping
 
 from fdm.attribute_functions import RF, TF
 from fql.operators.APIs import Operator, OperatorInput
@@ -33,11 +33,100 @@ _ABSENT: Any = object()
 
 
 class AggregationFunction:
+    """Aggregates an RF to a single value, optionally over one attribute.
+
+    The built-in subclasses (``Count``, ``Sum``, ...) also serialize to the
+    plan IR via ``to_dict`` / ``from_dict``; user-built ones stay ``Opaque``.
+    """
+
+    #: Operator name in the plan IR (e.g. ``"sum"``). ``None`` for user-built
+    #: aggregations, whose behaviour is an arbitrary callable.
+    op_name: str | None = None
+
     def __init__(
         self, aggregation_function: Callable[[Any], Any], attribute: str | None = None
     ):
         self.aggregation_function = aggregation_function
         self.attribute = attribute
+
+    def __repr__(self) -> str:
+        """Readable form for ``explain()`` and ``Opaque`` markers.
+
+        Built-in aggregations and their user subclasses render as ``Sum('a')``
+        or ``Count()``: built-ins like ``Avg`` store only a placeholder function
+        (``len``) and compute in ``__call__``, so showing it would mislead.
+        ``AggregationFunction(my_fn, 'a')`` and user subclasses outside the
+        built-ins additionally show the wrapped function before the attribute,
+        since that function is what makes them opaque. Attributes are read
+        defensively: a user subclass may skip ``super().__init__``.
+        """
+        arguments: list[str] = []
+        # isinstance, not exact type (unlike ``is_serializable``): user
+        # subclasses of built-ins also hide the placeholder function.
+        if not isinstance(self, tuple(_SERIALIZABLE_AGGREGATIONS)):
+            function: Any = getattr(self, "aggregation_function", None)
+            if function is not None:
+                arguments.append(getattr(function, "__name__", repr(function)))
+        attribute: str | None = getattr(self, "attribute", None)
+        if attribute is not None:
+            arguments.append(repr(attribute))
+        return f"{type(self).__name__}({', '.join(arguments)})"
+
+    def is_serializable(self) -> bool:
+        """Whether this aggregation can be written into the plan IR.
+
+        True only for the exact built-in classes listed in
+        ``_SERIALIZABLE_AGGREGATIONS`` (end of this module) with a valid
+        attribute: a string, or ``None`` for ``Count()`` only. For those, op
+        name and attribute fully describe the behaviour. User subclasses,
+        ``AggregationFunction(custom_function, ...)`` and built-ins with an
+        invalid attribute (e.g. ``Sum(None)``) return False.
+        """
+        if type(self) not in _SERIALIZABLE_AGGREGATIONS:
+            return False
+        # Same rule as ``from_dict``, so that every written plan can be read
+        # back: a string attribute, or none at all for ``Count()``.
+        return isinstance(self.attribute, str) or (
+            self.attribute is None and type(self) is Count
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize this aggregation to a plain dict for the plan IR.
+
+        @return: ``{"type": "aggregation", "op": ..., "attr": ...}``; ``attr`` is
+            ``None`` for ``Count()``.
+        @raises ValueError: If this is not a built-in aggregation or its
+            attribute is invalid (see ``is_serializable``).
+        """
+        if not self.is_serializable():
+            raise ValueError(
+                f"{self!r} is not serializable: not a built-in aggregation,"
+                " or invalid attribute"
+            )
+        return {"type": "aggregation", "op": self.op_name, "attr": self.attribute}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "AggregationFunction":
+        """Deserialize an aggregation from a dict produced by ``to_dict``.
+
+        @param data: A dict with ``"type": "aggregation"``, ``"op"`` and ``"attr"``.
+        @return: A new instance of the built-in class registered for ``"op"``.
+        @raises ValueError: If ``"op"`` is missing or unknown, or ``"attr"`` is
+            not a string. A ``None`` or missing ``"attr"`` is accepted for
+            ``count`` only (``Count()`` counts all tuples).
+        """
+        op: Any = data.get("op")
+        attribute: Any = data.get("attr")
+        aggregation_cls: Callable[[str | None], AggregationFunction] | None = (
+            _AGGREGATIONS_BY_OP.get(op) if isinstance(op, str) else None
+        )
+        if aggregation_cls is None:
+            raise ValueError(f"Unknown aggregation op: {op!r}")
+        if attribute is None and aggregation_cls is not Count:
+            raise ValueError(f"Aggregation {op!r} requires an attribute")
+        if attribute is not None and not isinstance(attribute, str):
+            raise ValueError(f"Aggregation attribute must be a string: {attribute!r}")
+        return aggregation_cls(attribute)
 
     def _defined_values(self, rf: RF) -> list:
         """Collect the values the attribute function actually maps for this
@@ -74,16 +163,22 @@ class AggregationFunction:
 
 
 class Max(AggregationFunction):
+    op_name: str = "max"
+
     def __init__(self, attribute: str):
         super().__init__(max, attribute)
 
 
 class Min(AggregationFunction):
+    op_name: str = "min"
+
     def __init__(self, attribute: str):
         super().__init__(min, attribute)
 
 
 class Count(AggregationFunction):
+    op_name: str = "count"
+
     def __init__(self, attribute: str | None = None):
         super().__init__(len, attribute)
 
@@ -100,11 +195,15 @@ class Count(AggregationFunction):
 
 
 class Sum(AggregationFunction):
+    op_name: str = "sum"
+
     def __init__(self, attribute: str):
         super().__init__(sum, attribute)
 
 
 class Avg(AggregationFunction):
+    op_name: str = "avg"
+
     def __init__(self, attribute: str):
         super().__init__(len, attribute)
 
@@ -118,6 +217,8 @@ class Avg(AggregationFunction):
 
 
 class Median(AggregationFunction):
+    op_name: str = "median"
+
     def __init__(self, attribute: str):
         super().__init__(len, attribute)
 
@@ -133,9 +234,28 @@ class Median(AggregationFunction):
 
 
 class Mean(Avg):
-    """Synonym for Avg."""
+    """Synonym for Avg. Serializes to the plan IR as ``"avg"`` and therefore
+    comes back as ``Avg``."""
 
     pass
+
+
+#: Built-in aggregation classes that serialize to the plan IR. Exact types only:
+#: a user subclass may override ``__call__``, so it stays Opaque.
+_SERIALIZABLE_AGGREGATIONS: frozenset[type[AggregationFunction]] = frozenset(
+    {Max, Min, Count, Sum, Avg, Median, Mean}
+)
+
+#: Maps an op name back to the class that restores it. ``Mean`` shares the op
+#: name ``"avg"`` and therefore restores as ``Avg``.
+_AGGREGATIONS_BY_OP: dict[str, Callable[[str | None], AggregationFunction]] = {
+    "max": Max,
+    "min": Min,
+    "count": Count,
+    "sum": Sum,
+    "avg": Avg,
+    "median": Median,
+}
 
 
 class aggregate(Operator[RF, TF]):

@@ -105,14 +105,22 @@
     - [ ] PR 4: demo backend dispatcher that partitions a plan into a
       backend-executable prefix and a local residual at the first `Opaque`
       boundary.
-    - [ ] `filter_values` wraps the user predicate in an internal lambda
+    - [x] `filter_values` wraps the user predicate in an internal lambda
       (`filters.py:111`), so the extractor sees the wrapper, not the
       original predicate. Stash the original on the instance so PR 2 can
-      serialize it.
+      serialize it. Done: stored as `_user_predicate` and exposed via
+      `_plan_params` (also in `filter_keys`, `filter_items_scan_complement`).
     - [ ] `_value_{to,from}_dict` use a bare `"type"` discriminator; a user
       dict param whose keys include `"type"` with value in
-      {`"leaf"`,`"node"`,`"opaque"`,`"literal"`} would be mis-rehydrated.
-      Namespace to e.g. `"__funqdb_type__"`.
+      {`"leaf"`,`"node"`,`"opaque"`,`"literal"`,`"predicate"`,`"aggregation"`}
+      would be mis-rehydrated. Namespace to e.g. `"__funqdb_type__"`.
+    - [ ] `Predicate.from_dict` raises `KeyError`/`TypeError` on malformed
+      input instead of `ValueError`; validate like `AggregationFunction.from_dict`.
+    - [ ] structured alternatives for the remaining genuine lambdas, so plans
+      become SQL-translatable: ranking keys (`rank_by`, `subset`),
+      partitioning functions (`partition`, `partition_by_aggregate`), the
+      per-item `aggregation_function` of `partition_by_aggregate`,
+      `transform` / `transform_items`, join predicates (`add_join_predicate`).
 - [ ] observer semantics for AFs not in the store, maybe queue or load, when queuing it may break semantics, e.g. for
   other AFs in main memory that should be informed but are not as part of the observer chain is not in main memory
 
@@ -186,6 +194,9 @@
     - [x] PR 2: structured predicates (Eq/Gt/Like/In/And/Or/Not) so that
       filter/join predicates are no longer forced to be opaque lambdas;
       needed for any real backend dispatcher.
+    - [x] 006: no accidental `Opaque` — factories omitted from plans,
+      `project`/`group_by` expose their attributes, built-in aggregation
+      functions serialize (`IR_VERSION` 2).
 - [x] sync docu and tutorial for new operators
 - [x] PR 3: consolidate existing per-operator `explain()` strings to be
       derived from `to_plan()` so there is a single source of truth.

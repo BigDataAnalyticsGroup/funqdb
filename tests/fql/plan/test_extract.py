@@ -32,14 +32,33 @@ test, read it, verify the assertions match intended semantics, then remove
 its ``@pytest.mark.needs_review_new`` decorator.
 """
 
+import re
+from collections.abc import Mapping
 from typing import Any, Callable
 
 import pytest
 
 from fdm.attribute_functions import RF, DBF
+from fql.operators.aggregates import (
+    AggregationFunction,
+    Avg,
+    Count,
+    Max,
+    Mean,
+    Median,
+    Min,
+    Sum,
+    aggregate,
+)
+from fql.operators.constraints import drop_join_predicate
 from fql.operators.filters import filter_items, filter_values
+from fql.operators.partition import group_by, partition
+from fql.operators.partition_and_aggregate import group_by_aggregate
+from fql.operators.projections import project
+from fql.operators.set_operations import cogroup, intersect, minus, union
 from fql.plan import LogicalPlan, LeafRef, Opaque, PlanNode, extract, extract_plan
 from fql.plan.ir import IR_VERSION, PlanChild, _value_from_dict, _value_to_dict
+from fql.predicates.predicates import Eq
 from tests.lib import _create_testdata
 
 
@@ -409,31 +428,29 @@ def test_extract_literal_fallback_for_unsupported_types():
     assert root.params["value"] == 42
 
 
-def test_serialize_param_covers_list_and_dict_params():
-    """Operator parameters that are lists or dicts must be recursively
-    serialized. We verify this by extracting a ``filter_items`` whose
-    ``create_lineage`` param is ``False`` (a primitive already covered)
-    and by checking that an operator whose input carries nested AF
-    references serializes them correctly."""
-    db: DBF = _create_testdata(frozen=True)
-    users: RF = db.users
-
-    # filter_items stores output_factory (None or callable).
-    # We construct one with output_factory=None to cover the primitive param
-    # path, then check params roundtrip. create_lineage is an unimplemented
-    # internal flag (prefixed with _) and correctly excluded from plan params.
+def test_serialize_param_hides_private_and_passes_none():
+    """Private operator attributes are hidden; ``None`` params pass through as ``None``.
+    Would fail if the private ``_create_lineage`` flag (or any other ``_``-prefixed
+    attribute) leaked into the plan, or if ``None`` were turned into an ``Opaque``."""
+    db: DBF = _create_testdata(frozen=True)  # departments, users, customers
     pipeline: filter_items[RF, RF] = filter_items[RF, RF](
-        users,
-        filter_predicate=lambda i: True,
-        output_factory=None,
-    )
-    plan: LogicalPlan = pipeline.to_plan()
-    root: PlanChild = plan.root
-    assert isinstance(root, PlanNode)
-    # output_factory=None should serialize as None (primitive).
-    assert root.params["output_factory"] is None
-    # create_lineage is private (_create_lineage) and must not appear in params.
-    assert "create_lineage" not in root.params
+        db.users, filter_predicate=lambda i: True
+    )  # filter_items stores the private flag _create_lineage
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert "_create_lineage" not in root.params  # private flag is not a plan param
+    assert not any(
+        k.startswith("_") for k in root.params
+    )  # no private attribute at all
+
+    dropper: drop_join_predicate[DBF, DBF] = drop_join_predicate[DBF, DBF](
+        db, description="x"
+    )  # description mode: predicate and matcher stay None
+    drop_root: PlanChild = dropper.to_plan().root  # extract without executing
+    assert isinstance(drop_root, PlanNode)  # an operator node, not a leaf
+    assert drop_root.params["description"] == "x"  # the string param is kept as is
+    assert drop_root.params["predicate"] is None  # None passes through unchanged
+    assert drop_root.params["matcher"] is None  # None passes through unchanged
 
 
 # -- Pretty-print nested plan ------------------------------------------------
@@ -478,3 +495,425 @@ def test_explain_nested_plan_contains_both_levels():
 
     # Outer operator < inner operator < leaf: tree structure reflected visually.
     assert outer_indent < inner_indent < leaf_indent
+
+
+# -- Structured params instead of accidental Opaque markers (006) -------------
+
+
+def _find_opaques(value: Any) -> list[Opaque]:
+    """Collect every ``Opaque`` marker found anywhere below ``value``.
+
+    Walks ``PlanNode`` params and inputs as well as nested dicts, lists and
+    tuples recursively. Leaves, primitives, structured predicates and
+    aggregation functions contain no markers and contribute nothing.
+    """
+    if isinstance(value, Opaque):
+        return [value]
+    if isinstance(value, PlanNode):
+        return _find_opaques(value.params) + _find_opaques(value.inputs)
+    if isinstance(value, Mapping):
+        return [opaque for v in value.values() for opaque in _find_opaques(v)]
+    if isinstance(value, (list, tuple)):
+        return [opaque for v in value for opaque in _find_opaques(v)]
+    return []
+
+
+def test_project_plan_shows_attribute_names():
+    """``project`` exposes its attribute names in the plan, without any ``Opaque``.
+    Would fail if the internal ``af.project(...)`` lambda leaked into the plan
+    as ``transformation_function``."""
+    users: RF = _users()  # frozen users relation: name, yob, department
+    pipeline: project = project(users, "name", "yob")  # keep name and yob only
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.op == "project"  # named after the operator class
+    assert root.params["attributes"] == ["name", "yob"]  # tuple -> list, order kept
+    assert "transformation_function" not in root.params  # internal lambda hidden
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_group_by_plan_shows_grouping_keys():
+    """``group_by`` exposes its grouping keys in the plan, without any ``Opaque``.
+    Would fail if the derived partitioning lambda or the default output factory
+    showed up in the plan."""
+    users: RF = _users()  # frozen users relation
+    pipeline: group_by = group_by(users, "department")  # one group per department
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.params["aggregate_keys"] == ["department"]  # grouping key visible
+    assert "partitioning_function" not in root.params  # derived lambda hidden
+    assert "output_factory" not in root.params  # default factory lambda hidden
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_aggregate_plan_survives_json_roundtrip():
+    """Built-in aggregations are structured in the plan and survive a JSON round trip.
+    Would fail if ``Count``/``Sum`` became ``Opaque`` or came back as plain dicts
+    instead of aggregation objects."""
+    users: RF = _users()  # frozen users relation
+    pipeline: aggregate = aggregate(users, n=Count(), s=Sum("yob"))  # count, sum
+    plan: LogicalPlan = pipeline.to_plan()  # extract without executing
+    assert _find_opaques(plan.root) == []  # built-in aggregations are not opaque
+
+    restored: LogicalPlan = LogicalPlan.from_json(plan.to_json())  # JSON round trip
+    assert isinstance(restored.root, PlanNode)  # still an operator node
+    n: AggregationFunction = restored.root.params["aggregates"]["n"]  # restored Count
+    s: AggregationFunction = restored.root.params["aggregates"]["s"]  # restored Sum
+    assert type(n) is Count  # Count comes back as exactly Count
+    assert n.to_dict() == pipeline.aggregates["n"].to_dict()  # same op, no attr
+    assert type(s) is Sum  # Sum comes back as exactly Sum
+    assert s.to_dict() == pipeline.aggregates["s"].to_dict()  # same op, attr "yob"
+
+
+def test_group_by_aggregate_plan_has_no_opaques():
+    """``group_by_aggregate`` with a built-in aggregation has no ``Opaque`` in its plan.
+    Would fail if an aggregation nested in the ``aggregates`` dict were not
+    recognised as serializable."""
+    users: RF = _users()  # frozen users relation
+    pipeline: group_by_aggregate = group_by_aggregate(
+        users, "department", n=Count()
+    )  # number of users per department
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.params["aggregate_keys"] == ["department"]  # grouping key visible
+    assert type(root.params["aggregates"]["n"]) is Count  # aggregation kept, structured
+    assert root.params["aggregates"]["n"].to_dict() == {
+        "type": "aggregation",
+        "op": "count",
+        "attr": None,
+    }  # literal IR record: Count without attribute counts all rows
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+@pytest.mark.parametrize("set_operation", [union, intersect, minus])
+def test_set_operation_plan_omits_output_factory(set_operation: type) -> None:
+    """Set operations leave their mandatory output factory out of the plan.
+    Would fail if ``Operator._plan_params`` stopped omitting ``output_factory``,
+    which would put an ``Opaque`` lambda into every set-operation plan."""
+    db: DBF = _create_testdata(frozen=True)  # departments, users, customers
+    pipeline: Any = set_operation(db, output_factory=lambda _: RF())  # lambda factory
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert "output_factory" not in root.params  # the factory lambda is omitted
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_cogroup_plan_omits_all_output_factories():
+    """``cogroup`` leaves all three output factories out of the plan.
+    Would fail if ``output_factory_nested`` or the defaulted
+    ``output_factory_leaf`` lambda leaked into the plan as ``Opaque``."""
+    db: DBF = _create_testdata(frozen=True)  # departments, users, customers
+    pipeline: cogroup = cogroup(
+        db, output_factory=lambda _: RF(), output_factory_nested=lambda _: RF()
+    )  # output_factory_leaf stays at its lambda default
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert "output_factory" not in root.params  # outer factory omitted
+    assert "output_factory_nested" not in root.params  # nested factory omitted
+    assert "output_factory_leaf" not in root.params  # default leaf factory omitted
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_partition_plan_omits_default_output_factory():
+    """``partition`` omits its default factory; only the user's own lambda stays opaque.
+    Would fail if the default ``DBF`` factory lambda showed up as a second
+    ``Opaque`` marker."""
+    users: RF = _users()  # frozen users relation
+    pipeline: partition = partition(
+        users, partitioning_function=lambda i: i.value.yob < 1980
+    )  # genuine user lambda; output_factory left at its default
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert "output_factory" not in root.params  # the default factory is omitted
+    opaques: list[Opaque] = _find_opaques(root)  # all remaining opaque markers
+    assert len(opaques) == 1  # exactly one marker is left ...
+    assert opaques[0] is root.params["partitioning_function"]  # ... the user lambda
+
+
+def test_filter_values_with_predicate_and_factory_has_no_opaques():
+    """A structured predicate plus an explicit factory gives a plan without ``Opaque``.
+    Would fail if an explicitly passed ``output_factory`` (not just the default)
+    were still serialized into the plan."""
+    users: RF = _users()  # frozen users relation
+    predicate: Eq = Eq("name", "Tom")  # structured predicate, kept for comparison
+    pipeline: filter_values[RF, RF] = filter_values[RF, RF](
+        users, predicate, output_factory=lambda _: RF()
+    )  # structured predicate plus a factory lambda
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert "output_factory" not in root.params  # the factory lambda is omitted
+    plan_predicate: Any = root.params["filter_predicate"]  # predicate in the plan
+    assert plan_predicate.to_dict() == predicate.to_dict()  # same structured predicate
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_explain_shows_readable_aggregations():
+    """``explain()`` renders built-in aggregations readably, e.g. ``Count()``.
+    Would fail if ``AggregationFunction.__repr__`` fell back to the default
+    ``<... object at 0x...>`` form."""
+    users: RF = _users()  # frozen users relation
+    pipeline: aggregate = aggregate(users, n=Count(), s=Sum("yob"))  # count, sum
+    text: str = pipeline.to_plan().explain()  # human-readable plan
+    assert "Count()" in text  # Count without attribute
+    assert "Sum('yob')" in text  # Sum with its attribute
+    assert "0x" not in text  # no memory address anywhere
+
+
+# -- Aggregation (de)serialization: edge cases and failure modes (006) --------
+
+
+@pytest.mark.parametrize(
+    "aggregation, expected",
+    [
+        (Max("a"), {"type": "aggregation", "op": "max", "attr": "a"}),
+        (Min("a"), {"type": "aggregation", "op": "min", "attr": "a"}),
+        (Count(), {"type": "aggregation", "op": "count", "attr": None}),
+        (Count("a"), {"type": "aggregation", "op": "count", "attr": "a"}),
+        (Sum("a"), {"type": "aggregation", "op": "sum", "attr": "a"}),
+        (Avg("a"), {"type": "aggregation", "op": "avg", "attr": "a"}),
+        (Median("a"), {"type": "aggregation", "op": "median", "attr": "a"}),
+    ],
+    ids=["max", "min", "count-star", "count-attr", "sum", "avg", "median"],
+)
+def test_builtin_aggregation_dict_form_is_pinned(
+    aggregation: AggregationFunction, expected: dict
+) -> None:
+    """Each built-in aggregation serializes to a fixed dict and restores as its class.
+    Would fail if an ``op_name`` were renamed (breaking stored plans) or the
+    ``_AGGREGATIONS_BY_OP`` registry mapped an op to the wrong class."""
+    assert aggregation.to_dict() == expected  # exact IR record, literal values
+    restored: AggregationFunction = AggregationFunction.from_dict(expected)  # restore
+    assert type(restored) is type(aggregation)  # exactly the same built-in class
+    assert restored.attribute == expected["attr"]  # attribute carried over
+
+
+def test_mean_serializes_as_avg_and_restores_as_avg():
+    """``Mean`` is a synonym: it serializes as ``"avg"`` and comes back as ``Avg``.
+    Would fail if ``Mean`` got its own op name or if ``"avg"`` restored as ``Mean``."""
+    data: dict = Mean("a").to_dict()  # serialize the synonym
+    assert data["op"] == "avg"  # same op name as Avg
+    assert type(AggregationFunction.from_dict(data)) is Avg  # restored as exactly Avg
+
+
+@pytest.mark.parametrize(
+    "data, message",
+    [
+        (
+            {"type": "aggregation", "op": "stddev", "attr": "a"},
+            "Unknown aggregation op",
+        ),
+        ({"type": "aggregation", "attr": "a"}, "Unknown aggregation op"),
+        ({"type": "aggregation", "op": 3, "attr": "a"}, "Unknown aggregation op"),
+        ({"type": "aggregation", "op": "sum", "attr": None}, "requires an attribute"),
+        ({"type": "aggregation", "op": "sum", "attr": 5}, "must be a string"),
+    ],
+    ids=["unknown-op", "missing-op", "non-string-op", "sum-without-attr", "int-attr"],
+)
+def test_aggregation_from_dict_rejects_malformed_records(
+    data: dict, message: str
+) -> None:
+    """``from_dict`` rejects malformed aggregation records with a ``ValueError``.
+    Would fail if a bad record crashed with ``KeyError``/``TypeError`` or silently
+    produced an aggregation that only fails later at execution time."""
+    with pytest.raises(ValueError, match=message):  # clear error, right reason
+        AggregationFunction.from_dict(data)  # deserialize the malformed record
+
+
+def test_count_from_dict_without_attr_key_restores_count_star():
+    """A ``count`` record without an ``"attr"`` key restores as ``Count()``.
+    Would fail if ``from_dict`` required the ``"attr"`` key (``KeyError``) or
+    restored a different class or a non-``None`` attribute."""
+    data: dict = {"type": "aggregation", "op": "count"}  # "attr" key missing
+    restored: AggregationFunction = AggregationFunction.from_dict(data)  # restore
+    assert type(restored) is Count  # exactly Count, no subclass
+    assert restored.attribute is None  # counts all tuples (COUNT(*))
+    assert repr(restored) == "Count()"  # readable form without attribute
+
+
+@pytest.mark.parametrize(
+    "aggregation",
+    [Sum(None), Max(5), Count(5)],
+    ids=["sum-without-attr", "max-int-attr", "count-int-attr"],
+)
+def test_builtin_aggregation_with_invalid_attribute_is_not_serializable(
+    aggregation: AggregationFunction,
+) -> None:
+    """A built-in aggregation with an invalid attribute is not serializable and stays opaque.
+    Would fail if ``is_serializable`` checked only the class, so that a plan were
+    written which ``from_dict`` later rejects (no attribute / non-string)."""
+    assert aggregation.is_serializable() is False  # invalid attribute -> not in IR
+    with pytest.raises(ValueError, match="is not serializable"):  # refused
+        aggregation.to_dict()  # attempt to serialize
+    users: RF = _users()  # frozen users relation
+    pipeline: aggregate = aggregate(users, x=aggregation)  # build only, no execution
+    root: PlanChild = pipeline.to_plan().root  # extraction must not crash
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    marker: Any = root.params["aggregates"]["x"]  # the serialized aggregation
+    assert isinstance(marker, Opaque)  # falls back to an opaque marker
+    assert _find_opaques(root) == [marker]  # and it is the only one in the plan
+    restored: LogicalPlan = LogicalPlan.from_json(
+        pipeline.to_plan().to_json()
+    )  # JSON round trip must not raise (no from_dict on an invalid record)
+    assert isinstance(restored.root, PlanNode)  # still an operator node
+    assert isinstance(
+        restored.root.params["aggregates"]["x"], Opaque
+    )  # comes back as an opaque marker, not as a broken aggregation
+
+
+def test_count_with_or_without_attribute_stays_serializable():
+    """``Count()`` and ``Count("yob")`` remain serializable under the attribute rule.
+    Would fail if the attribute check in ``is_serializable`` rejected ``None`` for
+    ``Count`` too, turning every ``Count()`` in a plan into an ``Opaque`` marker."""
+    assert Count().is_serializable() is True  # no attribute is fine for Count
+    assert Count("yob").is_serializable() is True  # string attribute is fine
+
+
+class _MyAvg(Avg):
+    """User subclass of a built-in aggregation; it may change the behaviour."""
+
+    def __call__(self, rf: RF) -> Any:
+        """Return a constant instead of the average (behaviour differs from Avg)."""
+        return 0
+
+
+@pytest.mark.parametrize(
+    "aggregation",
+    [AggregationFunction(len, "a"), _MyAvg("a")],
+    ids=["custom-function", "user-subclass"],
+)
+def test_aggregation_to_dict_rejects_non_builtin(
+    aggregation: AggregationFunction,
+) -> None:
+    """``to_dict`` refuses aggregations whose behaviour is not described by op + attr.
+    Would fail if a user subclass serialized under its parent's op name, so that
+    a backend would silently compute the parent's aggregate instead."""
+    with pytest.raises(ValueError, match="is not serializable"):  # refused
+        aggregation.to_dict()  # attempt to serialize
+
+
+def _my_aggregation_fn(values: list) -> int:
+    """Module-level custom aggregation: number of distinct values."""
+    return len(set(values))
+
+
+def test_custom_aggregation_function_becomes_opaque_with_readable_repr():
+    """``AggregationFunction(custom_fn, attr)`` is ``Opaque`` and names the function.
+    Would fail if a custom aggregation were structured (its op is unknown) or if
+    the marker showed only a memory address instead of the function name."""
+    users: RF = _users()  # frozen users relation
+    pipeline: aggregate = aggregate(
+        users, x=AggregationFunction(_my_aggregation_fn, "yob")
+    )  # user-built aggregation over yob
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    marker: Any = root.params["aggregates"]["x"]  # the serialized aggregation
+    assert isinstance(marker, Opaque)  # custom aggregation is opaque
+    assert "_my_aggregation_fn" in marker.repr  # names the wrapped function ...
+    assert "'yob'" in marker.repr  # ... and the attribute
+
+
+class _MySum(Sum):
+    """User subclass of ``Sum`` with its own behaviour."""
+
+    def __call__(self, rf: RF) -> Any:
+        """Sum the attribute twice (behaviour differs from Sum)."""
+        return 2 * super().__call__(rf)
+
+
+def test_user_subclass_of_builtin_aggregation_becomes_opaque():
+    """A user subclass of ``Sum`` is ``Opaque`` in the plan, not structured as ``sum``.
+    Would fail if ``is_serializable`` used ``isinstance`` instead of the exact
+    type, letting a backend run a plain SUM instead of the user's code."""
+    users: RF = _users()  # frozen users relation
+    pipeline: aggregate = aggregate(users, s=_MySum("yob"))  # overridden __call__
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    marker: Any = root.params["aggregates"]["s"]  # the serialized aggregation
+    assert isinstance(marker, Opaque)  # not structured as "sum"
+    assert marker.reason == "callable"  # an instance with __call__, not a lambda
+    assert "_MySum" in marker.repr  # the user class name is shown
+
+
+class _Broken(AggregationFunction):
+    """User subclass that skips ``super().__init__``: no attributes are set."""
+
+    def __init__(self) -> None:
+        """Deliberately do not call ``super().__init__``."""
+        pass
+
+    def __call__(self, rf: RF) -> Any:
+        """Count the tuples."""
+        return len(rf)
+
+
+def test_aggregation_without_super_init_has_repr_and_extracts_as_opaque():
+    """A subclass skipping ``super().__init__`` has a ``repr`` and extracts as Opaque.
+    Would fail if ``__repr__`` read ``self.attribute`` directly (AttributeError),
+    which would crash ``explain()`` and the whole plan extraction."""
+    assert repr(_Broken()) == "_Broken()"  # no attributes -> empty argument list
+    users: RF = _users()  # frozen users relation
+    pipeline: aggregate = aggregate(users, b=_Broken())  # build only
+    root: PlanChild = pipeline.to_plan().root  # extraction must not crash
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    marker: Any = root.params["aggregates"]["b"]  # the serialized aggregation
+    assert isinstance(marker, Opaque)  # user aggregation is opaque
+    assert marker.repr == "_Broken()"  # readable repr recorded in the marker
+
+
+class _MyCountDistinct(AggregationFunction):
+    """Direct user subclass of ``AggregationFunction`` that wraps its own function."""
+
+    def __init__(self, attribute: str) -> None:
+        """Wrap ``_my_aggregation_fn`` over ``attribute``."""
+        super().__init__(_my_aggregation_fn, attribute)
+
+
+@pytest.mark.parametrize(
+    "aggregation, expected",
+    [
+        (_MyAvg("a"), "_MyAvg('a')"),
+        (_MyCountDistinct("a"), "_MyCountDistinct(_my_aggregation_fn, 'a')"),
+        (
+            AggregationFunction(_my_aggregation_fn, "a"),
+            "AggregationFunction(_my_aggregation_fn, 'a')",
+        ),
+    ],
+    ids=["builtin-subclass", "direct-subclass", "plain-aggregation-function"],
+)
+def test_aggregation_repr_shows_wrapped_function_only_for_non_builtins(
+    aggregation: AggregationFunction, expected: str
+) -> None:
+    """The ``repr`` names the wrapped function only outside built-in aggregations.
+    Would fail if a built-in subclass showed ``Avg``'s placeholder ``len`` (misleading)
+    or if a user-wrapped function were hidden from the ``Opaque`` marker."""
+    assert repr(aggregation) == expected  # exact readable form, class name first
+
+
+# -- IR version and JSON round trip of structured params (006) ---------------
+
+
+def test_from_dict_rejects_ir_version_1_plans():
+    """Plans written with the old IR version 1 are rejected with a clear error.
+    Would fail if ``IR_VERSION`` were not raised, so that an old plan with
+    aggregations as plain dicts would be read as if it were current."""
+    plan_dict: dict = extract_plan(_users()).to_dict()  # a valid current plan
+    plan_dict["ir_version"] = 1  # pretend it was written by the old version
+    expected: str = f"Unsupported IR version: 1 (expected {IR_VERSION})"  # message
+    with pytest.raises(ValueError, match=re.escape(expected)):  # rejected
+        LogicalPlan.from_dict(plan_dict)  # read the old plan
+
+
+def test_project_and_group_by_keys_survive_json_roundtrip():
+    """``project`` attributes and ``group_by`` keys come back as plain lists from JSON.
+    Would fail if these new structured params were dropped or turned into
+    ``Opaque`` markers by the IR (de)serialization."""
+    users: RF = _users()  # frozen users relation
+    projected: project = project(users, "name", "department")  # two attributes
+    grouped: group_by = group_by(projected, "department")  # group the projection
+    restored: LogicalPlan = LogicalPlan.from_json(grouped.to_plan().to_json())  # JSON
+    root: PlanChild = restored.root  # the group_by node
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.params["aggregate_keys"] == ["department"]  # grouping key restored
+    inner: PlanChild = root.inputs[0]  # the project node below it
+    assert isinstance(inner, PlanNode)  # an operator node, not a leaf
+    assert inner.params["attributes"] == ["name", "department"]  # restored

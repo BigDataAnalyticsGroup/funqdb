@@ -26,6 +26,12 @@ from typing import Any, Iterable, Mapping
 # filter_items(filter_values(af, ...), ...) without flagging a type error.
 type OperatorInput[T] = T | Operator[Any, T]
 
+#: Factory parameters only choose the class of the result AF; they carry no query
+#: logic and are almost always lambdas, so they are omitted from the plan IR.
+_PLAN_OMITTED_PARAMS: frozenset[str] = frozenset(
+    {"output_factory", "output_factory_nested", "output_factory_leaf"}
+)
+
 
 class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](ABC):
     """Signature for an operator that transforms inputs to outputs.
@@ -40,8 +46,10 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](ABC):
     default implementation uses reflection via ``_plan_inputs`` /
     ``_plan_params`` and covers the common case where a subclass has one
     ``input_function`` attribute and stores all other configuration as plain
-    public attributes. Subclasses with unusual parameter shapes (e.g. factory
-    closures that should not appear in the plan) may override the two hooks.
+    public attributes. Subclasses with unusual parameter shapes (e.g. an
+    internal lambda that should be replaced by the structured parameters it
+    was built from, as in ``project`` and ``group_by``) may override the two
+    hooks.
     """
 
     _result: OUTPUT_AttributeFunction | None = None
@@ -89,14 +97,17 @@ class Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction](ABC):
         """Return the operator's named parameters for extraction.
 
         Default: every public instance attribute except ``input_function``
-        (which is surfaced as a subplan input, not a parameter) and the
-        private ``_result`` cache. Subclasses may override this to omit
+        (which is surfaced as a subplan input, not a parameter), the
+        private ``_result`` cache, and the factory parameters listed in
+        ``_PLAN_OMITTED_PARAMS``. Subclasses may override this to omit
         non-serializable fields or add derived ones.
         """
         return {
             k: v
             for k, v in vars(self).items()
-            if k != "input_function" and not k.startswith("_")
+            if k != "input_function"
+            and not k.startswith("_")
+            and k not in _PLAN_OMITTED_PARAMS
         }
 
     def to_plan(self):
