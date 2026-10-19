@@ -46,11 +46,11 @@ users: RF = RF({
     3: TF({"name": "John",  "yob": 2003}),
 })
 
-# k-smallest: youngest 2 users
+# k-smallest yob: oldest 2 users
 top2 = subset(users, ranking_key=lambda i: i.value.yob, k=2).result
 # → { 1: Horst(1972), 2: Tom(1983) }
 
-# reverse=True: 2 oldest users
+# reverse=True (k-largest yob): youngest 2 users
 bottom2 = subset(users, ranking_key=lambda i: i.value.yob, k=2, reverse=True).result
 # → { 3: John(2003), 2: Tom(1983) }
 ```
