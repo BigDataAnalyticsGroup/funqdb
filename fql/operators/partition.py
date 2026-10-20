@@ -22,6 +22,8 @@
 from typing import Callable, Any, Mapping
 
 from fdm.attribute_functions import RF, DBF, CompositeForeignObject
+from fql.expressions import UNDEFINED, Attr, Composite, _evaluate_on_item
+from fql.predicates.predicates import Predicate
 from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
 
@@ -32,7 +34,13 @@ class partition(Operator[RF, DBF]):
     #TODO: generic type: this operator can also partition an entire database...
 
     @param input_function: The input RF to partition.
-    @param partitioning_function: A function that takes an Item and returns the partition key for that item.
+    @param partitioning_function: A function that takes an Item and returns the partition key for that item, or a
+    structured key from ``fql.expressions`` (``Attr``, ``Key``, ``Composite``) or a ``Predicate``. A tuple whose
+    expression key is ``UNDEFINED`` (attribute not mapped) is dropped. A ``Predicate`` is evaluated on the item's value
+    and yields a bool, never ``UNDEFINED`` (two-valued logic of 004: a comparison, ``Like``, ``In`` or ``Exists`` over
+    a missing attribute gives ``False``; ``Missing(...)`` or the negation of a comparison gives ``True``); this keeps
+    ``partition(P) == {True: filter_values(P), False: filter_values(Not(P))}`` (empty partitions are absent). Like
+    ``filter_values``, a predicate may still raise on a wrongly typed value.
     @param output_factory: If set, this factory function will be used to create the output DBF instance. If not set,
     a new DBF instance will be created.
     """
@@ -41,7 +49,7 @@ class partition(Operator[RF, DBF]):
         self,
         input_function: OperatorInput[RF],
         *,
-        partitioning_function: Callable[[Item], Any],
+        partitioning_function: Callable[[Item], Any] | Predicate,
         output_factory: Callable[..., DBF] = None,
     ):
         self.input_function = input_function
@@ -56,7 +64,9 @@ class partition(Operator[RF, DBF]):
         output_function: DBF = self.output_factory(None)
         item: Item
         for item in input_function:
-            partition_key = self.partitioning_function(item)
+            partition_key = _evaluate_on_item(self.partitioning_function, item)
+            if partition_key is UNDEFINED:
+                continue  # attribute not mapped -> tuple does not contribute
             if partition_key not in output_function:
                 output_function[partition_key] = RF(frozen=False)
             output_function[partition_key][item.key] = item.value
@@ -72,7 +82,12 @@ class partition(Operator[RF, DBF]):
 class group_by(partition):
     """Partitions an input RF into a DBF based on the equality of the given keys (the values mapped to by those keys).
     Thus, this operator simulates the traditional group-by in relational algebra and SQL. The partitioning function is
-    automatically derived from the specified grouping keys (attributes)."""
+    automatically derived from the specified grouping keys (attributes): ``Attr(key)`` for one key (scalar partition
+    keys), ``Composite(Attr(k1), ...)`` for several (tuple partition keys).
+
+    A tuple that does not map a grouping attribute is dropped (FDM has no NULL group). Keys must be strings and are read
+    as attribute paths (``.`` or ``__``); invalid keys raise ``ValueError`` here. Consequently a misspelt key, or values
+    that are not attribute functions, give an empty result instead of an error."""
 
     # TODO: generic type: this operator can also partition an entire database...
 
@@ -84,19 +99,18 @@ class group_by(partition):
 
         super().__init__(
             input_function,
-            # convert the grouping function to a partitioning function that returns a tuple of the grouping keys for
-            # the specified attributes:
-            partitioning_function=lambda item: (
-                tuple(item.value[attribute] for attribute in aggregate_keys)
+            # one key -> scalar partition key; several -> tuple of the key values:
+            partitioning_function=(
+                Composite(*(Attr(attribute) for attribute in aggregate_keys))
                 if len(aggregate_keys) > 1
-                else item.value[aggregate_keys[0]]
+                else Attr(aggregate_keys[0])
             ),
         )
         self.aggregate_keys: tuple[str, ...] = aggregate_keys
 
     def _plan_params(self) -> Mapping[str, Any]:
-        """Hide the internal partitioning lambda; ``aggregate_keys`` reaches the
-        plan via the default public-attribute scan."""
+        """Hide the derived partitioning key; ``aggregate_keys`` carries the same
+        information and reaches the plan via the default public-attribute scan."""
         params: dict[str, Any] = dict(super()._plan_params())
         del params["partitioning_function"]
         return params

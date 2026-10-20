@@ -17,7 +17,7 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
 #
-"""Unit tests for the structured expressions ``Attr`` and ``Key`` (007)."""
+"""Unit tests for the structured expressions ``Attr``, ``Key`` and ``Composite``."""
 
 import copy
 import pickle
@@ -26,8 +26,8 @@ from typing import Any, Callable
 import pytest
 
 from fdm.attribute_functions import TF
-from fql.expressions import UNDEFINED, Attr, Expression, Key
-from fql.predicates.predicates import _UNDEFINED
+from fql.expressions import UNDEFINED, Attr, Composite, Expression, Key
+from fql.predicates.predicates import _UNDEFINED, Lt
 from fql.util import Item
 
 
@@ -269,7 +269,153 @@ def test_from_dict_on_subclass_dispatches_on_op() -> None:
 def test_is_serializable_only_for_exact_builtin_classes(
     expression: Expression, expected: bool
 ) -> None:
-    """Only exactly ``Attr`` and ``Key`` are serializable, not user subclasses.
+    """Only the exact built-in classes are serializable, not user subclasses.
     Would fail if ``is_serializable`` used ``isinstance``: a subclass overriding
     ``__call__`` would be written as a plain ``Attr`` and lose its logic."""
     assert expression.is_serializable() is expected  # exact-type rule
+
+
+# -- Composite (008) -----------------------------------------------------------
+
+
+def test_composite_rejects_zero_components() -> None:
+    """``Composite()`` without any component is rejected when it is created.
+    Would fail if an empty composite were accepted and every item got the key ``()``."""
+    with pytest.raises(
+        ValueError, match="needs at least one component"
+    ):  # eager check in the constructor
+        Composite()  # no components at all
+
+
+@pytest.mark.parametrize(
+    "component",
+    ["a", lambda item: 1],
+    ids=["bare-string", "lambda"],
+)
+def test_composite_rejects_non_expression_component(component: Any) -> None:
+    """``Composite`` rejects a component that is neither an expression nor a predicate.
+    Would fail if a bare attribute name or a lambda were accepted: the string would
+    fail only at evaluation, the lambda would make the composite unserializable."""
+    with pytest.raises(
+        TypeError, match="must be expressions or predicates"
+    ):  # eager check in the constructor
+        Composite(component)  # construction alone must fail
+
+
+@pytest.mark.parametrize(
+    "record, message",
+    [
+        (
+            {"type": "expression", "op": "composite"},
+            "non-empty list of components",
+        ),
+        (
+            {"type": "expression", "op": "composite", "components": []},
+            "non-empty list of components",
+        ),
+        (
+            {
+                "type": "expression",
+                "op": "composite",
+                "components": [{"type": "expression", "attr": "a"}],
+            },
+            "Unknown expression op",  # Expression.from_dict's own ValueError
+        ),
+        (
+            {
+                "type": "expression",
+                "op": "composite",
+                "components": [{"type": "column", "op": "attr", "attr": "a"}],
+            },
+            "Malformed composite component",
+        ),
+        (
+            {
+                "type": "expression",
+                "op": "composite",
+                "components": [{"type": "predicate", "op": "gt"}],
+            },
+            "Malformed composite component",
+        ),  # predicate record without attr / value: Predicate.from_dict's KeyError
+        (
+            {
+                "type": "expression",
+                "op": "composite",
+                "components": [{"type": "predicate", "op": "not", "predicate": 5}],
+            },
+            "Malformed composite component",
+        ),  # wrong shape below op: Predicate.from_dict's TypeError
+    ],
+    ids=[
+        "missing-components",
+        "empty-components",
+        "component-without-op",
+        "component-unknown-type",
+        "predicate-component-without-fields",
+        "predicate-component-wrong-shape",
+    ],
+)
+def test_composite_from_dict_rejects_malformed_record(
+    record: dict, message: str
+) -> None:
+    """``Expression.from_dict`` raises ``ValueError`` for a malformed composite record.
+    Would fail if a malformed composite, or a malformed predicate record nested in
+    it, raised ``KeyError`` / ``TypeError`` instead of one clear error type."""
+    with pytest.raises(ValueError, match=message):  # one clear error type
+        Expression.from_dict(record)  # read the malformed record
+
+
+class _MyComposite(Composite):
+    """A user subclass of ``Composite`` (could override ``__call__``)."""
+
+
+@pytest.mark.parametrize(
+    "composite",
+    [_MyComposite(Attr("yob")), Composite(Attr("name"), _DoubledYob("yob"))],
+    ids=["composite-subclass", "user-attr-component"],
+)
+def test_composite_with_user_subclass_is_not_serializable(
+    composite: Composite,
+) -> None:
+    """A ``Composite`` subclass or a composite with a user ``Attr`` subclass is opaque.
+    Would fail if the check used ``isinstance`` or ignored the components, so the
+    plan would hold a plain record that computes something different."""
+    assert composite.is_serializable() is False  # stays Opaque in the plan
+
+
+def test_nested_composite_repr_is_readable() -> None:
+    """``repr`` of a nested composite reads like the nested constructor calls.
+    Would fail if an inner composite or predicate fell back to the default
+    ``<... object at 0x...>`` form."""
+    composite: Composite = Composite(
+        Attr("dept"), Composite(Key(), Lt("yob", 1980))
+    )  # a composite inside a composite
+    assert (
+        repr(composite) == "Composite(Attr('dept'), Composite(Key(), Lt('yob', 1980)))"
+    )  # exactly as written by the user
+
+
+def test_nested_composite_returns_nested_tuple_and_propagates_undefined() -> None:
+    """A nested ``Composite`` yields a nested tuple, and ``UNDEFINED`` from the inner
+    composite makes the outer one ``UNDEFINED`` as well.
+    Would fail if the inner tuple were flattened into the outer one, or if the outer
+    composite returned ``("Ann", UNDEFINED)`` (the tuple would not be dropped)."""
+    item: Item = _employee()  # key 7, name Ann, yob 1970, no salary
+    assert Composite(Attr("name"), Composite(Key(), Lt("yob", 1980)))(item) == (
+        "Ann",
+        (7, True),
+    )  # inner composite stays a nested tuple
+    assert (
+        Composite(Attr("name"), Composite(Key(), Attr("salary")))(item) is UNDEFINED
+    )  # no salary -> inner UNDEFINED -> outer UNDEFINED
+
+
+def test_composite_with_predicate_component_keeps_tuple_missing_the_attribute() -> None:
+    """A predicate component over a missing attribute yields ``False``, not ``UNDEFINED``.
+    Would fail if ``Composite`` treated a predicate like an ``Attr`` and dropped the
+    tuple (decision 008: ``Composite(Attr("a"), Gt("b", 1))`` gives ``(a, False)``)."""
+    item: Item = _employee()  # key 7, name Ann, no salary mapped
+    assert Composite(Attr("name"), Lt("salary", 1))(item) == (
+        "Ann",
+        False,
+    )  # kept, with False for the comparison over the missing salary

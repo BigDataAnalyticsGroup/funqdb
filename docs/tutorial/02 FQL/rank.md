@@ -43,11 +43,15 @@ ranked: RF = rank_by(users, ranking_key=lambda i: i.value.yob).result
 - `ranking_key`: a callable mapping an `Item` (key + value) to a comparable
   value. Analogous to Python's `sorted(..., key=…)`. Instead of a lambda, a
   structured key from `fql.expressions` can be used: `Attr("yob")` (an
-  attribute of the value) or `Key()` (the item's key). On ordinary tuples it
-  gives the same order as the equivalent lambda but keeps the plan free of
-  `Opaque` markers. Items without the ranking attribute are dropped (there is
-  no NULL to sort first or last), so the result can have fewer ranks than the
-  input has items. `Attr` only counts an attribute as present if the tuple
+  attribute of the value), `Key()` (the item's key),
+  `Composite(Attr("dept"), Attr("yob"))` (lexicographic, one direction for all
+  positions) or a `Predicate` (evaluated on the value, `False` before `True`).
+  On ordinary tuples it gives the same order as the equivalent lambda but keeps
+  the plan free of `Opaque` markers. Items for which an `Attr` / `Composite`
+  key is undefined (attribute missing) are dropped — there is no NULL to sort
+  first or last — so the result can have fewer ranks than the input has items;
+  a `Predicate` key never drops (a missing attribute gives `False` for a
+  comparison). `Attr` only counts an attribute as present if the tuple
   maps it (`"yob" in tf`); a value that only comes from a default value
   function, without a declared domain, counts as absent.
 - `reverse=True`: rank descending (largest first).
@@ -107,7 +111,8 @@ first with `key_to_value` (e.g. `key_to_value(users, "user_id")`, see
 Items with equal `ranking_key` therefore retain their input iteration
 order in the result. If you need a deterministic total order even
 across runs of an unordered store, fold a tiebreaker into `ranking_key`
-itself (e.g. return a tuple `(yob, name)`).
+itself (e.g. `Composite(Attr("yob"), Attr("name"))`, or a lambda returning
+the tuple `(yob, name)`).
 
 ### items_sorted_by: AF → Iterator[Item]
 
@@ -147,8 +152,8 @@ of the algebra **explicit at every call site**.
 
 - `key`: a callable mapping an `Item` to a comparable value. Required;
   must be callable or a `TypeError` is raised eagerly. Structured keys
-  (`Attr`, `Key`) work as for `rank_by`; items without the attribute are
-  skipped.
+  (`Attr`, `Key`, `Composite`, a `Predicate`) work as for `rank_by`; items
+  for which an expression key is undefined are skipped.
 - `reverse=True`: yield descending.
 
 #### Important properties

@@ -26,12 +26,15 @@ from fql.operators.APIs import Operator, OperatorInput
 from fql.operators.aggregates import aggregate
 from fql.operators.partition import group_by, partition
 from fql.operators.transforms import transform_items
+from fql.predicates.predicates import Predicate
 from fql.util import Item
 
 
 class group_by_aggregate(Operator[RF, RF]):
     """Group an input RF by the equality of the given keys (the values mapped to by those keys) and aggregate the
-    groups using the specified aggregation functions."""
+    groups using the specified aggregation functions. Grouping follows ``group_by``: tuples without a grouping
+    attribute are dropped. The ``group_by`` is built lazily, so invalid keys raise ``ValueError`` only when the result
+    is computed."""
 
     def __init__(
         self, input_function: OperatorInput[RF], *aggregate_keys, **aggregates
@@ -58,7 +61,9 @@ class group_by_aggregate(Operator[RF, RF]):
 
 
 class partition_by_aggregate(Operator[RF, RF]):
-    """Group an input RF by a grouping function and aggregate the groups using an aggregation function."""
+    """Group an input RF by a grouping function and aggregate the groups using an aggregation function. The
+    partitioning function follows the key rules of ``partition`` (``Attr`` / ``Composite`` / ``Predicate`` or a
+    lambda); the per-item ``aggregation_function`` is still a plain callable."""
 
     # TODO: generic input and output AFs: this operator can also be used to partition an entire database and aggregate
     # those partitions
@@ -67,7 +72,7 @@ class partition_by_aggregate(Operator[RF, RF]):
         self,
         input_function: OperatorInput[RF],
         *,
-        partitioning_function: Callable[[Item], Any],
+        partitioning_function: Callable[[Item], Any] | Predicate,
         aggregation_function: Callable[[RF], Any],
     ):
         self.input_function = input_function

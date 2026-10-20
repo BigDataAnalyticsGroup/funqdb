@@ -60,9 +60,10 @@ Internally: all items are sorted by `ranking_key`, then the slice
 preserved in the output AF.
 
 Instead of a lambda, a structured ranking key from `fql.expressions` can be
-used, e.g. `subset(users, ranking_key=Attr("yob"), k=2)` or `Key()` for the
-item's key. It gives the same order but keeps the plan free of `Opaque`
-markers. Items without the ranking attribute are dropped before the slice
+used, e.g. `subset(users, ranking_key=Attr("yob"), k=2)`, `Key()` for the
+item's key, `Composite(...)` for several attributes or a `Predicate`. It gives
+the same order but keeps the plan free of `Opaque` markers. Items for which an
+expression key is undefined (attribute missing) are dropped before the slice
 (there is no NULL to sort first or last), so fewer than `k` items may be
 returned.
 
@@ -70,7 +71,7 @@ returned.
 
 | Parameter        | Type                    | Default | Description                                                                                       |
 |:-----------------|:------------------------|:--------|:--------------------------------------------------------------------------------------------------|
-| `ranking_key`    | `Callable[[Item], Any]` | -       | Maps each `Item` to a comparable value used for sorting; or `Attr` / `Key` (items without the attribute are dropped). |
+| `ranking_key`    | `Callable[[Item], Any]` | -       | Maps each `Item` to a comparable value used for sorting; or `Attr` / `Key` / `Composite` / a `Predicate` (see above). |
 | `k`              | `int`                   | -       | Number of items to keep. Must be ≥ 1.                                                             |
 | `offset`         | `int`                   | `0`     | Number of items to skip from the start of the sorted list. Must be ≥ 0. Only valid in top-k mode. |
 | `reverse`        | `bool`                  | `False` | If `True`, sort descending (largest first).                                                       |

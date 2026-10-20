@@ -39,7 +39,7 @@ from typing import Any, Callable
 import pytest
 
 from fdm.attribute_functions import RF, DBF
-from fql.expressions import Attr, Expression, Key
+from fql.expressions import Attr, Composite, Expression, Key
 from fql.operators.APIs import Operator
 from fql.operators.aggregates import (
     AggregationFunction,
@@ -62,7 +62,7 @@ from fql.operators.set_operations import cogroup, intersect, minus, union
 from fql.operators.subsets import subset
 from fql.plan import LogicalPlan, LeafRef, Opaque, PlanNode, extract, extract_plan
 from fql.plan.ir import IR_VERSION, PlanChild, _value_from_dict, _value_to_dict
-from fql.predicates.predicates import Eq
+from fql.predicates.predicates import Eq, Lt
 from tests.lib import _create_testdata
 
 
@@ -538,14 +538,16 @@ def test_project_plan_shows_attribute_names():
 
 def test_group_by_plan_shows_grouping_keys():
     """``group_by`` exposes its grouping keys in the plan, without any ``Opaque``.
-    Would fail if the derived partitioning lambda or the default output factory
-    showed up in the plan."""
+    Would fail if the derived partitioning key (``Attr`` / ``Composite``) or the
+    default output factory showed up in the plan."""
     users: RF = _users()  # frozen users relation
     pipeline: group_by = group_by(users, "department")  # one group per department
     root: PlanChild = pipeline.to_plan().root  # extract without executing
     assert isinstance(root, PlanNode)  # an operator node, not a leaf
     assert root.params["aggregate_keys"] == ["department"]  # grouping key visible
-    assert "partitioning_function" not in root.params  # derived lambda hidden
+    assert (
+        "partitioning_function" not in root.params
+    )  # derived key (Attr/Composite) hidden
     assert "output_factory" not in root.params  # default factory lambda hidden
     assert _find_opaques(root) == []  # nothing opaque left in the whole plan
 
@@ -896,13 +898,17 @@ def test_aggregation_repr_shows_wrapped_function_only_for_non_builtins(
 # -- IR version and JSON round trip of structured params (006) ---------------
 
 
-def test_from_dict_rejects_ir_version_1_plans():
-    """Plans written with the old IR version 1 are rejected with a clear error.
-    Would fail if ``IR_VERSION`` were not raised, so that an old plan with
-    aggregations as plain dicts would be read as if it were current."""
+@pytest.mark.parametrize("old_version", [1, 2, 3])
+def test_from_dict_rejects_old_ir_version_plans(old_version: int) -> None:
+    """Plans written with an older IR version (1, 2 or 3) are rejected with a clear error.
+    Would fail if ``IR_VERSION`` had not been raised with each format change, so an
+    old plan (plain-dict aggregations, lambda-only ranking keys, or predicate keys
+    evaluated on the item) would be read as if it were current."""
     plan_dict: dict = extract_plan(_users()).to_dict()  # a valid current plan
-    plan_dict["ir_version"] = 1  # pretend it was written by the old version
-    expected: str = f"Unsupported IR version: 1 (expected {IR_VERSION})"  # message
+    plan_dict["ir_version"] = old_version  # pretend an older version wrote it
+    expected: str = (
+        f"Unsupported IR version: {old_version} (expected {IR_VERSION})"  # message
+    )
     with pytest.raises(ValueError, match=re.escape(expected)):  # rejected
         LogicalPlan.from_dict(plan_dict)  # read the old plan
 
@@ -1017,12 +1023,50 @@ def test_user_subclass_of_attr_extracts_as_opaque():
     assert _find_opaques(root) == [key]  # and the only marker in the plan
 
 
-def test_from_dict_rejects_ir_version_2_plans():
-    """Plans written with IR version 2 (before structured ranking keys) are rejected.
-    Would fail if ``IR_VERSION`` had not been raised to 3, so a version-2 plan
-    with lambda-only ranking keys would be read as if it were current."""
-    plan_dict: dict = extract_plan(_users()).to_dict()  # a valid current plan
-    plan_dict["ir_version"] = 2  # pretend it was written by the previous version
-    expected: str = f"Unsupported IR version: 2 (expected {IR_VERSION})"  # message
-    with pytest.raises(ValueError, match=re.escape(expected)):  # rejected
-        LogicalPlan.from_dict(plan_dict)  # read the old plan
+# -- Structured partition keys: Composite (008) -------------------------------
+
+#: The IR record of ``Composite(Attr("department"), Lt("yob", 1980))``.
+_COMPOSITE_RECORD: dict = {
+    "type": "expression",
+    "op": "composite",
+    "components": [
+        {"type": "expression", "op": "attr", "attr": "department"},
+        {"type": "predicate", "op": "lt", "attr": "yob", "value": 1980},
+    ],
+}
+
+
+def _partition_by_composite() -> partition:
+    """A partition of the users by department and "born before 1980" (not executed)."""
+    return partition(
+        _users(), partitioning_function=Composite(Attr("department"), Lt("yob", 1980))
+    )
+
+
+def test_partition_with_composite_key_extracts_without_opaque():
+    """``partition`` with a ``Composite`` of an ``Attr`` and a ``Lt`` is fully structured.
+    Would fail if ``Composite`` were not recognized as serializable (e.g. because
+    of its predicate component) or wrote a different IR record."""
+    root: PlanChild = _partition_by_composite().to_plan().root  # no execution
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+    key: Any = root.params["partitioning_function"]  # the extracted key
+    assert key.to_dict() == _COMPOSITE_RECORD  # exact nested IR record
+
+
+def test_partition_with_composite_key_survives_json_roundtrip():
+    """A JSON round trip restores exactly the ``Composite`` partition key.
+    Would fail if ``_value_from_dict`` did not restore the ``"composite"`` op,
+    or restored its components as plain dicts instead of Attr / Lt objects."""
+    restored: LogicalPlan = LogicalPlan.from_json(
+        _partition_by_composite().to_plan().to_json()
+    )  # serialize to JSON text and read it back
+    root: PlanChild = restored.root  # the partition node
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    key: Any = root.params["partitioning_function"]  # the restored key
+    assert type(key) is Composite  # exactly Composite, no dict
+    assert [type(c) for c in key.components] == [
+        Attr,
+        Lt,
+    ]  # components restored as objects, not as plain dicts
+    assert key.to_dict() == _COMPOSITE_RECORD  # same components, same order

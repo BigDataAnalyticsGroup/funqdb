@@ -47,9 +47,9 @@ and backend-agnostic:
 Nothing in this module depends on any runtime Operator or AttributeFunction
 state; it is pure data. The only exception is (de)serializing structured
 parameter values: ``Predicate``s, built-in aggregation functions and
-expressions (``Attr``, ``Key``) are imported lazily from ``fql.predicates``,
-``fql.operators.aggregates`` and ``fql.expressions`` to convert them to and from
-their dict form. The only place that knows how to *build* an IR from an
+expressions (``Attr``, ``Key``, ``Composite``) are imported lazily from
+``fql.predicates``, ``fql.operators.aggregates`` and ``fql.expressions`` to
+convert them to and from their dict form. The only place that knows how to *build* an IR from an
 operator tree is ``fql.plan.extract``.
 """
 
@@ -66,7 +66,7 @@ from typing import Any, Literal, Union
 #: Bump this when the on-wire IR format changes in a way that older readers
 #: cannot handle, so that future consumers can refuse or migrate old plans
 #: instead of silently misinterpreting them.
-IR_VERSION: int = 3
+IR_VERSION: int = 4
 
 
 # -- Nodes --------------------------------------------------------------------
@@ -191,9 +191,9 @@ class PlanNode:
     #: JSON-ish keyword parameters. Values are one of: primitive
     #: (str/int/float/bool/None), tuple/list of those, a nested dict of
     #: those, a structured ``Predicate``, a built-in aggregation function
-    #: (``Count``, ``Sum``, ...), a built-in expression (``Attr``, ``Key``),
-    #: or an ``Opaque`` marker. The extractor is responsible for ensuring
-    #: this invariant holds; see
+    #: (``Count``, ``Sum``, ...), a built-in expression (``Attr``, ``Key``,
+    #: ``Composite``), or an ``Opaque`` marker. The extractor is responsible
+    #: for ensuring this invariant holds; see
     #: ``fql.plan.extract._serialize_param``.
     params: Mapping[str, Any] = field(default_factory=dict)
 
@@ -239,7 +239,8 @@ def _value_to_dict(value: Any) -> Any:
 
     if isinstance(value, AggregationFunction) and value.is_serializable():
         return value.to_dict()
-    # Built-in expressions (Attr, Key) serialize to {"type": "expression", ...}.
+    # Built-in expressions (Attr, Key, Composite) serialize to
+    # {"type": "expression", ...}.
     from fql.expressions import Expression
 
     if isinstance(value, Expression) and value.is_serializable():

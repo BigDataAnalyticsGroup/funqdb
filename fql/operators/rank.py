@@ -81,14 +81,15 @@ from typing import Any, Callable, Iterator
 
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import RF
-from fql.expressions import UNDEFINED
+from fql.expressions import UNDEFINED, _evaluate_on_item
 from fql.operators.APIs import Operator, OperatorInput
+from fql.predicates.predicates import Predicate
 from fql.util import Item
 
 
 def _sorted_items(
     input_function: AttributeFunction,
-    ranking_key: Callable[[Item], Any],
+    ranking_key: Callable[[Item], Any] | Predicate,
     reverse: bool,
 ) -> list[Item]:
     """Sort the items of ``input_function`` by ``ranking_key``, stably.
@@ -103,12 +104,13 @@ def _sorted_items(
     behaviour is unchanged (a missing attribute still raises).
 
     @param input_function: The AF whose items are sorted.
-    @param ranking_key: Maps an ``Item`` to a comparable value or ``UNDEFINED``.
+    @param ranking_key: Maps an ``Item`` to a comparable value or ``UNDEFINED``;
+        a ``Predicate`` is evaluated on the item's value (``False`` < ``True``).
     @param reverse: If ``True``, sort descending.
     @return: The items with a defined key, in sorted order.
     """
     keyed: list[tuple[Any, Item]] = [
-        (ranking_key(item), item) for item in input_function
+        (_evaluate_on_item(ranking_key, item), item) for item in input_function
     ]
     defined: list[tuple[Any, Item]] = [
         (sort_key, item) for sort_key, item in keyed if sort_key is not UNDEFINED
@@ -139,7 +141,7 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self,
         input_function: OperatorInput[INPUT_AttributeFunction],
         *,
-        ranking_key: Callable[[Item], Any],
+        ranking_key: Callable[[Item], Any] | Predicate,
         reverse: bool = False,
         output_factory: Callable[..., OUTPUT_AttributeFunction] | None = None,
     ):
@@ -150,10 +152,12 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             whose result is one.
         @param ranking_key: A function that maps an :class:`Item` to a
             comparable value. Analogous to Python's ``sorted(..., key=…)``.
-            A structured expression such as ``Attr("yob")`` or ``Key()``
-            (``fql.expressions``) keeps the plan free of ``Opaque``; items for
-            which it yields ``UNDEFINED`` are dropped, so the result may have
-            fewer ranks than the input has items.
+            A structured expression such as ``Attr("yob")``, ``Key()`` or
+            ``Composite(...)`` (``fql.expressions``, lexicographic, one global
+            direction) or a ``Predicate`` (evaluated on the item's value,
+            ``False`` sorts before ``True``) keeps the plan free of ``Opaque``;
+            items for which an expression yields ``UNDEFINED`` are dropped, so
+            the result may have fewer ranks than the input has items.
         @param reverse: If ``True``, rank in descending order of
             ``ranking_key`` (largest first). Default ``False``.
         @param output_factory: Optional factory for the output AF. If
@@ -207,7 +211,7 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 def items_sorted_by(
     input_function: AttributeFunction,
     *,
-    key: Callable[[Item], Any],
+    key: Callable[[Item], Any] | Predicate,
     reverse: bool = False,
 ) -> Iterator[Item]:
     """Yield the items of ``input_function`` in user-defined sorted order.
@@ -237,9 +241,10 @@ def items_sorted_by(
 
     @param input_function: The AF whose items should be yielded in order.
     @param key: A callable that maps an :class:`Item` to a comparable
-        value, analogous to ``sorted(..., key=…)``. With a structured
-        expression such as ``Attr("yob")``, items for which it yields
-        ``UNDEFINED`` are skipped.
+        value, analogous to ``sorted(..., key=…)``. Structured keys work as
+        for ``rank_by``: ``Attr`` / ``Key`` / ``Composite`` (items for which
+        they yield ``UNDEFINED`` are skipped) or a ``Predicate`` (evaluated on
+        the value, ``False`` before ``True``).
     @param reverse: If ``True``, yield items in descending order of
         ``key``. Default ``False``.
     @return: An :class:`Iterator` over :class:`Item` instances. The

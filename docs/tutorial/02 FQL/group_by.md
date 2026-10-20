@@ -33,6 +33,12 @@ grouped2 = group_by(employees, "dept", "salary").result
 # partition key is ("eng", 90), ("eng", 80), ("sales", 70), etc.
 ```
 
+Grouping keys are attribute paths (`"dept"`, `"org.name"` or `"org__name"`). A tuple that does not map a
+grouping attribute is **dropped** — there is no NULL group. Consequently a misspelt key gives an empty result
+rather than an error, and an attribute whose name itself contains `.` or `__` cannot be used as a grouping key
+(it is read as a path). Internally `group_by` uses the structured keys `Attr` / `Composite` (see
+[partition](partition.md)), so its plan contains no `Opaque` marker.
+
 ### group_by_aggregate — group then aggregate in one step
 
 Combines ``group_by`` with ``aggregate`` into a single operator. The result

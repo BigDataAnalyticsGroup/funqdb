@@ -283,6 +283,9 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` *Structured ranking keys `Attr` / `Key` (serializable, plan without `Opaque`)*  
   `Attr("yob")` (attribute path of the item's value, dot or dunder form) and `Key()` (the item's key) from `fql.expressions` are drop-in replacements for ranking-key lambdas in `rank_by`, `subset` (top-k, also `top`/`bottom`) and `items_sorted_by`. They serialize to the plan IR as `{"type": "expression", ...}`. Items whose ranking attribute is not mapped are dropped instead of being sorted first/last (no NULL semantics); lambda keys keep their behaviour. Decision: `docs/changes/007-structured-ranking-keys/`.
 
+- `[✅]` *Structured partition keys: `Attr`, `Composite`, `Predicate` in `partition`; `group_by` drops tuples without the grouping attribute*  
+  `partition` accepts `Attr`, `Key`, `Composite` (from `fql.expressions`) or a `Predicate` as partitioning function; a `Predicate` is evaluated on the value and yields a bool (a comparison over a missing attribute gives `False`, `Missing(...)` gives `True`; `partition(P)` equals `{True: filter_values(P), False: filter_values(Not(P))}`), an expression key of `UNDEFINED` drops the tuple. `group_by` / `group_by_aggregate` build their key from `Attr` / `Composite` and drop tuples without a grouping attribute instead of raising. `Composite` and a bare `Predicate` also work as ranking keys. Plans stay free of `Opaque`; IR version 4. Decision: `docs/changes/008-structured-partition-keys/`.
+
 ### Set Operations
 
 - `[✅]` ***union** / **V** — combine ≥2 AFs by keys; warns on duplicate key overwrite*  

@@ -29,20 +29,25 @@ without the accessed attribute does not contribute to the operator reading it
 (see ``docs/changes/004-undefined-attribute-semantics/DECISION.md``). Every
 consumer of an expression must handle this marker.
 
-Scope: for now ``Attr`` and ``Key`` are meant as ranking keys of ``rank_by``,
-``subset`` (top-k) and ``items_sorted_by``, which drop items whose key is
-``UNDEFINED``. Other operators (e.g. ``partition``) do not yet define a rule for
-the marker; there an unmapped attribute would silently form its own group.
+Scope: ``Attr``, ``Key`` and ``Composite`` are meant as ranking keys of
+``rank_by``, ``subset`` (top-k) and ``items_sorted_by`` and as partition keys of
+``partition`` (and therefore ``group_by``); all of them drop items whose key is
+``UNDEFINED``. A ``Predicate`` may be used as a key too: it is evaluated on the
+item's value and yields a bool, never ``UNDEFINED`` (two-valued logic of 004:
+a comparison, ``Like``, ``In`` or ``Exists`` over a missing attribute gives
+``False``; ``Missing(...)`` or the negation of a comparison gives ``True``;
+``And`` / ``Or`` combine their parts; exactly as in ``filter_values``). Other operators do not define a rule for the marker yet.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Callable
 
 from fql.predicates.predicates import (
     _UNDEFINED,
+    Predicate,
     _Undefined,
     _resolve_attr_path,
     _split_attr_path,
@@ -77,8 +82,9 @@ class Expression(ABC):
     def is_serializable(self) -> bool:
         """Whether this expression can be written into the plan IR.
 
-        True only for the exact built-in classes (``Attr``, ``Key``): a user
-        subclass may override ``__call__`` and therefore stays ``Opaque``.
+        True only for the exact built-in classes (``Attr``, ``Key``,
+        ``Composite``): a user subclass may override ``__call__`` and therefore
+        stays ``Opaque``.
         """
         return type(self) in _EXPRESSIONS_BY_OP.values()
 
@@ -178,7 +184,125 @@ class Key(Expression):
         return "Key()"
 
 
+def _evaluate_on_item(key: Callable[[Item], Any] | Predicate, item: Item) -> Any:
+    """Evaluate a ranking or partition key on ``item``.
+
+    A ``Predicate`` is evaluated on ``item.value`` (as in ``filter_values``);
+    anything else (an expression or a lambda) on the item itself. Shared by
+    ``Composite``, ``partition`` and the sorting helper of ``rank_by`` /
+    ``subset`` / ``items_sorted_by``.
+
+    @param key: The key function, expression or predicate.
+    @param item: The item to evaluate it on.
+    @return: The key value (``UNDEFINED`` if an expression's attribute is unmapped).
+    """
+    if isinstance(key, Predicate):
+        return key(item.value)
+    return key(item)
+
+
+class Composite(Expression):
+    """A tuple of component values, e.g. ``Composite(Attr("dept"), Attr("city"))``.
+
+    Returns ``UNDEFINED`` if any component is ``UNDEFINED``, so a tuple missing
+    one of the attributes is dropped by the consuming operator. Components are
+    expressions (``Attr``, ``Key``, ``Composite``) or predicates; a predicate is
+    evaluated on the item's value and yields a bool, never ``UNDEFINED``. Used
+    for grouping by several attributes and as a lexicographic ranking key.
+    """
+
+    op_name: str = "composite"
+
+    def __init__(self, *components: Expression | Predicate) -> None:
+        """Initialize a composite expression.
+
+        @param components: One or more expressions or predicates.
+        @raises ValueError: If no component is given.
+        @raises TypeError: If a component is neither an expression nor a
+            predicate (e.g. a lambda or an attribute name as a plain string).
+        """
+        if not components:
+            raise ValueError("Composite needs at least one component")
+        for component in components:
+            if not isinstance(component, (Expression, Predicate)):
+                raise TypeError(
+                    f"Composite components must be expressions or predicates, "
+                    f"got {component!r}"
+                )
+        self.components: tuple[Expression | Predicate, ...] = components
+
+    def __call__(self, item: Item) -> Any:
+        """Return the tuple of component values, or ``UNDEFINED``."""
+        values: list[Any] = []
+        for component in self.components:
+            value: Any = _evaluate_on_item(component, item)
+            if value is UNDEFINED:
+                return UNDEFINED
+            values.append(value)
+        return tuple(values)
+
+    def is_serializable(self) -> bool:
+        """Whether this composite can be written into the plan IR.
+
+        Requires exactly ``Composite`` and every expression component to be
+        serializable. Predicate components always count as serializable,
+        consistent with how the extractor treats a bare ``Predicate``.
+        """
+        return super().is_serializable() and all(
+            isinstance(c, Predicate) or c.is_serializable() for c in self.components
+        )
+
+    def to_dict(self) -> dict:
+        """Serialize to ``{"type": "expression", "op": "composite",
+        "components": [...]}``."""
+        return {
+            "type": "expression",
+            "op": self.op_name,
+            "components": [c.to_dict() for c in self.components],
+        }
+
+    @classmethod
+    def _from_dict(cls, data: Mapping[str, Any]) -> Composite:
+        """Restore from a record; nested expression and predicate records are
+        dispatched on their ``"type"``.
+
+        @raises ValueError: If ``"components"`` is not a non-empty list, or a
+            component is not a dict with a known ``"type"``, or a nested record
+            has missing fields or the wrong shape (``KeyError`` / ``TypeError``
+            from ``Predicate.from_dict`` are re-raised as ``ValueError``). Field
+            values of the wrong type (e.g. a numeric ``"attr"``) are not checked
+            here and only fail when the key is evaluated.
+        """
+        records: Any = data.get("components")
+        if not isinstance(records, list) or not records:
+            raise ValueError(
+                f"Composite needs a non-empty list of components: {data!r}"
+            )
+        components: list[Expression | Predicate] = []
+        for record in records:
+            record_type: Any = (
+                record.get("type") if isinstance(record, Mapping) else None
+            )
+            if record_type not in ("expression", "predicate"):
+                raise ValueError(f"Malformed composite component: {record!r}")
+            try:
+                components.append(
+                    Expression.from_dict(record)
+                    if record_type == "expression"
+                    else Predicate.from_dict(record)
+                )
+            except (KeyError, TypeError) as error:
+                raise ValueError(
+                    f"Malformed composite component: {record!r}"
+                ) from error
+        return cls(*components)
+
+    def __repr__(self) -> str:
+        """Readable form for ``explain()``, e.g. ``Composite(Attr('a'), Key())``."""
+        return f"Composite({', '.join(repr(c) for c in self.components)})"
+
+
 #: Maps an op name to the expression class that restores it.
 _EXPRESSIONS_BY_OP: dict[str, type[Expression]] = {
-    expression_cls.op_name: expression_cls for expression_cls in (Attr, Key)
+    expression_cls.op_name: expression_cls for expression_cls in (Attr, Key, Composite)
 }

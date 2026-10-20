@@ -23,10 +23,11 @@ import collections.abc
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF, RSF, CompositeForeignObject
-from fql.expressions import Attr, Key
+from fql.expressions import Attr, Composite, Key
 from fql.operators.filters import filter_keys
 from fql.operators.rank import rank_by, items_sorted_by
 from fql.operators.subsets import subset
+from fql.predicates.predicates import Lt
 from fql.util import Item
 from tests.lib import _create_testdata
 
@@ -847,3 +848,107 @@ def test_stored_none_ranking_key_is_kept(
     people[2] = TF({"name": "Eve"})  # no yob attribute at all
     people.freeze()  # inputs to operators are frozen
     assert sort_names(people, Attr("yob")) == ["Ann"]  # Ann kept, Eve dropped
+
+
+# ---------------------------------------------------------------------------
+# Predicate and Composite ranking keys (008)
+# ---------------------------------------------------------------------------
+
+
+def test_rank_by_predicate_key_sorts_false_before_true() -> None:
+    """``rank_by`` with ``Lt("yob", 1980)`` ranks the False tuples before the True one.
+    Would fail if the predicate were evaluated on the item instead of its value:
+    every key would be False and the insertion order (Ann first) would be kept."""
+    ranked: RF = rank_by(
+        _people(with_eve=True), ranking_key=Lt("yob", 1980)
+    ).result  # Ann (1970) is the only True and is inserted first
+    assert _names(ranked) == [
+        "Bob",  # False (2000)
+        "Eve",  # False (no yob: a predicate yields False, Eve is not dropped)
+        "Cid",  # False (1990)
+        "Dan",  # False (1980 is not < 1980)
+        "Ann",  # True (1970) comes last
+    ]  # ties among the False tuples keep their insertion order
+
+
+def _staff() -> RF:
+    """Four employees whose insertion, department and yob orders all differ.
+
+    ::
+
+        insertion | key | name | dept | yob
+        ----------+-----+------+------+------
+          1st     |  1  | Ann  | Ops  | 1970
+          2nd     |  2  | Bob  | Dev  | 2000
+          3rd     |  3  | Cid  | Ops  | 1960
+          4th     |  4  | Dan  | Dev  | 1980
+
+        by (dept, yob): Dan, Bob, Cid, Ann
+    """
+    staff: RF = RF()  # empty, unfrozen relation
+    staff[1] = TF({"name": "Ann", "dept": "Ops", "yob": 1970})  # inserted first
+    staff[2] = TF({"name": "Bob", "dept": "Dev", "yob": 2000})  # inserted second
+    staff[3] = TF({"name": "Cid", "dept": "Ops", "yob": 1960})  # inserted third
+    staff[4] = TF({"name": "Dan", "dept": "Dev", "yob": 1980})  # inserted last
+    staff.freeze()  # inputs to operators are frozen in the other tests too
+    return staff
+
+
+def test_rank_by_composite_key_sorts_lexicographically() -> None:
+    """``rank_by`` with ``Composite(Attr("dept"), Attr("yob"))`` sorts by dept, then yob.
+    Would fail if the components were compared in the wrong order (yob first)
+    or if the second component were ignored within a department."""
+    ranked: RF = rank_by(
+        _staff(), ranking_key=Composite(Attr("dept"), Attr("yob"))
+    ).result  # department first, year of birth second
+    assert _names(ranked) == [
+        "Dan",  # (Dev, 1980)
+        "Bob",  # (Dev, 2000)
+        "Cid",  # (Ops, 1960)
+        "Ann",  # (Ops, 1970)
+    ]
+
+
+def test_rank_by_composite_key_reverse_sorts_all_components_descending() -> None:
+    """``rank_by`` with a ``Composite`` key and ``reverse=True`` sorts both parts descending.
+    Would fail if ``reverse`` applied only to the first component (Cid before Ann)
+    or were ignored for composite keys."""
+    ranked: RF = rank_by(
+        _staff(), ranking_key=Composite(Attr("dept"), Attr("yob")), reverse=True
+    ).result  # one global direction for the whole composite key
+    assert _names(ranked) == [
+        "Ann",  # (Ops, 1970)
+        "Cid",  # (Ops, 1960)
+        "Bob",  # (Dev, 2000)
+        "Dan",  # (Dev, 1980)
+    ]  # exact descending lexicographic order
+
+
+def test_rank_by_composite_key_drops_tuple_missing_one_component() -> None:
+    """``rank_by`` with ``Composite(Attr("dept"), Attr("yob"))`` drops a tuple that
+    lacks either attribute.
+
+    ::
+
+        key | name | dept | yob
+        ----+------+------+------
+         1  | Ann  | Ops  | 1970
+         2  | Bob  | Dev  |  --    <- no yob mapped
+         3  | Cid  |  --  | 1960   <- no dept mapped
+         4  | Dan  | Dev  | 1980
+
+    Would fail if a composite key with one ``UNDEFINED`` component were kept and
+    compared (``TypeError``) instead of making the whole key ``UNDEFINED``."""
+    staff: RF = RF()  # empty, unfrozen relation
+    staff[1] = TF({"name": "Ann", "dept": "Ops", "yob": 1970})  # complete
+    staff[2] = TF({"name": "Bob", "dept": "Dev"})  # no yob
+    staff[3] = TF({"name": "Cid", "yob": 1960})  # no dept
+    staff[4] = TF({"name": "Dan", "dept": "Dev", "yob": 1980})  # complete
+    staff.freeze()  # inputs to operators are frozen
+    ranked: RF = rank_by(
+        staff, ranking_key=Composite(Attr("dept"), Attr("yob"))
+    ).result  # department first, year of birth second
+    assert _names(ranked) == [
+        "Dan",
+        "Ann",
+    ]  # (Dev, 1980), (Ops, 1970); Bob, Cid dropped

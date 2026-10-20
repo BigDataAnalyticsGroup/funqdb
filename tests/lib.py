@@ -18,6 +18,7 @@
 #
 #
 
+from typing import Any
 
 from fdm.attribute_functions import TF, RF, DBF
 from fdm.schema import Schema
@@ -194,3 +195,12 @@ def _subset_DBF(whitelist: set[str], frozen: bool = True, observe_items=False) -
         filter_predicate=lambda key: key in whitelist,
         output_factory=lambda _: DBF(),
     ).result
+
+
+def _memberships(partitions: DBF) -> dict[Any, set[Any]]:
+    """Map every partition key to the set of tuple keys in that partition.
+
+    @param partitions: The result of ``partition`` / ``group_by``: one RF per partition key.
+    @return: Partition key -> set of the keys of the tuples in that partition.
+    """
+    return {item.key: {member.key for member in item.value} for item in partitions}

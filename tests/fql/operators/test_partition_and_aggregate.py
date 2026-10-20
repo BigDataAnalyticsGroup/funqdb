@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from fdm.attribute_functions import DBF, RF, TF
@@ -10,7 +12,7 @@ from fql.operators.partition_and_aggregate import (
 from fql.operators.rank import rank_by
 from fql.operators.transforms import transform_items, key_to_value
 from fql.util import Item
-from tests.lib import _create_testdata
+from tests.lib import _create_testdata, _memberships
 
 
 def test_partitioning_and_group_by_composed_partitioning_key():
@@ -212,3 +214,124 @@ def test_ordering_after_group_by_drops_aggregate_keys():
     assert (
         tom_value.name == "Tom"
     )  # its identity survived ranking because it was lifted into the value first
+
+
+# ---------------------------------------------------------------------------
+# group_by with missing grouping attributes (008)
+# ---------------------------------------------------------------------------
+
+
+def _staff() -> RF:
+    """Four employees; Dan has no department, Eve has no city.
+
+    ::
+
+        key | name | dept | city
+        ----+------+------+--------
+         1  | Ann  | Dev  | Berlin
+         2  | Bob  | Dev  | Berlin
+         3  | Dan  |  --  | Paris    <- no dept mapped
+         4  | Eve  | Ops  |  --      <- no city mapped
+    """
+    staff: RF = RF()  # empty, unfrozen relation
+    staff[1] = TF({"name": "Ann", "dept": "Dev", "city": "Berlin"})  # complete
+    staff[2] = TF({"name": "Bob", "dept": "Dev", "city": "Berlin"})  # complete
+    staff[3] = TF({"name": "Dan", "city": "Paris"})  # no dept
+    staff[4] = TF({"name": "Eve", "dept": "Ops"})  # no city
+    staff.freeze()  # inputs to operators are frozen in the other tests too
+    return staff
+
+
+def test_group_by_drops_tuple_without_the_grouping_attribute() -> None:
+    """``group_by(rel, "dept")`` drops Dan, who has no department.
+    Would fail if a missing grouping attribute still raised ``AttributeError``
+    (behaviour before 008) or formed its own group."""
+    groups: DBF = group_by(_staff(), "dept").result  # one group per department
+    memberships: dict = _memberships(groups)  # group key -> set of tuple keys
+    assert memberships == {"Dev": {1, 2}, "Ops": {4}}  # Dan (key 3) is dropped
+
+
+def test_group_by_two_keys_drops_tuple_missing_either_attribute() -> None:
+    """``group_by(rel, "dept", "city")`` gives tuple keys and drops Dan and Eve.
+    Would fail if a tuple missing only one of the two grouping attributes
+    raised, or formed a group with a partly undefined key."""
+    groups: DBF = group_by(_staff(), "dept", "city").result  # (dept, city) groups
+    memberships: dict = _memberships(groups)  # group key -> set of tuple keys
+    assert memberships == {("Dev", "Berlin"): {1, 2}}  # only Ann and Bob remain
+
+
+@pytest.mark.parametrize(
+    "key, message",
+    [
+        ("", "Empty segment in attribute path"),  # no segment at all
+        ("a..b", "Empty segment in attribute path"),  # empty middle segment
+        (1, "Attribute path must be a string"),  # not a path
+    ],
+    ids=["empty", "double-dot", "int"],
+)
+def test_group_by_rejects_invalid_grouping_key_at_construction(
+    key: Any, message: str
+) -> None:
+    """``group_by`` raises ``ValueError`` for an invalid grouping key when it is created.
+    Would fail if the key were checked only when the result is computed, or if an
+    integer key were still accepted as before 008."""
+    with pytest.raises(ValueError, match=message):  # eager check, no .result needed
+        group_by(_staff(), key)  # construction alone must fail
+
+
+def test_group_by_aggregate_checks_grouping_key_only_when_computed() -> None:
+    """``group_by_aggregate`` with an invalid key is created fine and fails on ``.result``.
+    Would fail if the documented lazy behaviour changed, i.e. if the operator built
+    its ``group_by`` (and thus validated the key) already in the constructor."""
+    pipeline: group_by_aggregate = group_by_aggregate(
+        _staff(), "", count=Count()
+    )  # no error yet: the group_by is built lazily
+    with pytest.raises(ValueError, match="Empty segment in attribute path"):  # now
+        pipeline.result  # computing the result validates the key
+
+
+def _staff_with_org() -> RF:
+    """Four employees whose organization is a nested TF; Dan has no organization.
+
+    ::
+
+        key | name | org -> name
+        ----+------+------------
+         1  | Ann  | Acme
+         2  | Bob  | Acme
+         3  | Cid  | Zeta
+         4  | Dan  |  --          <- no org mapped
+    """
+    acme: TF = TF({"name": "Acme"})  # shared organization of Ann and Bob
+    staff: RF = RF()  # empty, unfrozen relation
+    staff[1] = TF({"name": "Ann", "org": acme})  # works at Acme
+    staff[2] = TF({"name": "Bob", "org": acme})  # works at Acme
+    staff[3] = TF({"name": "Cid", "org": TF({"name": "Zeta"})})  # works at Zeta
+    staff[4] = TF({"name": "Dan"})  # no organization
+    staff.freeze()  # inputs to operators are frozen in the other tests too
+    return staff
+
+
+@pytest.mark.parametrize("key", ["org.name", "org__name"], ids=["dot", "dunder"])
+def test_group_by_nested_path_key(key: str) -> None:
+    """``group_by`` with a dotted or dunder path groups by the nested organization name.
+    Would fail if one path spelling were read as a plain attribute name (empty
+    result) or if Dan without an organization raised instead of being dropped."""
+    groups: DBF = group_by(_staff_with_org(), key).result  # one group per org name
+    assert _memberships(groups) == {
+        "Acme": {1, 2},  # Ann and Bob
+        "Zeta": {3},  # Cid
+    }  # Dan (key 4) has no org and is dropped
+
+
+def test_group_by_aggregate_does_not_count_dropped_tuples() -> None:
+    """``group_by_aggregate`` counts per department and leaves Dan out of every count.
+    Would fail if a tuple without the grouping attribute were counted in some group
+    or made the whole aggregation fail."""
+    result: RF = group_by_aggregate(
+        _staff(), "dept", count=Count()
+    ).result  # number of employees per department
+    counts: dict[Any, int] = {
+        item.key: item.value.count for item in result
+    }  # group key -> count
+    assert counts == {"Dev": 2, "Ops": 1}  # Ann + Bob, Eve; Dan (no dept) dropped

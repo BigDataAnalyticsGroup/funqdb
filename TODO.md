@@ -30,12 +30,16 @@
 - [ ] in-place FQL operators (paper Sec 4.3): INSERT/UPDATE/DELETE as composable
   FQL operators, not just `__setitem__`/`__delitem__`. The paper envisions
   in-place usage across the entire Table 1 landscape, not limited to RF→RF.
-- [ ] undefined-attribute handling in `partition` / `group_by`: `partition.py:90`
-  reads `item.value[attribute]` for the grouping key and still raises on a tuple
-  that does not map it (same for `set_operations.py` grouping extraction). Sibling
-  of feature 004 (undefined-attribute semantics for predicates / `where` /
-  aggregates / join, see `docs/changes/004-undefined-attribute-semantics/`).
-  Open question: a missing grouping key forms its own group vs. the tuple is dropped.
+- [ ] undefined-attribute handling in `cogroup`: the grouping extraction in
+  `set_operations.py` reads `item.value[attribute]` and still raises on a tuple
+  that does not map it. `partition` / `group_by` are done (008: the tuple is
+  dropped); `cogroup` should follow the same rule. Sibling of feature 004.
+- [ ] Python treats `True`, `1` and `1.0` as equal dict keys, so a partition key
+  function returning bools for some tuples and numbers for others merges those
+  partitions (also with lambdas; noted in 008).
+- [ ] `partition`: a partition key value containing `__` (e.g. `"a__b"`) is split
+  as a path when written into the result DBF and raises `AttributeError`
+  (pre-existing; noted in 008).
 - [ ] flattening joins — follow-up MR to lift the two NotImplementedError
   paths that MR 2's minimal POC explicitly declines: (a) JoinPredicate
   pushdown during the join walk, firing predicates as soon as all their
@@ -121,11 +125,12 @@
     - [ ] `Predicate.from_dict` raises `KeyError`/`TypeError` on malformed
       input instead of `ValueError`; validate like `AggregationFunction.from_dict`.
     - [ ] structured alternatives for the remaining genuine lambdas, so plans
-      become SQL-translatable: partitioning functions (`partition`, `partition_by_aggregate`), the
-      per-item `aggregation_function` of `partition_by_aggregate`,
+      become SQL-translatable: partition keys beyond `Attr` / `Composite` /
+      `Predicate` (case distinctions, arithmetic), the per-item
+      `aggregation_function` of `partition_by_aggregate`,
       `transform` / `transform_items`, join predicates (`add_join_predicate`).
-      Ranking keys are done (007: `Attr` / `Key`); each new consumer of an
-      expression must define its rule for `UNDEFINED`.
+      Ranking keys (007) and partition keys (008) are done; each new consumer
+      of an expression must define its rule for `UNDEFINED`.
     - [ ] ranking by several keys with a direction per key
       (`ORDER BY a, b DESC`), on top of `fql.expressions`.
 - [ ] reject ambiguous attribute paths with a run of three or more underscores

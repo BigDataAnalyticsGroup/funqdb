@@ -26,10 +26,10 @@ decide which ones survive. Two modes:
 - **Top-k:** sort by ``ranking_key``, skip ``offset`` items, keep the next
   ``k``. Original keys are preserved (in contrast to ``rank_by``, which
   re-keys to ℕ). ``AttributeFunction.top`` / ``bottom`` are built on it. A
-  structured key such as ``Attr("yob")`` or ``Key()`` from
-  ``fql.expressions`` keeps the plan free of ``Opaque``; items without the
-  ranking attribute are dropped before the slice, so fewer than ``k`` items
-  may be returned.
+  structured key such as ``Attr("yob")``, ``Key()`` or ``Composite(...)`` from
+  ``fql.expressions``, or a ``Predicate``, keeps the plan free of ``Opaque``;
+  items for which an expression key is ``UNDEFINED`` are dropped before the
+  slice, so fewer than ``k`` items may be returned.
 - **Generic:** ``subset_predicate`` receives the whole input and returns the
   subset, for arbitrary global conditions (e.g. "all items above the mean").
 
@@ -40,6 +40,7 @@ from typing import Callable, Any
 
 from fql.operators.APIs import Operator, OperatorInput
 from fql.operators.rank import _sorted_items
+from fql.predicates.predicates import Predicate
 from fql.util import Item
 
 
@@ -68,7 +69,7 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         self,
         input_function: OperatorInput[INPUT_AttributeFunction],
         *,
-        ranking_key: Callable[[Item], Any] | None = None,
+        ranking_key: Callable[[Item], Any] | Predicate | None = None,
         k: int | None = None,
         offset: int = 0,
         reverse: bool = False,
@@ -78,9 +79,10 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         """Initialize the subset operator.
         @param input_function: The input AF to compute a subset of.
         @param ranking_key: A function that maps an Item to a comparable value used for sorting.
-            A structured expression such as ``Attr("yob")`` (``fql.expressions``) keeps the plan
-            free of ``Opaque``; items for which it yields ``UNDEFINED`` are dropped before the
-            top-k slice, so fewer than k items may be returned.
+            A structured key (``Attr``, ``Key``, ``Composite`` from ``fql.expressions``, or a
+            ``Predicate`` evaluated on the value) keeps the plan free of ``Opaque``; items for
+            which an expression yields ``UNDEFINED`` are dropped before the top-k slice, so
+            fewer than k items may be returned.
         @param k: The number of items to keep (top-k). Required when ranking_key is provided.
         @param offset: An optional offset to skip the first n items after sorting. Default is 0.
         @param reverse: If True, keep the k largest instead of the k smallest. Only used with ranking_key.

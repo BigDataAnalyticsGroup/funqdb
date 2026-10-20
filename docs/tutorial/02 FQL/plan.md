@@ -98,7 +98,7 @@ The predicate is fully inspectable in the JSON (shortened):
 
 ```json
 {
-  "ir_version": 3,
+  "ir_version": 4,
   "root": {
     "type": "node",
     "op": "filter_values",
@@ -252,8 +252,22 @@ JSON roundtrip (``Mean`` comes back as ``Avg``). Excerpt of the JSON:
 ```
 
 A self-built ``AggregationFunction(my_function, "salary")`` stays opaque, as do
-custom partitioning functions passed to ``partition``. ``group_by`` shows its
-grouping keys instead of the internal partitioning function.
+lambdas passed to ``partition``. Structured partition keys (``Attr``,
+``Composite``, a ``Predicate``) appear as data; a composite key looks like
+
+```json
+"partitioning_function": {
+  "type": "expression", "op": "composite",
+  "components": [
+    { "type": "expression", "op": "attr", "attr": "dept" },
+    { "type": "predicate", "op": "lt", "attr": "salary", "value": 80 }
+  ]
+}
+```
+
+``group_by`` shows its grouping keys instead of the internal partitioning key.
+Since IR version 4 a ``Predicate`` used as partition or ranking key is evaluated
+on the tuple's value, which is why plans of version 3 are rejected.
 
 Factory parameters such as ``output_factory`` never appear in the plan: they
 only choose the class of the result AF, not what the query computes.
