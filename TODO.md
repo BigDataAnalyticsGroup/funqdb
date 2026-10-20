@@ -9,6 +9,9 @@
 
 ## Medium prio:
 
+- [ ] report page (`benchmarks/tools/report/report.html`): add a browser test (Playwright or jsdom)
+  that loads a report with a case that contains markup and asserts that the page shows it as text.
+  The page already has `data-testid` attributes for this test.
 - [ ] subqueries — FQL's functional composition already subsumes SQL subqueries
   (uncorrelated = variable assignment, correlated = lambda closures, scalar =
   transforms). Needs a tutorial page demonstrating each SQL pattern in FQL.

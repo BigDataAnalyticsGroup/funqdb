@@ -1,0 +1,291 @@
+/*
+ *
+ *    This is funqDB, a query processing library and system built around FDM and FQL.
+ *
+ *    Copyright (C) 2026 Prof. Dr. Jens Dittrich, Saarland University
+ *
+ *    This program is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU Affero General Public License as
+ *    published by the Free Software Foundation, either version 3 of the
+ *    License, or (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU Affero General Public License for more details.
+ *
+ *    You should have received a copy of the GNU Affero General Public License
+ *    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ *
+ */
+
+/* Look & feel shared by the report pages.
+   Inlined into each page's <head> by the shared-head placeholder
+   (see shared/page.py). Page-specific styles live in the page templates. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg: #1f1f1f;
+    --surface: #2a2a2a;
+    --elevated: #3b3b3b;
+    --border: #797979;
+    --text: #e0e0e0;
+    --muted: #ababab;
+    --accent: #d3ffbe;
+    --pass: #3ed42d;
+    --fail: #ee3333;
+    --pass-bg: rgba(45,212,160,.12);
+    --fail-bg: rgba(249,123,92,.12);
+    --error-text: #f0b0a0;
+    --radius: 8px;
+    --mono: ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace;
+    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ── Light theme overrides ────────────────────── */
+:root.light {
+    --bg: #f6f7f8;
+    --surface: #ffffff;
+    --elevated: #eceef0;
+    --border: #d3d7db;
+    --text: #1f2429;
+    --muted: #687078;
+    --accent: #2b8a3e;
+    --pass: #2b8a3e;
+    --fail: #d92020;
+    --pass-bg: rgba(43,138,62,.12);
+    --fail-bg: rgba(217,32,32,.10);
+    --error-text: #a02525;
+}
+
+html { font-size: 14px; }
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+    min-height: 100vh;
+    /* Some fonts merge operators like >= and == into one character. */
+    font-variant-ligatures: none;
+}
+
+/* ── Header ───────────────────────────────────── */
+.page-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.header-left h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+}
+.header-left p {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 2px;
+    font-family: var(--mono);
+}
+
+.summary-pills {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.summary-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+.summary-pill.pass  { background: var(--pass-bg); border-color: rgba(45,212,160,.3); color: var(--pass); }
+.summary-pill.fail  { background: var(--fail-bg); border-color: rgba(249,123,92,.3); color: var(--fail); }
+.summary-pill.total { background: var(--elevated); border-color: var(--border); color: var(--text); }
+.summary-pill .dot  { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+/* ── Toolbar & controls ───────────────────────── */
+.toolbar {
+    padding: 16px 32px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.text-control {
+    padding: 7px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color .15s;
+}
+.text-control::placeholder { color: var(--muted); }
+.text-control:focus { border-color: var(--accent); }
+
+/* ── Status icons ─────────────────────────────── */
+.status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+}
+.status-icon.pass { background: var(--pass-bg); color: var(--pass); }
+.status-icon.fail { background: var(--fail-bg); color: var(--fail); }
+.status-empty { color: var(--muted); font-family: var(--mono); }
+
+/* ── Code & result blocks ─────────────────────── */
+.code-block { min-width: 0; }
+.code-block-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.code-block-label .lang-tag {
+    background: var(--elevated);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    color: var(--accent);
+    border: 1px solid var(--border);
+}
+
+.code-frame { position: relative; }
+.copy-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+.copy-btn:hover { color: var(--text); border-color: var(--muted); }
+.copy-btn.copied { color: var(--pass); border-color: var(--pass); }
+.copy-btn svg { width: 11px; height: 11px; }
+
+.code-wrap {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    max-height: 280px;
+}
+.code-wrap pre {
+    margin: 0 !important;
+    padding: 14px 16px !important;
+    background: transparent !important;
+    font-family: var(--mono) !important;
+    font-size: 0.78rem !important;
+    line-height: 1.6 !important;
+}
+.code-wrap pre code {
+    font-family: var(--mono) !important;
+    font-size: inherit !important;
+}
+
+/* in a two-column block grid, a wide block spans the full row */
+.wide-block {
+    grid-column: 1 / -1;
+}
+
+/* result cells: preserve the per-row line breaks, wrap long rows */
+.result-pre {
+    margin: 0;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text);
+}
+
+.error-block {
+    grid-column: 1 / -1;
+    background: var(--fail-bg);
+    border: 1px solid rgba(249,123,92,.3);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+}
+.error-block-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--fail);
+    margin-bottom: 6px;
+}
+.error-block p {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--error-text);
+    line-height: 1.5;
+}
+
+/* ── Scrollbar ────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Header right / theme toggle ──────────────── */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--muted); }
+.theme-toggle svg { width: 16px; height: 16px; }
+.theme-toggle .icon-moon { display: none; }
+.theme-toggle .icon-sun  { display: block; }
+:root.light .theme-toggle .icon-sun  { display: none; }
+:root.light .theme-toggle .icon-moon { display: block; }

@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<!--
+
+    This is funqDB, a query processing library and system built around FDM and FQL.
+
+    Copyright (C) 2026 Prof. Dr. Jens Dittrich, Saarland University
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>__REPORT_NAME__</title>
+    __SHARED_HEAD__
+
+    <style>
+        /* ── Search ───────────────────────────────────── */
+        .search-wrap {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+            max-width: 360px;
+        }
+        .search-wrap svg {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            pointer-events: none;
+        }
+        .search-wrap input {
+            width: 100%;
+            padding-left: 34px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--muted);
+            transition: all .15s;
+            font-family: var(--sans);
+        }
+        .filter-btn:hover  { border-color: var(--muted); color: var(--text); }
+        .filter-btn.active { background: var(--elevated); border-color: var(--accent); color: var(--accent); }
+
+        .count-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--elevated);
+            border-radius: 8px;
+            padding: 1px 6px;
+            font-size: 0.7rem;
+            margin-left: 4px;
+            color: var(--muted);
+            min-width: 20px;
+        }
+
+        /* ── Table ────────────────────────────────────── */
+        body {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .table-wrap {
+            flex: 1;
+            overflow: auto;
+            padding: 0 32px 40px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 16px;
+        }
+
+        thead th {
+            padding: 8px 12px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            border-bottom: 1px solid var(--border);
+            text-align: left;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 1;
+        }
+
+        tbody tr.test-row {
+            cursor: pointer;
+            transition: background .1s;
+        }
+        tbody tr.test-row:hover { background: var(--surface); }
+        tbody tr.test-row.expanded { background: var(--surface); }
+
+        tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+            font-size: 0.85rem;
+        }
+
+        .test-id {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--text);
+            white-space: nowrap;
+        }
+
+        /* ── Per-status columns ───────────────────────── */
+        /* Each status step gets its own column; a left border on every
+           status column (and on the output column) draws the vertical lines
+           between columns. */
+        thead th.status-th,
+        tbody td.status-cell {
+            text-align: center;
+            border-left: 1px solid var(--border);
+        }
+        thead th.output-col,
+        tbody td.output-cell {
+            border-left: 1px solid var(--border);
+        }
+        thead th.status-th {
+            font-size: 0.66rem;
+            white-space: normal;
+            line-height: 1.25;
+            min-width: 64px;
+        }
+
+        .output-cell {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--muted);
+            width: 100%;
+            max-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .chevron {
+            color: var(--muted);
+            transition: transform .2s;
+            flex-shrink: 0;
+        }
+        tr.expanded .chevron { transform: rotate(90deg); }
+
+        /* ── Expanded detail row ──────────────────────── */
+        tr.detail-row td {
+            padding: 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .detail-inner {
+            padding: 16px 20px 20px 32px;
+            background: var(--surface);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* ── Output diff ──────────────────────────────── */
+        /* One line per ndiff line, tinted by its marker. The horizontal padding
+           sits on the lines rather than the <pre>, so a tint spans the full row. */
+        .diff-pre {
+            margin: 0;
+            padding: 14px 0;
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            line-height: 1.6;
+        }
+        .diff-line {
+            display: block;
+            padding: 0 16px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .diff-line.add { background: var(--pass-bg); color: var(--pass); }
+        .diff-line.del { background: var(--fail-bg); color: var(--fail); }
+        .diff-line.ctx { color: var(--muted); }
+
+        /* ── Expected-limitation marker & block ───────── */
+        /* A case that carries a `limitation` documents a tolerated gap;
+           its row carries a badge naming the limitation's category and its detail
+           view spells out the limitation. */
+        .limitation-badge {
+            display: inline-flex;
+            align-items: center;
+            margin-left: 8px;
+            padding: 1px 8px;
+            border-radius: 20px;
+            font-size: 0.68rem;
+            font-weight: 500;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            color: var(--muted);
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .limitation-block {
+            grid-column: 1 / -1;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+        }
+        .limitation-block-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+        .limitation-block p {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--text);
+            line-height: 1.5;
+        }
+        .config-block ul {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 16px;
+            list-style: none;
+        }
+        .config-block li {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--text);
+        }
+        .config-block li span { color: var(--muted); }
+
+        /* ── No results ───────────────────────────────── */
+        #no-results {
+            display: none;
+            text-align: center;
+            padding: 48px 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+
+<header class="page-header">
+    <div class="header-left">
+        <h1>__REPORT_NAME__</h1>
+        <p id="header-meta">Loading…</p>
+    </div>
+    <div class="header-right">
+        <div class="summary-pills" id="summary-pills" data-testid="summary"></div>
+        <button class="theme-toggle" id="themeToggle" type="button"
+                aria-label="Toggle light / dark theme" title="Toggle light / dark theme"></button>
+    </div>
+</header>
+
+<div class="toolbar">
+    <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="6.5" cy="6.5" r="5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/>
+        </svg>
+        <input type="text" id="search" data-testid="search" class="text-control" placeholder="Search test cases…">
+    </div>
+    <div class="filter-group" id="filter-group">
+        <button class="filter-btn active" data-filter="all" data-testid="filter-all">All <span class="count-badge" id="cnt-all">0</span></button>
+        <button class="filter-btn" data-filter="pass" data-testid="filter-pass">Passed <span class="count-badge" id="cnt-pass">0</span></button>
+        <button class="filter-btn" data-filter="fail" data-testid="filter-fail">Failed <span class="count-badge" id="cnt-fail">0</span></button>
+    </div>
+</div>
+
+<div class="table-wrap">
+    <table id="results-table">
+        <thead>
+        <tr id="head-row">
+            <th style="width:24px"></th>
+            <th data-col="id">Test Case</th>
+            <!-- one <th> per status step injected here from STATUS_STEPS -->
+            <th data-col="output" class="output-col" id="output-col">Output</th>
+        </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+    </table>
+    <div id="no-results">No test cases match your filter.</div>
+</div>
+
+<script>
+    // ── Data injected by Python ──────────────────────────────────────────────────
+    const REPORT = JSON.parse(__REPORT_JSON__);
+
+    const CHEVRON = `<svg class="chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6,4 10,8 6,12"/></svg>`;
+
+    // Total number of table columns: chevron + test case + one per status
+    // step + output. Used for the detail row's colspan.
+    const COL_COUNT = 2 + STATUS_STEPS.length + 1;
+
+    // ── Header cells: one per status step, before the output column
+    function buildHeaders() {
+        const headRow = document.getElementById('head-row');
+        const outputTh = document.getElementById('output-col');
+        STATUS_STEPS.forEach(s => {
+            const th = document.createElement('th');
+            th.className = 'status-th';
+            th.dataset.col = s.key;
+            th.textContent = s.label;
+            headRow.insertBefore(th, outputTh);
+        });
+    }
+
+    const tests = REPORT;
+
+    // ── Summary counts ───────────────────────────────────────────────────────────
+    const total = tests.length;
+    const passed = tests.filter(t => t.passed).length;
+    const failed = total - passed;
+
+    function renderSummaryPills() {
+        const container = document.getElementById('summary-pills');
+        // Round down, so that a single failed case never shows as 100 %.
+        const rate = total > 0 ? Math.floor(passed / total * 100) : 0;
+        container.innerHTML = `
+    <div class="summary-pill total"><span>${total}</span> total</div>
+    <div class="summary-pill pass"><span class="dot"></span>${passed} passed</div>
+    ${failed > 0 ? `<div class="summary-pill fail"><span class="dot"></span>${failed} failed</div>` : ''}
+    ${total > 0 ? `<div class="summary-pill ${failed === 0 ? 'pass' : 'fail'}">${rate}% pass rate</div>` : ''}
+  `;
+    }
+
+    // ── Filter / search state ────────────────────────────────────────────────────
+    let filterMode = 'all';
+    let searchQuery = '';
+
+    function matchesSearch(t) {
+        const q = searchQuery.toLowerCase();
+        return !q || t.id.toLowerCase().includes(q) || t.output.code.toLowerCase().includes(q);
+    }
+
+    function matchesFilter(t) {
+        return filterMode === 'all' ||
+            (filterMode === 'pass' && t.passed) ||
+            (filterMode === 'fail' && !t.passed);
+    }
+
+    function getVisible() {
+        return tests.filter(t => matchesFilter(t) && matchesSearch(t));
+    }
+
+    function updateCounts() {
+        document.getElementById('cnt-all').textContent = tests.filter(matchesSearch).length;
+        document.getElementById('cnt-pass').textContent = tests.filter(t => t.passed && matchesSearch(t)).length;
+        document.getElementById('cnt-fail').textContent = tests.filter(t => !t.passed && matchesSearch(t)).length;
+    }
+
+    // ── Render table ─────────────────────────────────────────────────────────────
+    const tbody = document.getElementById('tbody');
+    let expandedRow = null;
+
+    function renderTable() {
+        const visible = getVisible();
+        tbody.innerHTML = '';
+
+        if (visible.length === 0) {
+            document.getElementById('no-results').style.display = 'block';
+            return;
+        }
+        document.getElementById('no-results').style.display = 'none';
+
+        visible.forEach(t => {
+            const tr = document.createElement('tr');
+            tr.className = 'test-row';
+            tr.dataset.testid = 'case-row';
+
+            const statusCells = STATUS_STEPS.map(s =>
+                `<td class="status-cell" data-testid="status-${escapeHtml(s.key)}">${statusIconHtml(t.statuses[s.key])}</td>`
+            ).join('');
+
+            const limitation = t.limitation;
+            const limitationBadge = limitation
+                ? `<span class="limitation-badge" title="${escapeHtml(limitation.name)}">${escapeHtml(limitation.category)}</span>`
+                : '';
+
+            tr.innerHTML = `
+      <td style="padding-left:16px;">${CHEVRON}</td>
+      <td>
+        <div class="test-id">
+          ${escapeHtml(t.id)}${limitationBadge}
+        </div>
+      </td>
+      ${statusCells}
+      <td class="output-cell">${escapeHtml(t.output.code) || '-'}</td>
+    `;
+
+            tr.addEventListener('click', () => toggleDetail(tr, t));
+            tbody.appendChild(tr);
+        });
+    }
+
+    // The tolerated gap a case documents, spelled out; "" when it documents none.
+    function limitationBlock(limitation) {
+        if (!limitation) return '';
+        return `
+        <div class="limitation-block" data-testid="limitation-block">
+          <div class="limitation-block-label">Expected Limitation</div>
+          <p><strong>[${escapeHtml(limitation.category)}] ${escapeHtml(limitation.name)}</strong>: ${escapeHtml(limitation.description)}</p>
+        </div>`;
+    }
+
+    // The options a case ran with that differ from its producer's default; "" when none do.
+    function settingsBlock(settings) {
+        const entries = Object.entries(settings);
+        if (entries.length === 0) return '';
+
+        const items = entries
+            .map(([option, value]) => `<li><span>${escapeHtml(option)}</span> ${escapeHtml(value)}</li>`)
+            .join('');
+        return `
+        <div class="limitation-block config-block" data-testid="settings-block">
+          <div class="limitation-block-label">Configuration</div>
+          <ul>${items}</ul>
+        </div>`;
+    }
+
+    // The input, then each intermediate, filling the two-column grid in order;
+    // with an odd count the last one spans the full row.
+    function inputAndIntermediateBlocks(t) {
+        const blocks = [t.input, ...t.intermediates];
+        return blocks.map((block, i) => {
+            const isLastOfOdd = blocks.length % 2 === 1 && i === blocks.length - 1;
+            return codeBlock(escapeHtml(block.header), block.language, block.code_pretty, isLastOfOdd ? 'wide-block' : '');
+        }).join('');
+    }
+
+    // The expected against the actual output, as ndiff lines ('-' expected,
+    // '+' actual, ' ' agreeing); "" for an empty `output_diff`, i.e. whenever
+    // the output matches what was expected up to formatting (or nothing was).
+    function diffBlock(diff, header) {
+        if (diff.length === 0) return '';
+
+        const lines = diff.map(line => {
+            const op = line[0] === '+' ? 'add'
+                : line[0] === '-' ? 'del'
+                : 'ctx';
+            return `<span class="diff-line ${op}">${escapeHtml(line)}</span>`;
+        }).join('');
+        return `
+        <div class="code-block wide-block" data-testid="diff-block">
+          <div class="code-block-label">
+            Expected ${escapeHtml(header)}
+            <span class="lang-tag">− expected / + actual</span>
+          </div>
+          <div class="code-wrap"><pre class="diff-pre">${lines}</pre></div>
+        </div>`;
+    }
+
+    function toggleDetail(tr, t) {
+        // close existing
+        if (expandedRow && expandedRow !== tr) {
+            expandedRow.classList.remove('expanded');
+            const oldDetail = expandedRow.nextElementSibling;
+            if (oldDetail && oldDetail.classList.contains('detail-row')) {
+                oldDetail.remove();
+            }
+        }
+
+        // close if expanded
+        if (tr.classList.contains('expanded')) {
+            tr.classList.remove('expanded');
+            const detail = tr.nextElementSibling;
+            if (detail && detail.classList.contains('detail-row')) detail.remove();
+            expandedRow = null;
+            return;
+        }
+
+        tr.classList.add('expanded');
+        expandedRow = tr;
+        const detailTr = document.createElement('tr');
+        detailTr.className = 'detail-row';
+        detailTr.dataset.testid = 'case-detail';
+
+        detailTr.innerHTML = `
+    <td colspan="${COL_COUNT}">
+      <div class="detail-inner">
+        ${errorBlock(t.error, failedStepLabel(t.statuses))}
+        ${limitationBlock(t.limitation)}
+        ${settingsBlock(t.settings)}
+        ${inputAndIntermediateBlocks(t)}
+        ${diffBlock(t.output_diff, t.output.header)}
+        ${codeBlock(escapeHtml(t.output.header), t.output.language, t.output.code_pretty, 'wide-block')}
+        ${resultBlock('SQL Result', t.sql_result)}
+        ${resultBlock('FQL Result', t.fql_result)}
+      </div>
+    </td>
+  `;
+
+        tr.after(detailTr);
+        Prism.highlightAllUnder(detailTr);
+    }
+
+    // Search
+    document.getElementById('search').addEventListener('input', e => {
+        searchQuery = e.target.value;
+        expandedRow = null;
+        renderTable();
+        updateCounts();
+    });
+
+    // Filter buttons
+    document.getElementById('filter-group').addEventListener('click', e => {
+        const btn = e.target.closest('.filter-btn');
+        if (!btn) return;
+        filterMode = btn.dataset.filter;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+        expandedRow = null;
+        renderTable();
+        updateCounts();
+    });
+
+    // Init
+    initThemeToggle();
+    buildHeaders();
+    document.getElementById('header-meta').textContent =
+        `${total} test case${total !== 1 ? 's' : ''}`;
+    renderSummaryPills();
+    updateCounts();
+    renderTable();
+</script>
+</body>
+</html>
