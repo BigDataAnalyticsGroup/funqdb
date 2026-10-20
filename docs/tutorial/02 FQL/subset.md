@@ -59,11 +59,18 @@ Internally: all items are sorted by `ranking_key`, then the slice
 `sorted_items[offset : offset + k]` is returned.  Original keys are
 preserved in the output AF.
 
+Instead of a lambda, a structured ranking key from `fql.expressions` can be
+used, e.g. `subset(users, ranking_key=Attr("yob"), k=2)` or `Key()` for the
+item's key. It gives the same order but keeps the plan free of `Opaque`
+markers. Items without the ranking attribute are dropped before the slice
+(there is no NULL to sort first or last), so fewer than `k` items may be
+returned.
+
 ##### Parameters (top-k mode)
 
 | Parameter        | Type                    | Default | Description                                                                                       |
 |:-----------------|:------------------------|:--------|:--------------------------------------------------------------------------------------------------|
-| `ranking_key`    | `Callable[[Item], Any]` | -       | Maps each `Item` to a comparable value used for sorting.                                          |
+| `ranking_key`    | `Callable[[Item], Any]` | -       | Maps each `Item` to a comparable value used for sorting; or `Attr` / `Key` (items without the attribute are dropped). |
 | `k`              | `int`                   | -       | Number of items to keep. Must be ≥ 1.                                                             |
 | `offset`         | `int`                   | `0`     | Number of items to skip from the start of the sorted list. Must be ≥ 0. Only valid in top-k mode. |
 | `reverse`        | `bool`                  | `False` | If `True`, sort descending (largest first).                                                       |

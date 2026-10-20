@@ -77,7 +77,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Each AF maintains a lineage list recording its derivation history. Call `af.get_lineage()` to retrieve the list as a string array. Call `af.add_lineage(entry)` to append a provenance entry describing how the AF was derived (e.g., from an operator result). Lineage is preserved on copy but stripped during pickling.
 
 - `[✅]` *Top-k / bottom-k / random item retrieval*  
-  Call `af.top(k, key=func)` to get a new AF containing the k items with the smallest key values according to a ranking function. Call `af.bottom(k, key=func)` for the k items with the largest values. Call `af.random_item()` to retrieve one item uniformly at random. All three return new AFs or individual items without modifying the original.
+  Call `af.top(k, key=func)` to get a new AF containing the k items with the smallest key values according to a ranking function. Call `af.bottom(k, key=func)` for the k items with the largest values. `key` may also be a structured key (`Attr` / `Key`); items without the attribute are then dropped, so fewer than k items may be returned. Call `af.random_item()` to retrieve one item uniformly at random. All three return new AFs or individual items without modifying the original.
 
 - `[✅]` *Human-readable string representation and HTML printing*  
   Call `str(af)` to get a human-readable string showing all key-value pairs in a nested tree format. Call `af.print(flat=False)` to print to stdout with optional indentation. HTML rendering for Jupyter notebooks is supported via the `.my_str()` method, enabling formatted display in notebook environments.
@@ -279,6 +279,9 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` ***subset** — top-k by ranking key or arbitrary predicate-based subset*  
   Extracts a global subset of an AF in two modes: declarative top-k (via `ranking_key` and `k`) keeps the k items (after an optional offset) with the smallest ranking-key values (or largest if `reverse=True`); generic mode (via `subset_predicate`) accepts a function that receives the entire AF and returns an arbitrary subset. The two modes are mutually exclusive.
+
+- `[✅]` *Structured ranking keys `Attr` / `Key` (serializable, plan without `Opaque`)*  
+  `Attr("yob")` (attribute path of the item's value, dot or dunder form) and `Key()` (the item's key) from `fql.expressions` are drop-in replacements for ranking-key lambdas in `rank_by`, `subset` (top-k, also `top`/`bottom`) and `items_sorted_by`. They serialize to the plan IR as `{"type": "expression", ...}`. Items whose ranking attribute is not mapped are dropped instead of being sorted first/last (no NULL semantics); lambda keys keep their behaviour. Decision: `docs/changes/007-structured-ranking-keys/`.
 
 ### Set Operations
 

@@ -18,10 +18,28 @@
 #
 #
 
+"""Global subsets of an attribute function: ``subset``.
+
+Unlike a filter, which decides per item, ``subset`` needs to see all items to
+decide which ones survive. Two modes:
+
+- **Top-k:** sort by ``ranking_key``, skip ``offset`` items, keep the next
+  ``k``. Original keys are preserved (in contrast to ``rank_by``, which
+  re-keys to ℕ). ``AttributeFunction.top`` / ``bottom`` are built on it. A
+  structured key such as ``Attr("yob")`` or ``Key()`` from
+  ``fql.expressions`` keeps the plan free of ``Opaque``; items without the
+  ranking attribute are dropped before the slice, so fewer than ``k`` items
+  may be returned.
+- **Generic:** ``subset_predicate`` receives the whole input and returns the
+  subset, for arbitrary global conditions (e.g. "all items above the mean").
+
+Sorting is shared with ``fql.operators.rank`` (``_sorted_items``).
+"""
 
 from typing import Callable, Any
 
 from fql.operators.APIs import Operator, OperatorInput
+from fql.operators.rank import _sorted_items
 from fql.util import Item
 
 
@@ -60,6 +78,9 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         """Initialize the subset operator.
         @param input_function: The input AF to compute a subset of.
         @param ranking_key: A function that maps an Item to a comparable value used for sorting.
+            A structured expression such as ``Attr("yob")`` (``fql.expressions``) keeps the plan
+            free of ``Opaque``; items for which it yields ``UNDEFINED`` are dropped before the
+            top-k slice, so fewer than k items may be returned.
         @param k: The number of items to keep (top-k). Required when ranking_key is provided.
         @param offset: An optional offset to skip the first n items after sorting. Default is 0.
         @param reverse: If True, keep the k largest instead of the k smallest. Only used with ranking_key.
@@ -94,10 +115,10 @@ class subset[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             # generic mode: let the predicate compute the subset directly
             return self.subset_predicate(input_function)
 
-        # declarative top-k mode:
-        # sort all items by ranking_key, then keep the first k
-        sorted_items: list[Item] = sorted(
-            input_function, key=self.ranking_key, reverse=self.reverse
+        # declarative top-k mode: sort all items by ranking_key (dropping items
+        # whose key is UNDEFINED), skip `offset` items, then keep the next k
+        sorted_items: list[Item] = _sorted_items(
+            input_function, self.ranking_key, self.reverse
         )
         top_k_items: list[Item] = sorted_items[self.offset : self.offset + self.k]
 

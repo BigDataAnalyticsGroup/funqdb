@@ -98,7 +98,7 @@ The predicate is fully inspectable in the JSON (shortened):
 
 ```json
 {
-  "ir_version": 2,
+  "ir_version": 3,
   "root": {
     "type": "node",
     "op": "filter_values",
@@ -192,6 +192,31 @@ print(op.explain())
 Note how the ``ranking_key`` lambda is opaque, but the ``filter_predicate``
 inside the nested ``filter_values`` is a structured ``Eq`` — they coexist in
 the same plan tree.
+
+With the structured ranking key ``Attr`` from ``fql.expressions`` the whole
+plan is structured:
+
+```python
+from fql.expressions import Attr
+
+op = subset[RF, RF](
+    filter_values[RF, RF](users, filter_predicate=Eq("dept", "eng")),
+    ranking_key=Attr("salary"),
+    k=1,
+    reverse=True,
+)
+print(op.explain())
+```
+
+```
+- subset(ranking_key=Attr('salary'), k=1, offset=0, reverse=True, subset_predicate=None)
+  - filter_values(filter_predicate=Eq('dept', 'eng'))
+    - leaf RF #3
+```
+
+In the JSON, the key appears as
+``{"type": "expression", "op": "attr", "attr": "salary"}``; ``Key()`` (the
+item's key) as ``{"type": "expression", "op": "key"}``.
 
 #### 5. group_by and aggregate
 

@@ -39,6 +39,8 @@ from typing import Any, Callable
 import pytest
 
 from fdm.attribute_functions import RF, DBF
+from fql.expressions import Attr, Expression, Key
+from fql.operators.APIs import Operator
 from fql.operators.aggregates import (
     AggregationFunction,
     Avg,
@@ -55,7 +57,9 @@ from fql.operators.filters import filter_items, filter_values
 from fql.operators.partition import group_by, partition
 from fql.operators.partition_and_aggregate import group_by_aggregate
 from fql.operators.projections import project
+from fql.operators.rank import rank_by
 from fql.operators.set_operations import cogroup, intersect, minus, union
+from fql.operators.subsets import subset
 from fql.plan import LogicalPlan, LeafRef, Opaque, PlanNode, extract, extract_plan
 from fql.plan.ir import IR_VERSION, PlanChild, _value_from_dict, _value_to_dict
 from fql.predicates.predicates import Eq
@@ -917,3 +921,108 @@ def test_project_and_group_by_keys_survive_json_roundtrip():
     inner: PlanChild = root.inputs[0]  # the project node below it
     assert isinstance(inner, PlanNode)  # an operator node, not a leaf
     assert inner.params["attributes"] == ["name", "department"]  # restored
+
+
+# -- Structured ranking keys Attr / Key (007) --------------------------------
+
+#: Ranking pipelines with a structured key and the IR dict that key must produce.
+_RANKING_CASES: list = [
+    pytest.param(
+        lambda users: rank_by(users, ranking_key=Attr("yob")),
+        {"type": "expression", "op": "attr", "attr": "yob"},
+        id="rank_by-attr",
+    ),
+    pytest.param(
+        lambda users: rank_by(users, ranking_key=Key(), reverse=True),
+        {"type": "expression", "op": "key"},
+        id="rank_by-key",
+    ),
+    pytest.param(
+        lambda users: subset(users, ranking_key=Attr("yob"), k=2),
+        {"type": "expression", "op": "attr", "attr": "yob"},
+        id="subset-attr",
+    ),
+    pytest.param(
+        lambda users: subset(users, ranking_key=Key(), k=2, reverse=True),
+        {"type": "expression", "op": "key"},
+        id="subset-key",
+    ),
+]
+
+
+@pytest.mark.parametrize("build, expected", _RANKING_CASES)
+def test_structured_ranking_key_extracts_without_opaque(
+    build: Callable[[RF], Operator], expected: dict
+) -> None:
+    """``rank_by`` / ``subset`` with ``Attr`` or ``Key`` extract without ``Opaque``.
+    Would fail if ``_serialize_param`` turned the callable expression into an
+    ``Opaque`` marker, or if ``to_dict`` wrote a different IR record."""
+    root: PlanChild = build(_users()).to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+    assert root.params["ranking_key"].to_dict() == expected  # exact IR record
+
+
+@pytest.mark.parametrize("build, expected", _RANKING_CASES)
+def test_structured_ranking_key_survives_json_roundtrip(
+    build: Callable[[RF], Operator], expected: dict
+) -> None:
+    """A JSON round trip restores exactly the ``Attr`` / ``Key`` ranking key.
+    Would fail if ``_value_from_dict`` did not handle ``"type": "expression"``
+    and returned a plain dict, or restored a different expression class."""
+    pipeline: Operator = build(_users())  # ranking pipeline, not executed
+    original: Expression = pipeline.ranking_key  # the key passed by the user
+    restored: LogicalPlan = LogicalPlan.from_json(
+        pipeline.to_plan().to_json()
+    )  # serialize to JSON text and read it back
+    root: PlanChild = restored.root  # the rank_by / subset node
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    key: Any = root.params["ranking_key"]  # the restored ranking key
+    assert type(key) is type(original)  # exactly Attr or Key, no dict
+    assert key.to_dict() == expected  # same attribute path (for Attr)
+    assert root.params["reverse"] is pipeline.reverse  # sort direction restored
+
+
+def test_explain_shows_readable_ranking_keys():
+    """``explain()`` shows structured ranking keys as ``Attr('yob')`` and ``Key()``.
+    Would fail if ``Attr.__repr__`` / ``Key.__repr__`` fell back to the default
+    ``<... object at 0x...>`` form or the keys were shown as opaque markers."""
+    ranked: rank_by = rank_by(_users(), ranking_key=Attr("yob"))  # rank by age
+    top_2: subset = subset(ranked, ranking_key=Key(), k=2)  # first two ranks
+    text: str = top_2.to_plan().explain()  # human-readable plan of both operators
+    assert "Attr('yob')" in text  # rank_by key, readable
+    assert "Key()" in text  # subset key, readable
+    assert "<opaque" not in text  # no opaque marker anywhere
+    assert "0x" not in text  # no memory address anywhere
+
+
+class _DoubledYob(Attr):
+    """A user subclass of ``Attr`` whose ``__call__`` computes something else."""
+
+    def __call__(self, item: Any) -> Any:
+        """Twice the attribute value (not expressible as a plain ``Attr``)."""
+        return 2 * super().__call__(item)
+
+
+def test_user_subclass_of_attr_extracts_as_opaque():
+    """A user subclass of ``Attr`` as ranking key is extracted as ``Opaque``.
+    Would fail if extraction used ``isinstance`` and wrote the subclass as a plain
+    ``Attr`` record, so that a backend would rank by yob instead of 2 * yob."""
+    root: PlanChild = (
+        rank_by(_users(), ranking_key=_DoubledYob("yob")).to_plan().root
+    )  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    key: Any = root.params["ranking_key"]  # the extracted ranking key
+    assert isinstance(key, Opaque)  # a marker, not a structured expression
+    assert _find_opaques(root) == [key]  # and the only marker in the plan
+
+
+def test_from_dict_rejects_ir_version_2_plans():
+    """Plans written with IR version 2 (before structured ranking keys) are rejected.
+    Would fail if ``IR_VERSION`` had not been raised to 3, so a version-2 plan
+    with lambda-only ranking keys would be read as if it were current."""
+    plan_dict: dict = extract_plan(_users()).to_dict()  # a valid current plan
+    plan_dict["ir_version"] = 2  # pretend it was written by the previous version
+    expected: str = f"Unsupported IR version: 2 (expected {IR_VERSION})"  # message
+    with pytest.raises(ValueError, match=re.escape(expected)):  # rejected
+        LogicalPlan.from_dict(plan_dict)  # read the old plan

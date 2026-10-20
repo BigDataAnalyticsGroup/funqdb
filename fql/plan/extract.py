@@ -190,13 +190,14 @@ def _serialize_param(value: Any) -> Any:
     4. Nested ``AttributeFunction``s and ``Operator``s — which can show up
        in parameters for operators that take multiple AF handles — are
        recursed through ``extract``.
-    5. Structured ``Predicate``s and built-in aggregation functions
-       (``Count``, ``Sum``, ...) with a valid attribute are callable but
-       fully described by their data; they are kept as objects and serialized later by
+    5. Structured ``Predicate``s, built-in aggregation functions
+       (``Count``, ``Sum``, ...) with a valid attribute, and built-in
+       expressions (``Attr``, ``Key``) are callable but fully described by
+       their data; they are kept as objects and serialized later by
        ``ir._value_to_dict`` via their ``to_dict()``.
     6. Anything else callable (lambdas, functions, bound methods, classes
-       with ``__call__``, user-built aggregations) becomes an ``Opaque``
-       marker: we do not attempt to introspect Python code.
+       with ``__call__``, user-built aggregations and expressions) becomes an
+       ``Opaque`` marker: we do not attempt to introspect Python code.
     7. Anything else falls back to ``Opaque("unknown", ...)`` rather than
        crashing the extraction.
     """
@@ -229,6 +230,13 @@ def _serialize_param(value: Any) -> Any:
     from fql.operators.aggregates import AggregationFunction
 
     if isinstance(value, AggregationFunction) and value.is_serializable():
+        return value
+
+    # Built-in expressions (Attr, Key) are callable but fully described by
+    # their data; user subclasses stay Opaque (see ``is_serializable``).
+    from fql.expressions import Expression
+
+    if isinstance(value, Expression) and value.is_serializable():
         return value
 
     if callable(value):

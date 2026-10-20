@@ -23,6 +23,7 @@ import collections.abc
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF, RSF, CompositeForeignObject
+from fql.expressions import Attr, Key
 from fql.operators.filters import filter_keys
 from fql.operators.rank import rank_by, items_sorted_by
 from fql.operators.subsets import subset
@@ -609,3 +610,240 @@ def test_items_sorted_by_after_rank_by() -> None:
     # rank_by puts Horst at rank 0, Tom at 1, John at 2:
     assert [item.key for item in items] == [0, 1, 2]
     assert [item.value.name for item in items] == ["Horst", "Tom", "John"]
+
+
+# ---------------------------------------------------------------------------
+# Structured ranking keys Attr / Key (007)
+# ---------------------------------------------------------------------------
+
+
+def _people(with_eve: bool = False) -> RF:
+    """Four people whose key order, insertion order and yob order all differ.
+
+    ::
+
+        insertion  | key | name | yob
+        -----------+-----+------+------
+          1st      |  3  | Ann  | 1970
+          2nd      |  1  | Bob  | 2000
+         (3rd)     | (4) | Eve  |  --    <- only if with_eve: no yob mapped
+          3rd (4th)|  5  | Cid  | 1990
+          4th (5th)|  2  | Dan  | 1980
+
+        (bracketed insertion positions: with_eve=True)
+
+        by insertion: Ann, Bob, Cid, Dan
+        by key:       Bob, Dan, Ann, Cid
+        by yob:       Ann, Dan, Cid, Bob
+
+    Eve sits in the middle of both the insertion and the key order, so she
+    would show up inside the result if she were not dropped.
+    """
+    people: RF = RF()  # empty, unfrozen relation
+    people[3] = TF({"name": "Ann", "yob": 1970})  # inserted first, key 3
+    people[1] = TF({"name": "Bob", "yob": 2000})  # inserted second, key 1
+    if with_eve:  # optional tuple without a yob attribute
+        people[4] = TF({"name": "Eve"})  # key 4 lies between the other keys
+    people[5] = TF({"name": "Cid", "yob": 1990})  # key 5
+    people[2] = TF({"name": "Dan", "yob": 1980})  # inserted last, key 2
+    people.freeze()  # inputs to operators are frozen in the other tests too
+    return people
+
+
+def _names(ranked: RF) -> list[str]:
+    """The names of a ranked RF in rank order 0, 1, 2, ..."""
+    return [ranked[rank].name for rank in range(len(ranked))]
+
+
+def test_rank_by_attr_yob_ascending() -> None:
+    """``rank_by`` with ``Attr("yob")`` ranks by the yob value, oldest first.
+    Would fail if ``Attr`` read the wrong attribute or if the result followed
+    the key or insertion order instead of the yob order."""
+    ranked: RF = rank_by(_people(), ranking_key=Attr("yob")).result  # by yob
+    assert _names(ranked) == ["Ann", "Dan", "Cid", "Bob"]  # 1970, 1980, 1990, 2000
+
+
+def test_rank_by_attr_yob_descending() -> None:
+    """``rank_by`` with ``Attr("yob")`` and ``reverse=True`` ranks youngest first.
+    Would fail if ``reverse`` were not passed on to the shared sorting helper."""
+    ranked: RF = rank_by(
+        _people(), ranking_key=Attr("yob"), reverse=True
+    ).result  # by yob, descending
+    assert _names(ranked) == ["Bob", "Cid", "Dan", "Ann"]  # 2000, 1990, 1980, 1970
+
+
+def test_rank_by_key_orders_by_original_key() -> None:
+    """``rank_by`` with ``Key()`` ranks by the original key of each tuple.
+    Would fail if ``Key`` returned the value instead of the key, or if the
+    result simply kept the insertion order."""
+    ranked: RF = rank_by(_people(), ranking_key=Key()).result  # by original key
+    assert _names(ranked) == ["Bob", "Dan", "Ann", "Cid"]  # keys 1, 2, 3, 5
+
+
+@pytest.mark.parametrize("reverse", [False, True], ids=["ascending", "descending"])
+def test_rank_by_attr_equals_equivalent_lambda(reverse: bool) -> None:
+    """``Attr("yob")`` ranks exactly like the lambda ``item.value.yob``.
+    Would fail if the structured key and the lambda key were sorted by
+    different code paths that disagree on order or direction."""
+    structured: RF = rank_by(
+        _people(), ranking_key=Attr("yob"), reverse=reverse
+    ).result  # structured key
+    with_lambda: RF = rank_by(
+        _people(), ranking_key=lambda item: item.value.yob, reverse=reverse
+    ).result  # the same key written as a lambda
+    assert _names(structured) == _names(with_lambda)  # identical rank order
+
+
+def test_rank_by_attr_drops_tuple_without_the_attribute() -> None:
+    """A tuple without a ``yob`` mapping is dropped by ``rank_by(Attr("yob"))``.
+    Would fail if the missing attribute raised, or if Eve were kept and sorted
+    into the result (e.g. first or last) instead of being left out."""
+    ranked: RF = rank_by(
+        _people(with_eve=True), ranking_key=Attr("yob")
+    ).result  # Eve has no yob
+    assert _names(ranked) == ["Ann", "Dan", "Cid", "Bob"]  # Eve is not ranked
+
+
+def test_rank_by_attr_with_every_item_undefined_is_empty() -> None:
+    """``rank_by`` on an attribute no tuple has (e.g. a typo) returns an empty RF.
+    Would fail if the missing attribute raised or produced ranks for the
+    dropped tuples (documented consequence: the result is silently empty)."""
+    ranked: RF = rank_by(_people(), ranking_key=Attr("salary")).result  # no salary
+    assert type(ranked) is RF  # still the usual output type
+    assert len(ranked) == 0  # every tuple was dropped
+
+
+@pytest.mark.parametrize(
+    "method, expected",
+    [("top", {3: "Ann", 2: "Dan"}), ("bottom", {1: "Bob", 5: "Cid"})],
+    ids=["top", "bottom"],
+)
+def test_af_top_and_bottom_with_attr_drop_undefined(
+    method: str, expected: dict[int, str]
+) -> None:
+    """``AF.top`` / ``AF.bottom`` with ``Attr("yob")`` skip the tuple without yob.
+    Would fail if the convenience methods bypassed the shared sorting helper,
+    so that comparing Eve's ``UNDEFINED`` with an int raised ``TypeError``."""
+    people: RF = _people(with_eve=True)  # Eve has no yob
+    result: RF = getattr(people, method)(k=2, key=Attr("yob"))  # top-2 / bottom-2
+    names: dict[int, str] = {
+        item.key: item.value.name for item in result
+    }  # original key -> name
+    assert names == expected  # two oldest / two youngest, Eve not among them
+
+
+def test_items_sorted_by_attr_drops_undefined_and_keeps_order() -> None:
+    """``items_sorted_by`` with ``Attr("yob")`` drops Eve and sorts the rest by yob.
+    Would fail if ``items_sorted_by`` did not share the dropping sort helper and
+    raised on ``UNDEFINED``, or if it yielded Eve or the wrong order."""
+    items: list[Item] = list(
+        items_sorted_by(_people(with_eve=True), key=Attr("yob"))
+    )  # Eve has no yob
+    assert [item.key for item in items] == [3, 2, 5, 1]  # original keys kept
+    assert [item.value.name for item in items] == [
+        "Ann",
+        "Dan",
+        "Cid",
+        "Bob",
+    ]  # 1970, 1980, 1990, 2000; Eve left out
+
+
+def test_rank_by_attr_with_stored_none_among_ints_raises_type_error() -> None:
+    """A stored ``None`` next to ints makes ``rank_by(Attr(...))`` raise ``TypeError``.
+
+    ::
+
+        key | name | yob
+        ----+------+------
+         1  | Ann  | None
+         2  | Bob  | 2000
+
+    Would fail if ``None`` were silently dropped like ``UNDEFINED`` (documented:
+    a stored ``None`` is a real value and is compared like any other)."""
+    people: RF = RF()  # empty, unfrozen relation
+    people[1] = TF({"name": "Ann", "yob": None})  # yob mapped, but to None
+    people[2] = TF({"name": "Bob", "yob": 2000})  # an ordinary yob
+    people.freeze()  # inputs to operators are frozen
+    with pytest.raises(TypeError):  # None and int are not comparable
+        rank_by(people, ranking_key=Attr("yob")).result  # sorting happens here
+
+
+def test_rank_by_lambda_on_missing_attribute_still_raises() -> None:
+    """A lambda ranking key reading a missing attribute still raises ``AttributeError``.
+    Would fail if the dropping of undefined keys also swallowed lambda errors,
+    which the decision record explicitly leaves unchanged."""
+    with pytest.raises(AttributeError):  # Eve has no yob
+        rank_by(
+            _people(with_eve=True), ranking_key=lambda item: item.value.yob
+        ).result  # sorting happens here
+
+
+class _CountingKey:
+    """A ranking key that delegates to ``Attr("yob")`` and counts its calls."""
+
+    def __init__(self) -> None:
+        """Start with zero recorded calls."""
+        self.calls: int = 0  # how often the key was evaluated so far
+        self._inner: Attr = Attr("yob")  # the real key being wrapped
+
+    def __call__(self, item: Item) -> object:
+        """Record the call and return the item's yob (or ``UNDEFINED``)."""
+        self.calls += 1  # one more evaluation
+        return self._inner(item)  # same result as Attr("yob")
+
+
+def _names_rank_by(people: RF, key: collections.abc.Callable) -> list[str]:
+    """Names in rank order produced by ``rank_by(...).result``."""
+    return _names(rank_by(people, ranking_key=key).result)
+
+
+def _names_items_sorted_by(people: RF, key: collections.abc.Callable) -> list[str]:
+    """Names in the order yielded by ``items_sorted_by``."""
+    return [item.value.name for item in items_sorted_by(people, key=key)]
+
+
+def _names_subset_top_2(people: RF, key: collections.abc.Callable) -> list[str]:
+    """Names kept by ``subset`` in top-k mode with ``k=2``."""
+    return [item.value.name for item in subset(people, ranking_key=key, k=2).result]
+
+
+_SORTING_ENTRY_POINTS = [
+    pytest.param(_names_rank_by, id="rank_by"),
+    pytest.param(_names_items_sorted_by, id="items_sorted_by"),
+    pytest.param(_names_subset_top_2, id="subset-top-k"),
+]
+
+
+@pytest.mark.parametrize("sort_names", _SORTING_ENTRY_POINTS)
+def test_ranking_key_is_evaluated_exactly_once_per_item(
+    sort_names: collections.abc.Callable,
+) -> None:
+    """Every sorting entry point evaluates the ranking key exactly once per item.
+    Would fail if the key were called again during sorting or for the undefined
+    check (e.g. filtering with one call and sorting with a second one)."""
+    key: _CountingKey = _CountingKey()  # counts its own evaluations
+    people: RF = _people(with_eve=True)  # five items, Eve without yob
+    sort_names(people, key)  # run the operator / sink once
+    assert key.calls == len(people)  # 5: one call per item, Eve included
+
+
+@pytest.mark.parametrize("sort_names", _SORTING_ENTRY_POINTS)
+def test_stored_none_ranking_key_is_kept(
+    sort_names: collections.abc.Callable,
+) -> None:
+    """An item whose ranking key is a stored ``None`` is kept, not dropped.
+
+    ::
+
+        key | name | yob
+        ----+------+------
+         1  | Ann  | None   <- yob mapped to None: a real value, kept
+         2  | Eve  |  --    <- no yob mapped: UNDEFINED, dropped
+
+    Would fail if the undefined check used ``== None`` / falsiness instead of
+    ``is UNDEFINED`` and dropped Ann together with Eve."""
+    people: RF = RF()  # empty, unfrozen relation
+    people[1] = TF({"name": "Ann", "yob": None})  # yob mapped, but to None
+    people[2] = TF({"name": "Eve"})  # no yob attribute at all
+    people.freeze()  # inputs to operators are frozen
+    assert sort_names(people, Attr("yob")) == ["Ann"]  # Ann kept, Eve dropped

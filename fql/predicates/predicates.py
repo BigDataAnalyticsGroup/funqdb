@@ -58,11 +58,58 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 
+class _Undefined:
+    """Type of the single ``_UNDEFINED`` marker.
+
+    A class rather than a bare ``object()`` so that the marker prints readably
+    and stays the very same object when copied or pickled; consumers test it
+    with ``is``.
+    """
+
+    def __repr__(self) -> str:
+        """Print as ``UNDEFINED`` instead of ``<object at 0x...>``."""
+        return "UNDEFINED"
+
+    def __copy__(self) -> "_Undefined":
+        """Keep identity: a copy is the marker itself."""
+        return self
+
+    def __deepcopy__(self, memo: dict) -> "_Undefined":
+        """Keep identity: a deep copy is the marker itself."""
+        return self
+
+    def __reduce__(self) -> str:
+        """Pickle by reference to the module-level name (same object on load)."""
+        return "_UNDEFINED"
+
+
 # Sentinel returned by ``_resolve_attr_path`` when a path segment is not mapped
 # by the attribute function. Distinct from a stored ``None`` value: absence of a
 # (key, value) mapping is not a value (FDM has no NULL). Predicates translate this
-# into "does not match" so the tuple is simply not selected.
-_UNDEFINED: Any = object()
+# into "does not match" so the tuple is simply not selected. Its public name is
+# ``fql.expressions.UNDEFINED``.
+_UNDEFINED: _Undefined = _Undefined()
+
+
+def _split_attr_path(path: str) -> list[str]:
+    """Split a dot- or dunder-separated attribute path into its segments.
+
+    Double underscores are replaced by dots first. A run of three underscores
+    therefore splits after the first two (``"a___b"`` becomes ``a`` -> ``_b``),
+    as in ``.where()``; for names that start or end with an underscore, prefer
+    the dot form. (Rejecting such ambiguous runs is a TODO for its own MR.)
+
+    @param path: Dot- or ``__``-separated attribute path.
+    @return: The path segments, in order.
+    @raises ValueError: If the path contains an empty segment.
+    """
+    normalized: str = path.replace("__", ".")
+    segments: list[str] = normalized.split(".")
+    if not all(segments):
+        raise ValueError(
+            f"Empty segment in attribute path {path!r} (normalized: {normalized!r})"
+        )
+    return segments
 
 
 def _resolve_attr_path(obj: Any, path: str) -> Any:
@@ -86,14 +133,8 @@ def _resolve_attr_path(obj: Any, path: str) -> Any:
     # module (for ``Predicate``), so this module cannot import it at top level.
     from fdm.attribute_functions import DictionaryAttributeFunction
 
-    normalized: str = path.replace("__", ".")
     current: Any = obj
-    for segment in normalized.split("."):
-        if not segment:
-            raise ValueError(
-                f"Empty segment in attribute path {path!r} "
-                f"(normalized: {normalized!r})"
-            )
+    for segment in _split_attr_path(path):
         # Only attribute functions can be traversed further; anything else (a
         # scalar leaf, or a missing key) means the path is not mapped here.
         if (

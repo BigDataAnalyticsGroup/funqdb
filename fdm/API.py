@@ -261,9 +261,12 @@ class AttributeFunction[Key, Value](PureFunction):
     ) -> "AttributeFunction":
         """Return the k items with the smallest key values (top-k ascending).
         @param k: Number of items to keep.
-        @param key: A function mapping an Item to a comparable value for ranking.
+        @param key: A function mapping an Item to a comparable value for ranking, or a
+            structured key such as ``Attr("yob")`` / ``Key()`` from ``fql.expressions``.
         @param offset: Number of items to skip from the start of the sorted list (default 0).
         @return: A new AttributeFunction containing the k smallest items starting at offset.
+            With a structured key, items without the attribute are dropped first, so fewer
+            than k items may be returned.
         """
         from fql.operators.subsets import subset
 
@@ -274,9 +277,12 @@ class AttributeFunction[Key, Value](PureFunction):
     ) -> "AttributeFunction":
         """Return the k items with the largest key values (top-k descending).
         @param k: Number of items to keep.
-        @param key: A function mapping an Item to a comparable value for ranking.
+        @param key: A function mapping an Item to a comparable value for ranking, or a
+            structured key such as ``Attr("yob")`` / ``Key()`` from ``fql.expressions``.
         @param offset: Number of items to skip from the start of the sorted list (default 0).
         @return: A new AttributeFunction containing the k largest items starting at offset.
+            With a structured key, items without the attribute are dropped first, so fewer
+            than k items may be returned.
         """
         from fql.operators.subsets import subset
 

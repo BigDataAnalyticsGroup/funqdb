@@ -41,7 +41,7 @@ algebra: it can be the input of any operator that consumes an AF with a
 
 - Top-k:       ``rank_by(...) | filter_keys(lambda k: k < k_max)``
 - Pagination:  ``filter_keys(lambda k: offset <= k < offset + page_size)``
-- Median:      lookup at rank ``len // 2``
+- Median:      lookup at rank ``len(result) // 2``
 
 The crucial invariant — the one that makes this non-trivial compared to
 materializing a Python list and slicing it — is that the result is *still
@@ -81,8 +81,40 @@ from typing import Any, Callable, Iterator
 
 from fdm.API import AttributeFunction
 from fdm.attribute_functions import RF
+from fql.expressions import UNDEFINED
 from fql.operators.APIs import Operator, OperatorInput
 from fql.util import Item
+
+
+def _sorted_items(
+    input_function: AttributeFunction,
+    ranking_key: Callable[[Item], Any],
+    reverse: bool,
+) -> list[Item]:
+    """Sort the items of ``input_function`` by ``ranking_key``, stably.
+
+    Shared by ``rank_by``, ``subset`` (top-k) and ``items_sorted_by``. The key is
+    computed once per item. Items whose key is ``UNDEFINED`` (an expression such
+    as ``Attr`` on an unmapped attribute) are dropped: absence is not a value and
+    never takes part in the ordering (see
+    ``docs/changes/004-undefined-attribute-semantics/DECISION.md``). The check is
+    on the returned value, so it applies to any key function returning the
+    marker; a plain lambda that does not call an expression never does, so its
+    behaviour is unchanged (a missing attribute still raises).
+
+    @param input_function: The AF whose items are sorted.
+    @param ranking_key: Maps an ``Item`` to a comparable value or ``UNDEFINED``.
+    @param reverse: If ``True``, sort descending.
+    @return: The items with a defined key, in sorted order.
+    """
+    keyed: list[tuple[Any, Item]] = [
+        (ranking_key(item), item) for item in input_function
+    ]
+    defined: list[tuple[Any, Item]] = [
+        (sort_key, item) for sort_key, item in keyed if sort_key is not UNDEFINED
+    ]
+    defined.sort(key=lambda pair: pair[0], reverse=reverse)
+    return [item for _, item in defined]
 
 
 class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -118,6 +150,10 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             whose result is one.
         @param ranking_key: A function that maps an :class:`Item` to a
             comparable value. Analogous to Python's ``sorted(..., key=…)``.
+            A structured expression such as ``Attr("yob")`` or ``Key()``
+            (``fql.expressions``) keeps the plan free of ``Opaque``; items for
+            which it yields ``UNDEFINED`` are dropped, so the result may have
+            fewer ranks than the input has items.
         @param reverse: If ``True``, rank in descending order of
             ``ranking_key`` (largest first). Default ``False``.
         @param output_factory: Optional factory for the output AF. If
@@ -145,8 +181,8 @@ class rank_by[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         # Python's sorted is stable, so items with equal ranking_key keep
         # their input iteration order — we rely on this for tie-breaking.
-        sorted_items: list[Item] = sorted(
-            input_function, key=self.ranking_key, reverse=self.reverse
+        sorted_items: list[Item] = _sorted_items(
+            input_function, self.ranking_key, self.reverse
         )
 
         # Build the output AF. Default: a fresh RF, because the result's
@@ -201,18 +237,19 @@ def items_sorted_by(
 
     @param input_function: The AF whose items should be yielded in order.
     @param key: A callable that maps an :class:`Item` to a comparable
-        value, analogous to ``sorted(..., key=…)``.
+        value, analogous to ``sorted(..., key=…)``. With a structured
+        expression such as ``Attr("yob")``, items for which it yields
+        ``UNDEFINED`` are skipped.
     @param reverse: If ``True``, yield items in descending order of
         ``key``. Default ``False``.
     @return: An :class:`Iterator` over :class:`Item` instances. The
-        iterator is implemented as a generator over an eagerly
-        ``sorted`` list, so internally one full pass over the input is
-        materialized — the iterator type communicates single-pass
-        presentation intent at the call site, not laziness.
+        iterator runs over an eagerly sorted list, so internally one full
+        pass over the input is materialized — the iterator type
+        communicates single-pass presentation intent at the call site, not
+        laziness.
     @raise TypeError: if ``key`` is not callable. A ``TypeError`` from
-        :func:`sorted` itself (e.g. when ``key`` returns mutually
-        non-comparable values) is propagated unchanged when the iterator
-        is consumed.
+        sorting itself (e.g. when ``key`` returns mutually non-comparable
+        values) is raised by this call, since sorting happens eagerly.
 
     See also:
         :class:`rank_by` — the algebraic counterpart that returns a new
@@ -222,4 +259,4 @@ def items_sorted_by(
     """
     if not callable(key):
         raise TypeError(f"key must be callable, got {type(key).__name__}")
-    return iter(sorted(input_function, key=key, reverse=reverse))
+    return iter(_sorted_items(input_function, key, reverse))

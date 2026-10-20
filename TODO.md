@@ -112,15 +112,29 @@
       `_plan_params` (also in `filter_keys`, `filter_items_scan_complement`).
     - [ ] `_value_{to,from}_dict` use a bare `"type"` discriminator; a user
       dict param whose keys include `"type"` with value in
-      {`"leaf"`,`"node"`,`"opaque"`,`"literal"`,`"predicate"`,`"aggregation"`}
+      {`"leaf"`,`"node"`,`"opaque"`,`"literal"`,`"predicate"`,`"aggregation"`,
+      `"expression"`}
       would be mis-rehydrated. Namespace to e.g. `"__funqdb_type__"`.
     - [ ] `Predicate.from_dict` raises `KeyError`/`TypeError` on malformed
       input instead of `ValueError`; validate like `AggregationFunction.from_dict`.
     - [ ] structured alternatives for the remaining genuine lambdas, so plans
-      become SQL-translatable: ranking keys (`rank_by`, `subset`),
-      partitioning functions (`partition`, `partition_by_aggregate`), the
+      become SQL-translatable: partitioning functions (`partition`, `partition_by_aggregate`), the
       per-item `aggregation_function` of `partition_by_aggregate`,
       `transform` / `transform_items`, join predicates (`add_join_predicate`).
+      Ranking keys are done (007: `Attr` / `Key`); each new consumer of an
+      expression must define its rule for `UNDEFINED`.
+    - [ ] ranking by several keys with a direction per key
+      (`ORDER BY a, b DESC`), on top of `fql.expressions`.
+- [ ] reject ambiguous attribute paths with a run of three or more underscores
+  (`"a___b"` is read as `a` -> `_b` today) in `_split_attr_path` and `.where()`
+  path splitting alike; affects predicates, aggregates and `Attr` (007).
+- [ ] promote the definedness check onto the FDM type (`tf.defined(path)` /
+  `tf.get(path, default)`), deferred in 004 until a third consumer appears;
+  with `Attr` (007) there are three (predicates, aggregates, expressions).
+  Should also make "is the key present?" and "read the key" agree: today an AF
+  with a default value function but no declared domain returns a value for
+  `af[key]` while `key in af` is `False`, so predicates and `Attr` treat it as
+  absent although a lambda reads the default.
 - [ ] observer semantics for AFs not in the store, maybe queue or load, when queuing it may break semantics, e.g. for
   other AFs in main memory that should be informed but are not as part of the observer chain is not in main memory
 

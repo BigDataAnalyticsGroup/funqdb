@@ -41,7 +41,15 @@ ranked: RF = rank_by(users, ranking_key=lambda i: i.value.yob).result
 #### Parameters
 
 - `ranking_key`: a callable mapping an `Item` (key + value) to a comparable
-  value. Analogous to Python's `sorted(..., key=…)`.
+  value. Analogous to Python's `sorted(..., key=…)`. Instead of a lambda, a
+  structured key from `fql.expressions` can be used: `Attr("yob")` (an
+  attribute of the value) or `Key()` (the item's key). On ordinary tuples it
+  gives the same order as the equivalent lambda but keeps the plan free of
+  `Opaque` markers. Items without the ranking attribute are dropped (there is
+  no NULL to sort first or last), so the result can have fewer ranks than the
+  input has items. `Attr` only counts an attribute as present if the tuple
+  maps it (`"yob" in tf`); a value that only comes from a default value
+  function, without a declared domain, counts as absent.
 - `reverse=True`: rank descending (largest first).
 - `output_factory`: optional, defaults to `RF` because the result's key
   domain is always `ℕ` regardless of the input type.
@@ -53,6 +61,7 @@ other FQL operator that consumes an AF with a natural-number key domain.
 The classic SQL ordering use cases reduce to one-liners:
 
 ```python
+from fql.expressions import Attr
 from fql.operators.filters import filter_keys
 
 # top-2 (k smallest by yob)
@@ -67,8 +76,10 @@ page = filter_keys(
     filter_predicate=lambda k: 10 <= k < 20,
 ).result
 
-# median lookup
-median = rank_by(users, ranking_key=lambda i: i.value.yob).result[len(users) // 2]
+# median lookup (use the length of the ranked result: with the structured
+# key Attr("yob"), users without a yob are dropped from the ranking)
+ranked = rank_by(users, ranking_key=Attr("yob")).result
+median = ranked[len(ranked) // 2]
 ```
 
 This is the *non-trivial* property that makes `rank_by` more than just
@@ -85,9 +96,10 @@ pipeline never has to leave the model just to express order.
 
 The original keys of `input` are **not** preserved in the result of
 `rank_by`. If you need to keep them — e.g. to join back on a surrogate
-user id later in the pipeline — `project` the original key into the
-value first, so it travels along as part of the value type, *then*
-`rank_by`. Otherwise the surrogate key is gone.
+user id later in the pipeline — copy the original key into the value
+first with `key_to_value` (e.g. `key_to_value(users, "user_id")`, see
+[group_by](group_by.md)), so it travels along as part of the value type,
+*then* `rank_by`. Otherwise the surrogate key is gone.
 
 #### Stable tie-breaking
 
@@ -134,7 +146,9 @@ of the algebra **explicit at every call site**.
 #### Parameters
 
 - `key`: a callable mapping an `Item` to a comparable value. Required;
-  must be callable or a `TypeError` is raised eagerly.
+  must be callable or a `TypeError` is raised eagerly. Structured keys
+  (`Attr`, `Key`) work as for `rank_by`; items without the attribute are
+  skipped.
 - `reverse=True`: yield descending.
 
 #### Important properties

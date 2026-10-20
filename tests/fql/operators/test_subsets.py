@@ -20,7 +20,8 @@
 
 import pytest
 
-from fdm.attribute_functions import RF, DBF
+from fdm.attribute_functions import RF, DBF, TF
+from fql.expressions import Attr, Key
 from fql.operators.subsets import subset
 from fql.util import Item
 from tests.lib import _create_testdata
@@ -284,10 +285,8 @@ def test_subset_negative_offset_raises():
     """Negative offset must be rejected at construction time."""
     db: DBF = _create_testdata(frozen=True)
 
-    # -- begin AI-modified --
     with pytest.raises(ValueError):  # __init__ raises ValueError for offset < 0
         subset(db.customers, ranking_key=lambda item: item.key, k=2, offset=-1)
-    # -- end AI-modified --
 
 
 def test_subset_offset_with_predicate_raises():
@@ -338,3 +337,120 @@ def test_subset_offset_with_reverse():
     assert result[3] == db.customers[3]  # second item in the window
     assert 5 not in result  # largest key was skipped by offset
     assert 2 not in result  # beyond the k-window
+
+
+# ---------------------------------------------------------------------------
+# Structured ranking keys Attr / Key (007)
+# ---------------------------------------------------------------------------
+
+
+def _people(with_eve: bool = False) -> RF:
+    """Four people whose key order, insertion order and yob order all differ.
+
+    ::
+
+        insertion  | key | name | yob
+        -----------+-----+------+------
+          1st      |  3  | Ann  | 1970
+          2nd      |  1  | Bob  | 2000
+         (3rd)     | (4) | Eve  |  --    <- only if with_eve: no yob mapped
+          3rd (4th)|  5  | Cid  | 1990
+          4th (5th)|  2  | Dan  | 1980
+
+        (bracketed insertion positions: with_eve=True)
+
+        two oldest (by yob):    Ann, Dan
+        two youngest (by yob):  Bob, Cid
+        first two by key:       Bob, Dan
+        first two inserted:     Ann, Bob
+    """
+    people: RF = RF()  # empty, unfrozen relation
+    people[3] = TF({"name": "Ann", "yob": 1970})  # inserted first, key 3
+    people[1] = TF({"name": "Bob", "yob": 2000})  # inserted second, key 1
+    if with_eve:  # optional tuple without a yob attribute
+        people[4] = TF({"name": "Eve"})  # key 4 lies between the other keys
+    people[5] = TF({"name": "Cid", "yob": 1990})  # key 5
+    people[2] = TF({"name": "Dan", "yob": 1980})  # inserted last, key 2
+    people.freeze()  # inputs to operators are frozen in the other tests too
+    return people
+
+
+def test_subset_top_k_with_attr_yob():
+    """``subset`` with ``Attr("yob")`` and ``k=2`` keeps the two oldest people.
+    Would fail if the top-k mode did not evaluate ``Attr`` per item, or kept
+    the first two by key or by insertion order instead."""
+    result: RF = subset(_people(), ranking_key=Attr("yob"), k=2).result  # top-2
+    names: dict[int, str] = {
+        item.key: item.value.name for item in result
+    }  # original key -> name
+    assert names == {3: "Ann", 2: "Dan"}  # 1970 and 1980, original keys kept
+
+
+def test_subset_top_k_with_attr_yob_reverse():
+    """``subset`` with ``Attr("yob")``, ``k=2``, ``reverse=True`` keeps the youngest.
+    Would fail if ``reverse`` were ignored for structured ranking keys."""
+    result: RF = subset(
+        _people(), ranking_key=Attr("yob"), k=2, reverse=True
+    ).result  # top-2 descending
+    names: dict[int, str] = {
+        item.key: item.value.name for item in result
+    }  # original key -> name
+    assert names == {1: "Bob", 5: "Cid"}  # 2000 and 1990, original keys kept
+
+
+def test_subset_attr_offset_window_skips_undefined():
+    """``subset(Attr("yob"), k=2, offset=1)`` drops Eve before slicing the window.
+    Would fail if undefined items were dropped after slicing (window too small)
+    or counted towards the offset, or if Eve's ``UNDEFINED`` were compared."""
+    result: RF = subset(
+        _people(with_eve=True), ranking_key=Attr("yob"), k=2, offset=1
+    ).result  # sorted by yob: Ann, Dan, Cid, Bob -> skip Ann, keep two
+    names: dict[int, str] = {
+        item.key: item.value.name for item in result
+    }  # original key -> name
+    assert names == {2: "Dan", 5: "Cid"}  # 1980 and 1990; Eve not in the window
+
+
+def test_subset_attr_offset_window_reverse_skips_undefined():
+    """``subset(Attr("yob"), k=2, offset=1, reverse=True)`` drops Eve before slicing.
+    Would fail if undefined items were dropped only in ascending order, or if
+    Eve's ``UNDEFINED`` were counted towards the offset of a descending window."""
+    result: RF = subset(
+        _people(with_eve=True), ranking_key=Attr("yob"), k=2, offset=1, reverse=True
+    ).result  # sorted by yob descending: Bob, Cid, Dan, Ann -> skip Bob, keep two
+    names: dict[int, str] = {
+        item.key: item.value.name for item in result
+    }  # original key -> name
+    assert names == {5: "Cid", 2: "Dan"}  # 1990 and 1980; Eve not in the window
+
+
+def test_subset_attr_returns_fewer_than_k_when_keys_are_undefined():
+    """``subset`` returns fewer than k items when too few items have the attribute.
+    Would fail if dropped items were backfilled or the result padded to k
+    (documented: top-k may return fewer than k items)."""
+    result: RF = subset(
+        _people(with_eve=True), ranking_key=Attr("yob"), k=5
+    ).result  # five items in the input, but only four have a yob
+    assert len(result) == 4  # Eve is dropped, nothing replaces her
+    assert 4 not in result  # Eve's key is absent
+
+
+@pytest.mark.parametrize(
+    "reverse, expected",
+    [
+        (False, {1: "Bob", 2: "Dan"}),
+        (True, {5: "Cid", 3: "Ann"}),
+    ],
+    ids=["smallest-keys", "largest-keys"],
+)
+def test_subset_top_k_with_key(reverse: bool, expected: dict[int, str]) -> None:
+    """``subset`` with ``Key()`` and ``k=2`` keeps the items with the extreme keys.
+    Would fail if ``Key()`` ranked by insertion order or by value instead of by
+    the item key, or if ``reverse`` were ignored for ``Key()``."""
+    result: RF = subset(
+        _people(), ranking_key=Key(), k=2, reverse=reverse
+    ).result  # top-2 by item key; keys are 3, 1, 5, 2 in insertion order
+    names: dict[int, str] = {
+        item.key: item.value.name for item in result
+    }  # original key -> name
+    assert names == expected  # keys 1, 2 ascending; keys 5, 3 descending
