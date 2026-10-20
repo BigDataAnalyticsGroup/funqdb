@@ -35,6 +35,7 @@ by_parity = partition(
     partitioning_function=lambda item: item.value.n % 2,
 ).result
 # by_parity[0] holds the even-n tuples, by_parity[1] the odd-n ones
+# structured equivalent (plan without Opaque): partitioning_function=Attr("n") % 2
 ```
 
 Instead of a lambda, a structured key keeps the plan free of `Opaque` markers:

@@ -47,10 +47,10 @@ and backend-agnostic:
 Nothing in this module depends on any runtime Operator or AttributeFunction
 state; it is pure data. The only exception is (de)serializing structured
 parameter values: ``Predicate``s, built-in aggregation functions and
-expressions (``Attr``, ``Key``, ``Composite``) are imported lazily from
-``fql.predicates``, ``fql.operators.aggregates`` and ``fql.expressions`` to
-convert them to and from their dict form. The only place that knows how to *build* an IR from an
-operator tree is ``fql.plan.extract``.
+expressions (``Attr``, ``Key``, ``Composite``, arithmetic, ``Record``) are
+imported lazily from ``fql.predicates``, ``fql.operators.aggregates`` and
+``fql.expressions`` to convert them to and from their dict form. The only place
+that knows how to *build* an IR from an operator tree is ``fql.plan.extract``.
 """
 
 from __future__ import annotations
@@ -192,8 +192,8 @@ class PlanNode:
     #: (str/int/float/bool/None), tuple/list of those, a nested dict of
     #: those, a structured ``Predicate``, a built-in aggregation function
     #: (``Count``, ``Sum``, ...), a built-in expression (``Attr``, ``Key``,
-    #: ``Composite``), or an ``Opaque`` marker. The extractor is responsible
-    #: for ensuring this invariant holds; see
+    #: ``Composite``, arithmetic, ``Record``), or an ``Opaque`` marker. The
+    #: extractor is responsible for ensuring this invariant holds; see
     #: ``fql.plan.extract._serialize_param``.
     params: Mapping[str, Any] = field(default_factory=dict)
 
@@ -239,7 +239,7 @@ def _value_to_dict(value: Any) -> Any:
 
     if isinstance(value, AggregationFunction) and value.is_serializable():
         return value.to_dict()
-    # Built-in expressions (Attr, Key, Composite) serialize to
+    # Built-in expressions (Attr, Key, Composite, arithmetic, Record) serialize to
     # {"type": "expression", ...}.
     from fql.expressions import Expression
 

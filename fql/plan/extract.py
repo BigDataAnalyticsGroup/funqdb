@@ -192,8 +192,9 @@ def _serialize_param(value: Any) -> Any:
        recursed through ``extract``.
     5. Structured ``Predicate``s, built-in aggregation functions
        (``Count``, ``Sum``, ...) with a valid attribute, and built-in
-       expressions (``Attr``, ``Key``, ``Composite``) are callable but fully
-       described by their data; they are kept as objects and serialized later by
+       expressions (``Attr``, ``Key``, ``Composite``, arithmetic, ``Record``)
+       are callable but fully described by their data; they are kept as
+       objects and serialized later by
        ``ir._value_to_dict`` via their ``to_dict()``.
     6. Anything else callable (lambdas, functions, bound methods, classes
        with ``__call__``, user-built aggregations and expressions) becomes an
@@ -232,8 +233,9 @@ def _serialize_param(value: Any) -> Any:
     if isinstance(value, AggregationFunction) and value.is_serializable():
         return value
 
-    # Built-in expressions (Attr, Key, Composite) are callable but fully described by
-    # their data; user subclasses stay Opaque (see ``is_serializable``).
+    # Built-in expressions (Attr, Key, Composite, arithmetic, Record) are
+    # callable but fully described by their data; user subclasses stay Opaque
+    # (see ``is_serializable``).
     from fql.expressions import Expression
 
     if isinstance(value, Expression) and value.is_serializable():

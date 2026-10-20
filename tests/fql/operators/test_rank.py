@@ -952,3 +952,14 @@ def test_rank_by_composite_key_drops_tuple_missing_one_component() -> None:
         "Dan",
         "Ann",
     ]  # (Dev, 1980), (Ops, 1970); Bob, Cid dropped
+
+
+def test_rank_by_arithmetic_key_negated_yob() -> None:
+    """``rank_by`` with ``Attr("yob") * -1`` ranks youngest first, drops Eve.
+    Would fail if an arithmetic expression were not evaluated as a ranking key
+    (e.g. sorted as an object, or by the plain yob), or if the ``UNDEFINED`` key of
+    a tuple without yob were ranked instead of dropped."""
+    ranked: RF = rank_by(
+        _people(with_eve=True), ranking_key=Attr("yob") * -1
+    ).result  # -2000 < -1990 < -1980 < -1970; Eve has no yob
+    assert _names(ranked) == ["Bob", "Cid", "Dan", "Ann"]  # youngest first, no Eve

@@ -56,6 +56,40 @@ doubled[1].score  # → 180
 doubled[2].score  # → 150
 ```
 
+#### Structured: `Record` and arithmetic
+
+The same mapping can be written without a lambda. `Record` builds a **new tuple with exactly the given
+fields** (like SQL `SELECT name, score * 2 AS score`); the plan then contains no `Opaque` marker and a
+backend can translate it:
+
+```python
+from fql.expressions import Attr, Record
+from fql.predicates import Gt
+
+doubled = transform_items[RF, RF](
+    scores,
+    transformation_function=Record(
+        name=Attr("name"),
+        score=Attr("score") * 2,      # arithmetic: + - * / % (or Add, Sub, Mul, Div, Mod)
+        passed=Gt("score", 70),       # a predicate field yields True / False
+    ),
+).result
+
+doubled[1].score   # → 180
+doubled[3].passed  # → False
+```
+
+- Keys are kept; without `output_factory` the result is always a **new RF** (the input is not modified).
+- Fields are `Attr`, `Key`, arithmetic expressions or predicates — no constants, no nested records.
+  Arithmetic operands are attributes, keys, other arithmetic or plain `int` / `float` numbers.
+- A field that cannot be computed is **absent** from the result tuple (FDM has no NULL): its attribute is
+  missing, or it divides by zero. If every field is absent, the empty tuple is kept.
+- Arithmetic follows Python: `/` is true division (`7 / 2 == 3.5`) and `%` takes the sign of the divisor
+  (`-7 % 3 == 2`). A non-numeric value (e.g. a stored `None` or a string) raises `TypeError`; dividing a
+  huge integer, or mixing it with a float, may raise `OverflowError`.
+- Arithmetic expressions also work as ranking and partition keys, e.g.
+  `partition(rf, partitioning_function=Attr("n") % 2)`.
+
 ### Relationship to other operators
 
 - **vs [filter](filter.md)**: filter selects a subset; transform can reshape

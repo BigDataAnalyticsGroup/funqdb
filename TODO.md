@@ -125,12 +125,13 @@
     - [ ] `Predicate.from_dict` raises `KeyError`/`TypeError` on malformed
       input instead of `ValueError`; validate like `AggregationFunction.from_dict`.
     - [ ] structured alternatives for the remaining genuine lambdas, so plans
-      become SQL-translatable: partition keys beyond `Attr` / `Composite` /
-      `Predicate` (case distinctions, arithmetic), the per-item
-      `aggregation_function` of `partition_by_aggregate`,
-      `transform` / `transform_items`, join predicates (`add_join_predicate`).
-      Ranking keys (007) and partition keys (008) are done; each new consumer
-      of an expression must define its rule for `UNDEFINED`.
+      become SQL-translatable: case distinctions (`CASE WHEN`), string
+      functions / concatenation, constant and nested `Record` fields, unary
+      minus, the per-item `aggregation_function` of `partition_by_aggregate`
+      (e.g. via `Record`), whole-AF `transform`, join predicates
+      (`add_join_predicate`). Ranking keys (007), partition keys (008) and
+      `transform_items` with `Record` + arithmetic (009) are done; each new
+      consumer of an expression must define its rule for `UNDEFINED`.
     - [ ] ranking by several keys with a direction per key
       (`ORDER BY a, b DESC`), on top of `fql.expressions`.
 - [ ] reject ambiguous attribute paths with a run of three or more underscores

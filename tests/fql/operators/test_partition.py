@@ -113,3 +113,17 @@ def test_partition_by_key_puts_every_tuple_into_its_own_partition() -> None:
     assert _memberships(partitions) == {
         k: {k} for k in range(1, 6)
     }  # every tuple alone in a partition named by its own key
+
+
+def test_partition_by_arithmetic_key_groups_by_computed_value() -> None:
+    """``partition`` with ``Attr("yob") % 2`` groups by even / odd year and drops Eve.
+    Would fail if an arithmetic key were evaluated on the TF instead of the item, or
+    if Eve (no yob, so the key is ``UNDEFINED``) landed in an ``UNDEFINED`` partition.
+    """
+    partitions: DBF = partition(
+        _staff(), partitioning_function=Attr("yob") % 2
+    ).result  # one partition per remainder
+    assert _memberships(partitions) == {
+        0: {1, 2, 3},  # 1970, 1990, 2000 are even
+        1: {4},  # 1975 is odd
+    }  # Eve (key 5) has no yob and is in no partition

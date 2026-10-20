@@ -265,6 +265,22 @@ lambdas passed to ``partition``. Structured partition keys (``Attr``,
 }
 ```
 
+A ``Record`` passed to ``transform_items`` appears under the parameter name
+``mapping_function``; its fields are an ordered list (JSON sorts dict keys), e.g.
+``Record(name=Attr("name"), score=Attr("score") * 2)`` becomes
+
+```json
+"mapping_function": {
+  "type": "expression", "op": "record",
+  "fields": [
+    { "name": "name",  "value": { "type": "expression", "op": "attr", "attr": "name" } },
+    { "name": "score", "value": { "type": "expression", "op": "mul",
+                                  "left": { "type": "expression", "op": "attr", "attr": "score" },
+                                  "right": 2 } }
+  ]
+}
+```
+
 ``group_by`` shows its grouping keys instead of the internal partitioning key.
 Since IR version 4 a ``Predicate`` used as partition or ranking key is evaluated
 on the tuple's value, which is why plans of version 3 are rejected.

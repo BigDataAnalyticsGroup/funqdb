@@ -18,12 +18,16 @@
 #
 #
 
+from typing import Any
+
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
+from fql.expressions import Attr, Record
 from fql.operators.aggregates import Count
 from fql.operators.partition_and_aggregate import group_by_aggregate
 from fql.operators.rank import rank_by
+from fql.predicates.predicates import Gt
 from fql.operators.transforms import (
     transform_items,
     transform,
@@ -468,3 +472,103 @@ def test_key_to_value_respects_frozen_state():
     assert not result_mixed["Ann"].frozen  # the unfrozen input value stays writable
     # the output AF itself is always frozen, whatever its values are
     assert result_mixed.frozen
+
+
+# -- transform_items with a structured Record (009) ---------------------------
+
+
+def _scores() -> RF:
+    """Two players; Bob has no score. The RF is left unfrozen on purpose.
+
+    ::
+
+        key | name | score
+        ----+------+------
+         1  | Ann  |  7
+         2  | Bob  |  --    <- no score mapped
+    """
+    return RF(
+        {1: TF({"name": "Ann", "score": 7}), 2: TF({"name": "Bob"})}
+    )  # unfrozen: an in-place update would succeed silently, not raise
+
+
+def test_transform_items_with_record_builds_a_new_relation() -> None:
+    """A ``Record`` maps every tuple to a new tuple under the same key, in a new RF.
+    Would fail if the structured path fell back to the in-place mode of a lambda
+    without output factory and overwrote the tuples of the input RF.
+
+    ::
+
+        key | double | name          key | name | score
+        ----+--------+-----          ----+------+------
+         1  |   14   | Ann    <-      1  | Ann  |  7
+         2  |   --   | Bob    <-      2  | Bob  |  --
+    """
+    players: RF = _scores()  # the input relation
+    result: RF = transform_items[RF, RF](
+        players,
+        transformation_function=Record(double=Attr("score") * 2, name=Attr("name")),
+    ).result  # SELECT score * 2 AS double, name
+    assert type(result) is RF  # a relation function
+    assert result is not players  # a new RF, not the input updated in place
+    assert [(f.key, f.value) for f in result[1]] == [
+        ("double", 14),
+        ("name", "Ann"),
+    ]  # Ann: both fields, in the order of the Record
+    assert [(f.key, f.value) for f in result[2]] == [
+        ("name", "Bob")
+    ]  # Bob: no score, so double is absent
+    assert [item.key for item in result] == [1, 2]  # keys preserved
+    assert [(f.key, f.value) for f in players[1]] == [
+        ("name", "Ann"),
+        ("score", 7),
+    ]  # the input tuple is unchanged
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        Attr("score"),  # bare attribute: would build an RF of plain scores
+        Attr("score") * 2,  # arithmetic: would build an RF of plain numbers
+        Gt("score", 1),  # predicate: would build an RF of bools
+    ],
+    ids=["attr", "arithmetic", "predicate"],
+)
+def test_transform_items_rejects_non_record_expression(expression: Any) -> None:
+    """``transform_items`` with a non-Record expression raises ``TypeError`` eagerly.
+    Would fail if any expression were accepted, which would build an RF of plain
+    values (scores, numbers or bools) instead of tuples."""
+    with pytest.raises(TypeError, match="accepts a Record"):  # eager check
+        transform_items(_scores(), transformation_function=expression)  # no .result
+
+
+def test_transform_items_with_record_keeps_item_whose_fields_are_all_absent() -> None:
+    """A tuple without any of the record's attributes is kept as an empty tuple.
+    Would fail if such an item were dropped (as a lambda returning ``None`` is).
+
+    ::
+
+        key | pay          key | name | score
+        ----+-----         ----+------+------
+         1  | --     <-     1  | Ann  |  7
+         2  | --     <-     2  | Bob  |  --
+    """
+    result: RF = transform_items[RF, RF](
+        _scores(), transformation_function=Record(pay=Attr("salary"))
+    ).result  # no tuple has a salary
+    assert [item.key for item in result] == [1, 2]  # both items kept
+    assert [len(item.value) for item in result] == [0, 0]  # as empty tuples
+
+
+def test_transform_items_with_record_uses_explicit_output_factory() -> None:
+    """With a ``Record`` and an ``output_factory`` the result is the factory's AF.
+    Would fail if the structured path always built its own RF and ignored the factory.
+    """
+    target: RF = RF()  # the AF the factory hands out
+    result: RF = transform_items[RF, RF](
+        _scores(),
+        transformation_function=Record(name=Attr("name")),
+        output_factory=lambda _: target,
+    ).result  # SELECT name
+    assert result is target  # exactly the factory's instance
+    assert [item.value.name for item in result] == ["Ann", "Bob"]  # filled with rows

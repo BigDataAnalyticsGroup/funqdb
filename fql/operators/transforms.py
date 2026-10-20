@@ -22,8 +22,10 @@
 import logging
 from typing import Callable, Any, Iterable
 
-from fdm.attribute_functions import DictionaryAttributeFunction
+from fdm.attribute_functions import RF, DictionaryAttributeFunction
+from fql.expressions import Expression, Record
 from fql.operators.APIs import Operator, OperatorInput
+from fql.predicates.predicates import Predicate
 from fql.util import Item
 
 logger = logging.Logger(__name__)
@@ -51,35 +53,69 @@ class transform_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
     """An operator that transforms the input instance by mapping its items.
-    The modified input instance will be returned as the output."""
+
+    With a callable, each item is mapped by it; without an output factory the
+    input instance is modified in place and returned. With a structured
+    ``Record`` (``fql.expressions``), each item becomes a new tuple with exactly
+    the record's fields under the same key (SQL: ``SELECT expr AS name``); the
+    result is then always a new RF unless an output factory is given, and the
+    plan stays free of ``Opaque``. The function appears in the plan as
+    ``mapping_function``."""
 
     def __init__(
         self,
         input_function: OperatorInput[INPUT_AttributeFunction],
         *,
-        transformation_function: Callable[..., Any],
+        transformation_function: Callable[..., Any] | Record,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
         """Initialize the transform_items operator.
         @param input_function: The input attribute function to transform.
-        @param transformation_function: A function that takes an Item and returns a transformed Item or None
+        @param transformation_function: A function that takes an Item and returns a transformed Item or None, or a
+            ``Record``.
         @param output_factory: If set, this factory function will be used to create the output instance.
+        @raises TypeError: If ``transformation_function`` is a predicate or an expression other than ``Record``
+            (neither would return an ``Item``).
         """
 
+        if isinstance(
+            transformation_function, (Expression, Predicate)
+        ) and not isinstance(transformation_function, Record):
+            raise TypeError(
+                "transform_items accepts a Record (or a callable on Item) as "
+                f"structured function, got {transformation_function!r}; wrap it "
+                "in Record(name=...)"
+            )
         self.input_function = input_function
         self.mapping_function = transformation_function
         self.output_factory = output_factory
 
     def _compute(self) -> OUTPUT_AttributeFunction:
+        """Map every item and write the results into the output AF.
+
+        A ``Record`` maps each item to ``Item(key, record(item))`` into a new RF
+        (or the factory's instance); a callable maps items freely, and without a
+        factory modifies the input in place.
+        """
         input_function = self._resolve_input(self.input_function)
 
+        is_record: bool = isinstance(self.mapping_function, Record)
+
         # get the mapped items:
-        mapped_items: Iterable[Item] = map(self.mapping_function, input_function)
+        if is_record:
+            record: Record = self.mapping_function
+            mapped_items: Iterable[Item] = (
+                Item(item.key, record(item)) for item in input_function
+            )
+        else:
+            mapped_items = map(self.mapping_function, input_function)
 
         output_function = input_function
         if self.output_factory is not None:
             output_function = self.output_factory(None)
             output_function.unfreeze()
+        elif is_record:
+            output_function = RF(frozen=False)  # structured: never in place
         else:
             logger.warning(
                 "No output function factory provided; modifying input function in place. This is not recommended as it"

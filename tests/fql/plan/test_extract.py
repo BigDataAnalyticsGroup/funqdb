@@ -39,7 +39,7 @@ from typing import Any, Callable
 import pytest
 
 from fdm.attribute_functions import RF, DBF
-from fql.expressions import Attr, Composite, Expression, Key
+from fql.expressions import Attr, Composite, Expression, Key, Mul, Record
 from fql.operators.APIs import Operator
 from fql.operators.aggregates import (
     AggregationFunction,
@@ -60,6 +60,7 @@ from fql.operators.projections import project
 from fql.operators.rank import rank_by
 from fql.operators.set_operations import cogroup, intersect, minus, union
 from fql.operators.subsets import subset
+from fql.operators.transforms import transform_items
 from fql.plan import LogicalPlan, LeafRef, Opaque, PlanNode, extract, extract_plan
 from fql.plan.ir import IR_VERSION, PlanChild, _value_from_dict, _value_to_dict
 from fql.predicates.predicates import Eq, Lt
@@ -1070,3 +1071,97 @@ def test_partition_with_composite_key_survives_json_roundtrip():
         Lt,
     ]  # components restored as objects, not as plain dicts
     assert key.to_dict() == _COMPOSITE_RECORD  # same components, same order
+
+
+# -- Structured transform_items: Record (009) ---------------------------------
+
+#: The IR record of the ``Record`` in ``_transform_by_record``; fields not sorted.
+_RECORD_IR: dict = {
+    "type": "expression",
+    "op": "record",
+    "fields": [
+        {
+            "name": "name",
+            "value": {"type": "expression", "op": "attr", "attr": "name"},
+        },
+        {
+            "name": "age",
+            "value": {
+                "type": "expression",
+                "op": "sub",
+                "left": 2026,
+                "right": {"type": "expression", "op": "attr", "attr": "yob"},
+            },
+        },
+        {
+            "name": "early",
+            "value": {"type": "predicate", "op": "lt", "attr": "yob", "value": 1980},
+        },
+    ],
+}
+
+
+def _transform_by_record() -> transform_items:
+    """Users mapped to name, age and "born before 1980" (not executed)."""
+    return transform_items(
+        _users(),
+        transformation_function=Record(
+            name=Attr("name"), age=2026 - Attr("yob"), early=Lt("yob", 1980)
+        ),
+    )
+
+
+def test_transform_items_with_record_extracts_without_opaque():
+    """A ``Record`` in ``transform_items`` extracts structured as ``mapping_function``.
+    Would fail if the ``Record`` became an ``Opaque`` marker, or if ``to_dict`` sorted
+    the fields by name (``age`` before ``name``)."""
+    root: PlanChild = _transform_by_record().to_plan().root  # no execution
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+    record: Any = root.params["mapping_function"]  # the extracted Record
+    assert record.to_dict() == _RECORD_IR  # exact IR record, fields in order
+
+
+def test_transform_items_with_record_survives_json_roundtrip():
+    """A JSON round trip restores exactly the ``Record``, with its field order.
+    Would fail if the fields were stored as a JSON object (sorted keys on output)
+    or restored as plain dicts instead of Attr / Sub / Lt objects."""
+    pipeline: transform_items = _transform_by_record()  # not executed
+    restored: LogicalPlan = LogicalPlan.from_json(
+        pipeline.to_plan().to_json()
+    )  # serialize to JSON text and read it back
+    root: PlanChild = restored.root  # the transform_items node
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    record: Any = root.params["mapping_function"]  # the restored Record
+    assert type(record) is Record  # exactly Record, no dict
+    assert repr(record) == repr(
+        pipeline.mapping_function
+    )  # same fields, same order, same expression objects
+    assert record.to_dict() == _RECORD_IR  # and the same IR record
+
+
+class _MyMul(Mul):
+    """A user subclass of ``Mul`` (could override ``__call__``)."""
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        Record(x=_MyMul(Attr("yob"), 2)),
+        Record(x=_DoubledYob("yob")),
+        Record(x=_DoubledYob("yob") * 2),  # exact Mul, user Attr subclass as operand
+    ],
+    ids=["mul-subclass", "attr-subclass", "attr-subclass-as-mul-operand"],
+)
+def test_record_with_user_subclass_extracts_as_opaque(record: Record) -> None:
+    """A ``Record`` holding a user subclass of ``Mul`` or ``Attr`` stays ``Opaque``.
+    Would fail if the exact-type rule ignored record fields or arithmetic operands,
+    so the plan would hold a plain record that computes something different."""
+    assert record.is_serializable() is False  # not writable into the plan IR
+    root: PlanChild = (
+        transform_items(_users(), transformation_function=record).to_plan().root
+    )  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    marker: Any = root.params["mapping_function"]  # the extracted function
+    assert isinstance(marker, Opaque)  # a marker, not a structured record
+    assert _find_opaques(root) == [marker]  # and the only marker in the plan
