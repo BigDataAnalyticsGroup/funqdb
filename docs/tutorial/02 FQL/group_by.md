@@ -99,7 +99,31 @@ shadow an attribute that already resolves on a value.
 
 Like ``group_by_aggregate``, but takes an arbitrary partitioning function
 instead of grouping keys — useful when the grouping criterion is not simple
-attribute equality.
+attribute equality. The aggregates are given as keyword arguments, exactly as
+for ``group_by_aggregate``:
+
+```python
+from fql.operators.partition_and_aggregate import partition_by_aggregate
+from fql.operators.aggregates import Count, Max
+from fql.predicates import Gt
+
+result = partition_by_aggregate(
+    employees,
+    partitioning_function=Gt("salary", 75),   # partition keys True / False
+    headcount=Count(),
+    top_salary=Max("salary"),
+).result
+
+result[True].headcount   # → 2   (Alice 90, Bob 80)
+result[False].top_salary  # → 70  (Carol)
+```
+
+With a structured partitioning key (``Attr``, ``Composite``, arithmetic or a
+predicate, see [partition](partition.md) for how missing attributes are
+handled) and built-in aggregates the plan contains no ``Opaque`` marker.
+Instead of keyword aggregates, a callable ``aggregation_function`` may be given
+that maps each partition ``Item(key, RF)`` to an ``Item`` — exactly one of the
+two forms. It stays opaque in the plan.
 
 ### Aggregation functions
 
@@ -117,4 +141,4 @@ FQL provides built-in aggregation function classes in
 
 Each is a callable that receives an RF and returns a scalar. They can be
 used standalone or as keyword arguments to ``aggregate`` /
-``group_by_aggregate``.
+``group_by_aggregate`` / ``partition_by_aggregate``.

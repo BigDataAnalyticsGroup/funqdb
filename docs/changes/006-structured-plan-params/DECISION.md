@@ -73,3 +73,10 @@ rejected.
   it would be applied per item (and fail at run time). Accepted as user error; not guarded.
 - Built-in aggregations with an invalid attribute (e.g. `Sum(None)`, `Max(5)`) are not serializable and stay
   `Opaque`, so that every written plan can be read back.
+
+## Note 2026-10-21 (superseded by 010)
+
+- The two notes above on `partition_by_aggregate` are superseded by
+  `docs/changes/010-structured-partition-aggregates/`: its aggregation is applied per **partition** (not per item),
+  built-in aggregates are now given as keyword arguments, and a structured object passed as `aggregation_function`
+  (e.g. `Count()`) is rejected with `TypeError` instead of being accepted as user error.

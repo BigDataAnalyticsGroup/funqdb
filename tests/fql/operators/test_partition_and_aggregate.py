@@ -3,7 +3,8 @@ from typing import Any
 import pytest
 
 from fdm.attribute_functions import DBF, RF, TF
-from fql.operators.aggregates import aggregate, Min, Max, Count
+from fql.expressions import Attr, Record
+from fql.operators.aggregates import aggregate, AggregationFunction, Min, Max, Count
 from fql.operators.partition import partition, group_by
 from fql.operators.partition_and_aggregate import (
     partition_by_aggregate,
@@ -11,6 +12,7 @@ from fql.operators.partition_and_aggregate import (
 )
 from fql.operators.rank import rank_by
 from fql.operators.transforms import transform_items, key_to_value
+from fql.predicates.predicates import Eq
 from fql.util import Item
 from tests.lib import _create_testdata, _memberships
 
@@ -335,3 +337,84 @@ def test_group_by_aggregate_does_not_count_dropped_tuples() -> None:
         item.key: item.value.count for item in result
     }  # group key -> count
     assert counts == {"Dev": 2, "Ops": 1}  # Ann + Bob, Eve; Dan (no dept) dropped
+
+
+# ---------------------------------------------------------------------------
+# partition_by_aggregate with keyword aggregates (010)
+# ---------------------------------------------------------------------------
+
+
+def test_partition_by_aggregate_keyword_aggregates_per_partition() -> None:
+    """Keyword aggregates give one aggregate tuple per ``Attr("dept")`` partition.
+    Would fail if Dan (no dept) were counted, or if ``Min("city")`` over Eve's
+    partition (no city) put a value instead of leaving ``city`` absent."""
+    result: RF = partition_by_aggregate(
+        _staff(), partitioning_function=Attr("dept"), n=Count(), city=Min("city")
+    ).result  # per department: number of employees and smallest city
+    tuples: dict[Any, dict[str, Any]] = {
+        item.key: {a.key: a.value for a in item.value} for item in result
+    }  # partition key -> plain dict of the aggregate tuple
+    assert tuples == {
+        "Dev": {"n": 2, "city": "Berlin"},  # Ann and Bob, both in Berlin
+        "Ops": {"n": 1},  # Eve only; no city mapped, so no city aggregate
+    }  # Dan (no dept) is in no partition
+
+
+def test_partition_by_aggregate_predicate_key_counts_missing_attribute_as_false() -> (
+    None
+):
+    """A predicate key with keyword aggregates counts per ``True`` / ``False`` partition.
+    Would fail if Eve, who has no city, were dropped instead of counted under
+    ``False`` (the comparison is false for a missing attribute)."""
+    result: RF = partition_by_aggregate(
+        _staff(), partitioning_function=Eq("city", "Berlin"), n=Count()
+    ).result  # employees in Berlin vs. elsewhere
+    counts: dict[Any, int] = {
+        item.key: item.value.n for item in result
+    }  # partition key -> count
+    assert counts == {True: 2, False: 2}  # Ann, Bob | Dan (Paris), Eve (no city)
+
+
+@pytest.mark.parametrize(
+    "kwargs, error, message",
+    [
+        ({}, ValueError, "exactly one of"),  # neither form given
+        (
+            {"aggregation_function": lambda i: i, "n": Count()},
+            ValueError,
+            "exactly one of",
+        ),  # both forms given
+        (
+            {"aggregation_function": Count()},
+            TypeError,
+            "as keywords",
+        ),  # aggregation instead of a callable on a partition
+        (
+            {"aggregation_function": Record(a=Attr("dept"))},
+            TypeError,
+            "as keywords",
+        ),  # expression instead of a callable on a partition
+        (
+            {"aggregation_function": Eq("dept", "Dev")},
+            TypeError,
+            "as keywords",
+        ),  # predicate instead of a callable on a partition
+        (
+            {"aggregation_function": AggregationFunction(len, "dept")},
+            TypeError,
+            "as keywords",
+        ),  # user-built aggregation: guard checks the base class, not only built-ins
+    ],
+    ids=["neither", "both", "count", "record", "predicate", "user-aggregation"],
+)
+def test_partition_by_aggregate_rejects_invalid_forms_at_construction(
+    kwargs: dict[str, Any], error: type[Exception], message: str
+) -> None:
+    """``partition_by_aggregate`` rejects a wrong aggregation form when it is created.
+    Would fail if neither/both forms were accepted, or if a structured object as
+    ``aggregation_function`` failed only on ``.result`` or silently gave empty tuples.
+    """
+    with pytest.raises(error, match=message):  # eager check, no .result needed
+        partition_by_aggregate(
+            _staff(), partitioning_function=Attr("dept"), **kwargs
+        )  # construction alone must fail

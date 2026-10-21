@@ -55,7 +55,10 @@ from fql.operators.aggregates import (
 from fql.operators.constraints import drop_join_predicate
 from fql.operators.filters import filter_items, filter_values
 from fql.operators.partition import group_by, partition
-from fql.operators.partition_and_aggregate import group_by_aggregate
+from fql.operators.partition_and_aggregate import (
+    group_by_aggregate,
+    partition_by_aggregate,
+)
 from fql.operators.projections import project
 from fql.operators.rank import rank_by
 from fql.operators.set_operations import cogroup, intersect, minus, union
@@ -590,6 +593,38 @@ def test_group_by_aggregate_plan_has_no_opaques():
         "attr": None,
     }  # literal IR record: Count without attribute counts all rows
     assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_partition_by_aggregate_keyword_plan_has_no_opaques():
+    """Keyword aggregates and a predicate key give a plan without any ``Opaque``.
+    Would fail if the keyword aggregates were hidden in an internal lambda."""
+    users: RF = _users()  # frozen users relation
+    pipeline: partition_by_aggregate = partition_by_aggregate(
+        users, partitioning_function=Lt("yob", 1980), n=Count()
+    )  # number of users born before 1980 vs. the rest
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.params["aggregation_function"] is None  # lambda form unused
+    assert type(root.params["aggregates"]["n"]) is Count  # aggregation kept, structured
+    assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+def test_partition_by_aggregate_lambda_plan_keeps_aggregation_opaque():
+    """The lambda form shows its aggregation as ``Opaque`` and no keyword aggregates.
+    Would fail if the lambda were dropped from the plan, or if the unused
+    ``aggregates`` param showed up as anything other than an empty dict."""
+    users: RF = _users()  # frozen users relation
+    pipeline: partition_by_aggregate = partition_by_aggregate(
+        users,
+        partitioning_function=Attr("department"),
+        aggregation_function=lambda i: i,
+    )  # lambda form: the aggregation is an arbitrary callable
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.params["aggregates"] == {}  # keyword form unused
+    assert isinstance(
+        root.params["aggregation_function"], Opaque
+    )  # lambda cannot be introspected
 
 
 @pytest.mark.parametrize("set_operation", [union, intersect, minus])

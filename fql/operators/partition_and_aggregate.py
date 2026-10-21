@@ -22,8 +22,9 @@
 from typing import Callable, Any
 
 from fdm.attribute_functions import RF, DBF
+from fql.expressions import Expression
 from fql.operators.APIs import Operator, OperatorInput
-from fql.operators.aggregates import aggregate
+from fql.operators.aggregates import AggregationFunction, aggregate
 from fql.operators.partition import group_by, partition
 from fql.operators.transforms import transform_items
 from fql.predicates.predicates import Predicate
@@ -61,9 +62,9 @@ class group_by_aggregate(Operator[RF, RF]):
 
 
 class partition_by_aggregate(Operator[RF, RF]):
-    """Group an input RF by a grouping function and aggregate the groups using an aggregation function. The
-    partitioning function follows the key rules of ``partition`` (``Attr`` / ``Composite`` / ``Predicate`` or a
-    lambda); the per-item ``aggregation_function`` is still a plain callable."""
+    """Partition an input RF by a partitioning function (key rules of ``partition``) and aggregate each partition,
+    either with keyword aggregates as in ``group_by_aggregate`` or with an ``aggregation_function`` (exactly one form,
+    see ``__init__``). See ``docs/changes/010-structured-partition-aggregates/``."""
 
     # TODO: generic input and output AFs: this operator can also be used to partition an entire database and aggregate
     # those partitions
@@ -73,17 +74,56 @@ class partition_by_aggregate(Operator[RF, RF]):
         input_function: OperatorInput[RF],
         *,
         partitioning_function: Callable[[Item], Any] | Predicate,
-        aggregation_function: Callable[[RF], Any],
+        aggregation_function: Callable[[Item], Item] | None = None,
+        **aggregates: AggregationFunction,
     ):
+        """Initialize the partition_by_aggregate operator.
+
+        @param input_function: The RF to partition.
+        @param partitioning_function: Maps an item to its partition key (see ``partition``).
+        @param aggregation_function: Callable mapping a partition ``Item(key, RF)`` to an ``Item``; mutually
+            exclusive with ``aggregates``. Stays opaque in the plan.
+        @param aggregates: Aggregation functions by result name, e.g. ``count=Count()``; each partition becomes one
+            tuple of them (an aggregate over no mapped values is absent, see 004). With a structured partitioning key
+            and built-in aggregates the plan contains no ``Opaque`` marker. An aggregate cannot be named
+            ``input_function``, ``partitioning_function``, ``aggregation_function`` or ``self`` (Python raises
+            ``TypeError``); a misspelt parameter name is taken as an aggregate.
+        @raises ValueError: If neither or both forms are given.
+        @raises TypeError: If ``aggregation_function`` is a structured object -- an expression such as ``Record``, a
+            predicate or an aggregation function (built-in or user-built): it would look structured in the plan but
+            fail at run time or yield empty tuples. Pass aggregations as keyword aggregates instead.
+        """
+        # Exactly one form: aggregation_function XOR keyword aggregates.
+        if (aggregation_function is None) == (not aggregates):
+            raise ValueError(
+                "partition_by_aggregate needs exactly one of aggregation_function or "
+                "keyword aggregates (e.g. count=Count())"
+            )
+        if isinstance(
+            aggregation_function, (Expression, Predicate, AggregationFunction)
+        ):
+            raise TypeError(
+                "aggregation_function must be a callable on a partition Item, got "
+                f"{aggregation_function!r}; pass built-in aggregates as keywords, "
+                "e.g. count=Count()"
+            )
         self.input_function = input_function
         self.partitioning_function = partitioning_function
         self.aggregation_function = aggregation_function
+        self.aggregates = aggregates
 
     def _compute(self) -> RF:
         input_function = self._resolve_input(self.input_function)
 
         return transform_items[DBF, RF](
             partition(input_function, partitioning_function=self.partitioning_function),
-            transformation_function=self.aggregation_function,
+            transformation_function=(
+                self.aggregation_function
+                if self.aggregation_function is not None
+                # keyword form: one aggregate tuple per partition, as in group_by_aggregate
+                else lambda item: Item(
+                    item.key, aggregate(item.value, **self.aggregates).result
+                )
+            ),
             output_factory=lambda _: RF(),
         ).result

@@ -127,16 +127,20 @@
     - [ ] structured alternatives for the remaining genuine lambdas, so plans
       become SQL-translatable: case distinctions (`CASE WHEN`), string
       functions / concatenation, constant and nested `Record` fields, unary
-      minus, the per-item `aggregation_function` of `partition_by_aggregate`
-      (e.g. via `Record`), whole-AF `transform`, join predicates
-      (`add_join_predicate`). Ranking keys (007), partition keys (008) and
-      `transform_items` with `Record` + arithmetic (009) are done; each new
-      consumer of an expression must define its rule for `UNDEFINED`.
+      minus, whole-AF `transform`, join predicates (`add_join_predicate`).
+      Ranking keys (007), partition keys (008), `transform_items` with
+      `Record` + arithmetic (009) and `partition_by_aggregate` with keyword
+      aggregates (010) are done; each new consumer of an expression must
+      define its rule for `UNDEFINED`.
     - [ ] ranking by several keys with a direction per key
       (`ORDER BY a, b DESC`), on top of `fql.expressions`.
 - [ ] reject ambiguous attribute paths with a run of three or more underscores
   (`"a___b"` is read as `a` -> `_b` today) in `_split_attr_path` and `.where()`
   path splitting alike; affects predicates, aggregates and `Attr` (007).
+- [ ] `aggregate`, `group_by_aggregate`, `partition_by_aggregate`: reject non-aggregation
+  values given as keyword aggregates (e.g. `big=Gt("salary", 75)` or `Attr(...)`):
+  a predicate is evaluated on the partition RF and silently yields `False`, yet the
+  plan shows it as structured (found in the 010 review; same gap in all three).
 - [ ] promote the definedness check onto the FDM type (`tf.defined(path)` /
   `tf.get(path, default)`), deferred in 004 until a third consumer appears;
   with `Attr` (007) there are three (predicates, aggregates, expressions).

@@ -270,7 +270,10 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Combines grouping and aggregation: partitions an RF by one or more attributes using `group_by`, then applies aggregation functions to each resulting partition independently. Returns an RF with one TF per group, where each TF contains the group's aggregated results.
 
 - `[✅]` ***partition_by_aggregate** — custom partition followed by aggregate per partition*  
-  Partitions an RF using a custom partitioning function, then applies a custom aggregation function to each partition's RF. Returns an RF where keys are partition keys and values are the aggregated results. More general than `group_by_aggregate` — allows arbitrary partitioning logic and a custom scalar aggregation function.
+  Partitions an RF using a custom partitioning function, then aggregates each partition. Returns an RF where keys are partition keys and values are the aggregated results. More general than `group_by_aggregate` — allows arbitrary partitioning logic.
+
+- `[✅]` *`partition_by_aggregate` with keyword aggregates (structured plan)*  
+  The partitioning key may be a lambda or structured (`Attr` / `Composite` / arithmetic / `Predicate`). Exactly one of `aggregation_function=<callable on the partition Item>` (opaque) or aggregates as keywords, e.g. `partition_by_aggregate(rf, partitioning_function=Lt("yob", 1980), count=Count(), oldest=Min("yob"))`; neither or both raise `ValueError`, a structured object (`Count()`, `Record`, predicate) as `aggregation_function` raises `TypeError`. With a structured key and built-in aggregates the plan is free of `Opaque`. Decision: `docs/changes/010-structured-partition-aggregates/`.
 
 ### Ranking & Ordering
 
