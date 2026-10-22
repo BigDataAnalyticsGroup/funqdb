@@ -33,7 +33,8 @@ The Functional Query Language — unary operators that transform AFs.
 - **Grouping:** [partition](<02 FQL/partition.md>), [group_by](<02 FQL/group_by.md>)
 - **Aggregation:** [aggregate](<02 FQL/aggregate.md>), [disaggregate](<02 FQL/disaggregate.md>)
 - **Set operations:** [union](<02 FQL/union.md>), [intersect / minus](<02 FQL/set_operations.md>)
-- **Join:** [join](<02 FQL/join.md>), [flatten](<02 FQL/flatten.md>), [subdatabase](<02 FQL/subdatabase.md>)
+- **Join:** [join](<02 FQL/join.md>), [flatten](<02 FQL/flatten.md>), [subdatabase](<02 FQL/subdatabase.md>),
+  [join graph & aggregate boxes](<02 FQL/join_graph.md>)
 - **Predicates:** [structured predicates](<02 FQL/predicates.md>)
 - **Plan inspection:** [explain() and plan IR](<02 FQL/plan.md>)
 

@@ -417,6 +417,18 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` *Build Yannakakis semijoin cascade (bottom-up + top-down passes)*  
   `build_semijoin_cascade(root)` performs a BFS from the root to construct a rooted spanning tree, then generates two passes: a bottom-up post-order traversal (reducing targets by sources) followed by a top-down pre-order traversal (reducing sources by targets). Each step is a `SemijoinStep(reduce, by, ref_key)` consumed by the `semijoin` operator to progressively filter the DBF.
 
+- `[✅]` *Aggregate and projection boxes (011)*  
+  `AggregateBox` is a node that holds a nested `JoinGraph` (its subgraph), named grouping keys (paths such as
+  `"O.customer"`) and named aggregates (`Sum("L.price")`); without aggregates it is a DISTINCT projection.
+  `add_box` adds it to an enclosing graph, `add_edge` connects it to a base relation through a grouping key that is a
+  reference (`X` or `X.attr`, relations compared by `uuid`). Boxes nest: a subgraph may contain boxes, and a path
+  into an inner box is checked against its output names; `add_box` rejects a box that would contain its own graph,
+  directly or through nested boxes. Logical representation only; not executable yet.
+
+- `[⚠️]` *Box edges: fresh `uuid`s and composite keys are not recognised*  
+  RFs of a filtered or cloned DBF have fresh `uuid`s, so a semantically correct edge is rejected (as retarget).
+  A reference held inside a composite key (RSF) never becomes an edge (no `ForeignValueConstraint`).
+
 - `[⚠️]` *Individual graph query methods tested only via integration, not in isolation*  
   Methods such as `pure_sources()`, `isolated_nodes()`, `is_trivial()`, `sole_relation_name()`, `outgoing_adjacency()`, and `connected_components()` are exercised through integration tests of operators that depend on them (e.g., `subdatabase`, `join`), but do not have dedicated unit tests that exercise each method independently.
 

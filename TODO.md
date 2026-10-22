@@ -141,6 +141,24 @@
   values given as keyword aggregates (e.g. `big=Gt("salary", 75)` or `Attr(...)`):
   a predicate is evaluated on the partition RF and silently yields `False`, yet the
   plan shows it as structured (found in the 010 review; same gap in all three).
+- [ ] `group_by` / `partition` over tuple-valued keys (a reference such as `"customer"`, or a
+  joined relation such as `"O"`): raises `TypeError: unhashable type: 'TF'` because TFs define
+  `__eq__` but no `__hash__`. Reproduction:
+  `c = TF({"n": 1}); group_by(RF({1: TF({"customer": c}), 2: TF({"customer": c})}), "customer").result`.
+  Decide identity vs. content grouping there; content grouping would make `AggregateBox` edges
+  unsound. Blocks executing every `AggregateBox` that groups by tuples (011).
+- [ ] `AggregateBox` follow-ups (011, see its DECISION.md): derive boxes from FQL pipelines
+  (`LogicalPlan` -> `JoinGraph`; likely needs a node kind pointing at a plan subtree instead of a
+  live RF); derive box edges automatically from reference-valued grouping keys; execute a box
+  (`group_by_aggregate(join(...))`, with grouping keys carried as result attributes and `join`
+  accepting a `JoinGraph` / edge list instead of a DBF); aggregation without fan-out over the
+  flattened join; render nested boxes (ASCII / `funqdb-viz`); serialize the graph; edges with join
+  predicates; subqueries / correlated edges across box boundaries; edges through a grouping key of
+  an inner box; selection predicates on nodes / boxes (WHERE / HAVING); key-preserving `project`
+  as a node annotation.
+- [ ] `repr()` of an `RF` raises `TypeError: __repr__ returned non-string (type ABCMeta)`, so
+  any `JoinGraph` / `AggregateBox` repr fails too (unreadable pytest failure output).
+- [ ] `fql/plan/join_graph.py` lacks the AGPL header and a module docstring.
 - [ ] promote the definedness check onto the FDM type (`tf.defined(path)` /
   `tf.get(path, default)`), deferred in 004 until a third consumer appears;
   with `Attr` (007) there are three (predicates, aggregates, expressions).

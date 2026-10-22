@@ -3,11 +3,16 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from fdm.attribute_functions import RF, DBF
 from fdm.schema import ForeignValueConstraint
+from fql.predicates.predicates import _split_attr_path
 
-# Type aliases — both are `str` at runtime, but the alias names make
+if TYPE_CHECKING:
+    from fql.operators.aggregates import AggregationFunction
+
+# Type aliases — all are `str` at runtime, but the alias names make
 # every signature in this file (and in operators that import these
 # types) self-documenting about which kind of name it is.
 #
@@ -17,13 +22,23 @@ from fdm.schema import ForeignValueConstraint
 # reference to another TF. Two `str`s collapsed into the same
 # variable name used to hide that difference; these aliases surface
 # it.
+# `AttributePath` is a dot- or `__`-separated path into the rows of a
+# joined subgraph, e.g. `"O.customer"` (relation `O`, attribute
+# `customer`) — used by `AggregateBox`, whose output *names* are
+# `AttributeName`s.
 type RelationName = str
 type AttributeName = str
+type AttributePath = str
 
 
 @dataclass(frozen=True)
 class Node:
-    """A named node in the graph. `name` is a relation name."""
+    """A named node in the graph. `name` is a relation name or, for an
+    `AggregateBox`, the name of the box's result relation.
+
+    Shared base of `JoinNode` (a base relation) and `AggregateBox`; a bare
+    `Node` is neither and only carries a name (e.g. in hand-built test graphs).
+    """
 
     name: RelationName
 
@@ -36,10 +51,154 @@ class JoinNode(Node):
 
 
 @dataclass(frozen=True)
-class Edge:
-    """A directed reference edge: source.rf[ref_key] references target.rf.
+class AggregateBox(Node):
+    """A box around a subgraph: groups the joined subgraph and aggregates each group.
 
-    Derived from a ForeignValueConstraint set via .references().
+    The box's result is again a relation, so the box is a node of the
+    enclosing graph and can be joined over (see `JoinGraph.add_edge`), and a
+    subgraph may itself contain boxes (nesting). This is a *logical*
+    representation; nothing here executes a box.
+
+    `group_keys` maps an output name to an attribute path into the rows of the
+    joined subgraph, whose top-level keys are relation names (e.g.
+    `customer="O.customer"`, or `"O"` for the tuples of `O` themselves);
+    `aggregates` maps an output name to an aggregation over such a path
+    (e.g. `revenue=Sum("L.price")`). The output attributes are the
+    grouping-key names plus the aggregate names.
+
+    Meaning (for a later executor): with grouping keys
+    `group_by_aggregate(join(subgraph), *paths, **aggregates)`, without
+    aggregates a DISTINCT projection (`is_projection()`), without grouping
+    keys a global aggregate (`aggregate(...)`, one result tuple). Not
+    executable today: `group_by` cannot group by tuples, and
+    `group_by_aggregate` does not write the grouping keys into the result
+    tuples. Box edges presuppose grouping by tuple identity.
+
+    Validation runs once, at construction. Details, limitations and the
+    rejected alternatives: `docs/changes/011-join-graph-aggregate-boxes/DECISION.md`.
+    """
+
+    subgraph: JoinGraph
+    group_keys: dict[AttributeName, AttributePath] = field(default_factory=dict)
+    aggregates: dict[AttributeName, AggregationFunction] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate the box against its subgraph.
+
+        Rules: the subgraph is non-empty; grouping keys and aggregates are not
+        both empty; the box name and all output names are single non-empty
+        segments (no `.` / `__`) and output names are unique; every path starts
+        with a relation of the subgraph and, if that relation is an inner box,
+        continues with one of its output names; every aggregate is an
+        `AggregationFunction`, and only `Count` among the built-ins may have
+        no attribute.
+
+        @raises ValueError: If a rule is violated; each rule has its own message.
+        """
+        # imported here, not at module level, so that `fql.plan` keeps no
+        # import-time dependency on operator modules (as in the plan IR)
+        from fql.operators.aggregates import AggregationFunction
+
+        if not self.subgraph.nodes:
+            raise ValueError(f"Box '{self.name}' needs a non-empty subgraph")
+        if not self.group_keys and not self.aggregates:
+            raise ValueError(
+                f"Box '{self.name}' needs grouping keys or aggregates (or both)"
+            )
+        clashes: set[AttributeName] = set(self.group_keys) & set(self.aggregates)
+        if clashes:
+            raise ValueError(
+                f"Box '{self.name}': output names used twice: {sorted(clashes)}"
+            )
+        # the box name and the output names become path segments
+        # (`"A.revenue"` in an enclosing box) and output names become
+        # `ref_key`s, so each must be a single non-empty segment
+        self._check_name("box name", self.name)
+        for output_name in self.output_names():
+            self._check_name("output name", output_name)
+        for output_name, path in self.group_keys.items():
+            self._check_path(output_name, path)
+        for output_name, aggregation in self.aggregates.items():
+            if not isinstance(aggregation, AggregationFunction):
+                raise ValueError(
+                    f"Box '{self.name}': aggregate '{output_name}' is not an "
+                    f"AggregationFunction: {aggregation!r}"
+                )
+            if aggregation.attribute is not None:
+                self._check_path(output_name, aggregation.attribute)
+            # without attribute only `Count()` and user-built aggregations
+            # (`op_name` None, e.g. over whole rows) make sense; `Sum(None)`
+            # would aggregate the joined rows themselves
+            elif aggregation.op_name not in (None, "count"):
+                raise ValueError(
+                    f"Box '{self.name}': aggregate '{output_name}' needs an "
+                    f"attribute: {aggregation!r}"
+                )
+
+    def _check_name(self, kind: str, name: RelationName | AttributeName) -> None:
+        """Check that `name` is a single non-empty path segment.
+
+        @param kind: What the name is (`"box name"` / `"output name"`), for the
+            error message.
+        @param name: The name to check.
+        @raises ValueError: If `name` is empty or contains `.` or `__`.
+        """
+        if not name or "." in name or "__" in name:
+            raise ValueError(
+                f"Box '{self.name}': {kind} {name!r} must be "
+                f"non-empty and contain neither '.' nor '__'"
+            )
+
+    def _check_path(self, output_name: AttributeName, path: AttributePath) -> None:
+        """Check that `path` starts with a relation of the subgraph and, if that
+        relation is an inner box, continues with one of the box's output names.
+
+        @param output_name: The grouping-key or aggregate name the path belongs
+            to (only used in error messages).
+        @param path: The attribute path to check.
+        @raises ValueError: If the first segment is not a subgraph node, or the
+            second segment is not an output name of the inner box it names.
+            An empty segment raises `_split_attr_path`'s own `ValueError`.
+        """
+        segments: list[str] = _split_attr_path(path)
+        inner: Node | None = self.subgraph.nodes.get(segments[0])
+        if inner is None:
+            raise ValueError(
+                f"Box '{self.name}': path {path!r} of '{output_name}' does not "
+                f"start with a relation of the subgraph {sorted(self.subgraph.nodes)}"
+            )
+        # an inner box's output names are known exactly, so a misspelt
+        # attribute of it can be caught here (base relations have no schema)
+        if (
+            isinstance(inner, AggregateBox)
+            and len(segments) > 1
+            and segments[1] not in inner.output_names()
+        ):
+            raise ValueError(
+                f"Box '{self.name}': path {path!r} of '{output_name}' names no "
+                f"output of inner box '{inner.name}': {inner.output_names()}"
+            )
+
+    def output_names(self) -> list[AttributeName]:
+        """The box's output attribute names: grouping keys, then aggregates."""
+        return [*self.group_keys, *self.aggregates]
+
+    def is_projection(self) -> bool:
+        """True iff the box has no aggregates, i.e. it is a DISTINCT projection."""
+        return not self.aggregates
+
+
+@dataclass(frozen=True)
+class Edge:
+    """A directed reference edge: a source tuple's `ref_key` attribute
+    references a tuple of `target` (`source_tf[ref_key] is target_tf`).
+
+    Edges and nodes are not hashable (they hold RFs, boxes hold dicts);
+    compare them by name, not with `==`.
+
+    Derived from a ForeignValueConstraint set via .references(), or added by
+    `JoinGraph.add_edge` from an `AggregateBox`; in that case the source tuple is a
+    result tuple of the box and `ref_key` one of its grouping keys.
     The `ref_key` is the *attribute* name on a source tuple (as in
     `source_tf[ref_key] is target_tf`) — it is emphatically *not* a
     relation name; the endpoints' relation names are
@@ -69,8 +228,11 @@ class Neighbor:
 class JoinGraph:
     """The join graph of a DBF, extracted from ForeignValueConstraint metadata.
 
-    Nodes are the named RFs in the DBF, edges are the directed references
-    between them (source.rf[ref_key] -> target.rf).
+    Nodes are named relations: the RFs of the DBF (`JoinNode`s) and
+    `AggregateBox`es added with `add_box`. Edges are directed references:
+    between RFs (found by `from_dbf`, `source_tf[ref_key] is target_tf`) and
+    from a box to a base relation (added by `add_edge`). The topology
+    queries treat a box like any other node.
 
     Project convention: **every read-only query about the graph's
     topology lives here, not in the operator that happens to need it.**
@@ -82,7 +244,7 @@ class JoinGraph:
     answers. Keep new graph algorithms on this class.
     """
 
-    nodes: dict[str, JoinNode] = field(default_factory=dict)
+    nodes: dict[RelationName, Node] = field(default_factory=dict)
     edges: list[Edge] = field(default_factory=list)
 
     def __len__(self) -> int:
@@ -112,20 +274,24 @@ class JoinGraph:
         """
         graph = cls()
 
-        # create one JoinNode per named RF in the DBF
-        for item in dbf:
-            graph.nodes[item.key] = JoinNode(name=item.key, rf=item.value)
+        # create one JoinNode per named RF in the DBF; kept in a local dict
+        # typed `JoinNode` so that `.rf` below is well-typed (`graph.nodes`
+        # holds any `Node`)
+        join_nodes: dict[RelationName, JoinNode] = {
+            item.key: JoinNode(name=item.key, rf=item.value) for item in dbf
+        }
+        graph.nodes.update(join_nodes)
 
         # build a lookup from RF uuid to relation name so we can resolve
         # the target_attribute_function stored in each ForeignValueConstraint
         # back to a named node in this graph
         uuid_to_name: dict[int, str] = {
-            node.rf.uuid: name for name, node in graph.nodes.items()
+            node.rf.uuid: name for name, node in join_nodes.items()
         }
 
         # scan each RF's values_constraints for ForeignValueConstraint instances;
         # these are created by .references() and encode source_rf[ref_key] -> target_rf
-        for name, node in graph.nodes.items():
+        for name, node in join_nodes.items():
             for constraint in node.rf.__dict__["values_constraints"]:
                 if isinstance(constraint, ForeignValueConstraint):
                     target_uuid: int = constraint.target_attribute_function.uuid
@@ -141,6 +307,86 @@ class JoinGraph:
                         )
 
         return graph
+
+    def add_box(self, box: AggregateBox) -> None:
+        """Add an aggregate box as a node of this graph.
+
+        @param box: The box; its name must not be used by another node.
+        @raises ValueError: If the name is already taken, or the box's subgraph
+            is this graph or encloses it through nested boxes (a box cannot
+            contain the graph it sits in, directly or indirectly).
+        """
+        if box.name in self.nodes:
+            raise ValueError(f"Node name '{box.name}' is already used in the graph")
+        if box.subgraph._encloses(self):
+            raise ValueError(
+                f"Box '{box.name}' cannot contain the graph it is added to "
+                f"(directly or through nested boxes)"
+            )
+        self.nodes[box.name] = box
+
+    def _encloses(self, graph: JoinGraph) -> bool:
+        """True iff `graph` is this graph or the subgraph of a box nested in it
+        (at any depth).
+
+        Terminates because `add_box` rejects every box that would close a
+        loop; a loop built by writing to `nodes` directly bypasses that.
+
+        @param graph: The graph to look for (compared by identity).
+        @return: Whether `graph` occurs in this graph's box nesting.
+        """
+        return graph is self or any(
+            isinstance(node, AggregateBox) and node.subgraph._encloses(graph)
+            for node in self.nodes.values()
+        )
+
+    def add_edge(
+        self, source: RelationName, target: RelationName, ref_key: AttributeName
+    ) -> None:
+        """Add a reference edge from a box to a base relation of this graph.
+
+        The edge must be backed by a reference: `ref_key` is a grouping key of
+        the box whose path is either `X` (the box groups by the tuples of the
+        subgraph relation X; X's RF is the target's RF) or `X.attr` (X
+        carries a `ForeignValueConstraint` on `attr` pointing at the target).
+        X must be a base relation of the subgraph, not an inner box.
+        Relations are compared by `uuid`, as in `from_dbf`.
+
+        @param source: Name of the box the edge starts at.
+        @param target: Name of the base relation the edge points to.
+        @param ref_key: Grouping-key name of the box that carries the reference.
+        @raises ValueError: If an endpoint is not a node of the graph, the
+            source is not a box, the target is not a base relation, `ref_key`
+            is not a grouping key, the key is not a reference to the target,
+            or the edge already exists; each rule has its own message.
+        """
+        for name in (source, target):
+            if name not in self.nodes:
+                raise ValueError(f"'{name}' is not a node of the graph")
+        source_node: Node = self.nodes[source]
+        target_node: Node = self.nodes[target]
+        if not isinstance(source_node, AggregateBox):
+            raise ValueError(f"Edge source '{source}' must be a box")
+        if not isinstance(target_node, JoinNode):
+            raise ValueError(f"Edge target '{target}' must be a base relation")
+        if ref_key not in source_node.group_keys:
+            raise ValueError(
+                f"'{ref_key}' is not a grouping key of box '{source}': "
+                f"{sorted(source_node.group_keys)}"
+            )
+        if not _group_key_references(source_node, ref_key, target_node.rf):
+            raise ValueError(
+                f"Grouping key '{ref_key}' of box '{source}' (path "
+                f"{source_node.group_keys[ref_key]!r}) is not a reference to '{target}'"
+            )
+        # compare by names: `Edge ==` would compare relations by content
+        if any(
+            (edge.source.name, edge.target.name, edge.ref_key)
+            == (source, target, ref_key)
+            for edge in self.edges
+        ):
+            raise ValueError(f"Edge {source} -{ref_key}-> {target} already exists")
+        self.edges.append(Edge(source=source_node, target=target_node, ref_key=ref_key))
 
     def check_acyclicity(self) -> None:
         """Verify that the directed reference graph is acyclic using Kahn's algorithm
@@ -379,7 +625,7 @@ class JoinGraph:
         @return: The selected root node name.
         """
         if root is not None:
-            assert root in self.nodes, f"Root '{root}' is not a relation in the DBF."
+            assert root in self.nodes, f"Root '{root}' is not a node of the graph."
             return root
 
         # auto-select: pick a node with no incoming references (pure target)
@@ -469,6 +715,37 @@ class JoinGraph:
         _post_order(root)
         _pre_order(root)
         return steps
+
+
+def _group_key_references(
+    box: AggregateBox, ref_key: AttributeName, target_rf: RF
+) -> bool:
+    """Whether the grouping key `ref_key` of `box` refers to the tuples of `target_rf`.
+
+    The key's path must be `X` (X is `target_rf` itself) or `X.attr` (X
+    carries a `ForeignValueConstraint` on `attr` pointing at `target_rf`),
+    with X a base relation of the box's subgraph. Any other shape (more
+    segments, X an inner box) does not count as a reference.
+
+    @param box: The box the edge starts at.
+    @param ref_key: A grouping-key name of `box`.
+    @param target_rf: The RF of the edge's target relation.
+    @return: True iff the key's path is a reference to `target_rf`.
+    """
+    segments: list[str] = _split_attr_path(box.group_keys[ref_key])
+    # `.get`: the box was validated at construction, but its dicts may have
+    # been changed since; a missing relation is then simply no reference
+    inner: Node | None = box.subgraph.nodes.get(segments[0])
+    if not isinstance(inner, JoinNode) or len(segments) > 2:
+        return False
+    if len(segments) == 1:
+        return inner.rf.uuid == target_rf.uuid
+    return any(
+        isinstance(constraint, ForeignValueConstraint)
+        and constraint.key == segments[1]
+        and constraint.target_attribute_function.uuid == target_rf.uuid
+        for constraint in inner.rf.__dict__["values_constraints"]
+    )
 
 
 @dataclass(frozen=True)
