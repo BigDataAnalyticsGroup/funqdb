@@ -34,7 +34,14 @@ logger = logging.Logger(__name__)
 class transform[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     Operator[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """An operator that transforms an input instance to an output instance."""
+    """An operator that transforms an input instance to an output instance.
+
+    This is FQL's general escape hatch: the transformation is an arbitrary
+    Python callable and therefore always appears as ``Opaque`` in the plan, by
+    design. For plans a backend can translate, use the specific operators
+    instead: ``aggregate`` for summaries, ``project`` for selecting attributes,
+    ``transform_items`` with a ``Record`` for per-item mappings.
+    """
 
     def __init__(
         self,

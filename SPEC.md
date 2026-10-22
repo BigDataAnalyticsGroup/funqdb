@@ -168,7 +168,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Returns a new AF containing only the specified attributes. Supports flat keys (e.g., `"name"`) and dot-separated nested paths (e.g., `"department.name"`). For path keys, intermediate AF-valued attributes are traversed and the scalar value stored under the final segment. Missing keys are silently skipped.
 
 - `[✅]` ***transform** — apply an arbitrary function to the whole AF*  
-  Returns the result of applying a transformation function to the entire input AF. The function receives the AF as its sole argument and may return any type. No assumptions are made about the output structure, allowing arbitrary transformations including type changes.
+  Returns the result of applying a transformation function to the entire input AF. The function receives the AF as its sole argument and may return any type. No assumptions are made about the output structure, allowing arbitrary transformations including type changes. As the general escape hatch it stays opaque in plans by design; `aggregate`, `project` and `transform_items` with `Record` are the structured alternatives.
 
 - `[✅]` ***transform_items** — map a function over each (key, value) item*  
   Returns a new AF whose items are the results of mapping a function over each `Item` in the input. The mapping function receives an `Item` and returns a transformed `Item`; returning `None` drops the item. Items are materialized before mapping to avoid modification during iteration.

@@ -127,11 +127,13 @@
     - [ ] structured alternatives for the remaining genuine lambdas, so plans
       become SQL-translatable: case distinctions (`CASE WHEN`), string
       functions / concatenation, constant and nested `Record` fields, unary
-      minus, whole-AF `transform`, join predicates (`add_join_predicate`).
-      Ranking keys (007), partition keys (008), `transform_items` with
-      `Record` + arithmetic (009) and `partition_by_aggregate` with keyword
-      aggregates (010) are done; each new consumer of an expression must
-      define its rule for `UNDEFINED`.
+      minus, join predicates (`add_join_predicate`). Ranking keys (007),
+      partition keys (008), `transform_items` with `Record` + arithmetic (009)
+      and `partition_by_aggregate` with keyword aggregates (010) are done;
+      each new consumer of an expression must define its rule for
+      `UNDEFINED`. Whole-AF `transform` stays opaque by design (general escape
+      hatch; `aggregate` / `project` / `transform_items` are its structured
+      alternatives).
     - [ ] ranking by several keys with a direction per key
       (`ORDER BY a, b DESC`), on top of `fql.expressions`.
 - [ ] reject ambiguous attribute paths with a run of three or more underscores

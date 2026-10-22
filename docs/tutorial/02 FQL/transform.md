@@ -32,6 +32,18 @@ summary.count      # → 3
 summary.max_score  # → 90
 ```
 
+`transform` is FQL's general escape hatch: its function is arbitrary Python, so it always appears as `Opaque`
+in a plan (by design). Where a specific operator expresses the same computation, prefer it — its plan is
+structured and translatable. The summary above, for instance, is an [aggregate](aggregate.md):
+
+```python
+from fql.operators.aggregates import aggregate, Count, Max
+
+summary = aggregate(scores, count=Count(), max_score=Max("score")).result
+summary.count      # → 3
+summary.max_score  # → 90
+```
+
 ### transform_items — per-item mapping
 
 Maps a function over each item in the input AF. The function receives an
