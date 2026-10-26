@@ -1,6 +1,8 @@
 .idea/
 **/__pycache__/
 .claude/projects/
+benchmarks/datasets/job/.data/
+benchmarks/datasets/job/.data_*/
 
 
 # uv-managed virtual environment

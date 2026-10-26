@@ -453,7 +453,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
 ## Benchmark datasets
 
 - `[✅]` *Open a registered dataset as an FDM database and a DuckDB reference*
-  `DATASETS[name].open()` returns a `LoadedDataset`. Its FDM rows are read out of the DuckDB connection, keyed by the declared primary keys, with each declared foreign key swizzled into a `Reference` to the target tuple. A `DECIMAL` stays a `Decimal` on both sides. Tests: `tests/benchmarks/datasets/test_dataset.py`, `tests/benchmarks/datasets/movies/test_movies_dataset.py`, `tests/benchmarks/datasets/tpch/test_tpch_dataset.py`.
+  `DATASETS[name].open()` returns a `LoadedDataset` when the dataset `has_data`, else a `Dataset` with keys and references only (e.g. `job`, the schema-only full dump). Its FDM rows are read out of the DuckDB connection, keyed by the declared primary keys, with each declared foreign key swizzled into a `Reference` to the target tuple. A `DECIMAL` stays a `Decimal` on both sides. Tests: `tests/benchmarks/datasets/test_dataset.py`, `tests/benchmarks/datasets/movies/test_movies_dataset.py`, `tests/benchmarks/datasets/tpch/test_tpch_dataset.py`, `tests/benchmarks/datasets/job/test_job_dataset.py`.
 
 - `[✅]` *Reject a foreign key without a target row*
   `open()` raises `ValueError` naming table, column and count, and closes its connection. A reference from or to a table without a primary key raises `ValueError` naming that table; a reference on a column its table does not have raises `ValueError` naming table and column. For `tpch`, `open()` raises `duckdb.IOException` when DuckDB's `tpch` extension is not installed and cannot be downloaded.
@@ -463,3 +463,9 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` *Compare SQL and FQL results*
   `QueryResult.check_matches` compares rows as a multiset, or in order, with Python's `==`: `1`, `1.0` and `True` are equal, but `Decimal("0.1")` and the float `0.1` are not. Columns align by name; a single column aligns by position only with the unnamed column of an FQL scalar. The empty result of a statement without rows (`from_statement`) matches nothing.
+
+- `[✅]` *Downscale the JOB dump to its seeds, with guarantees*
+  `downscale_job_data` writes `job/.data_seeds`: up to 3 rows of the join of every JOB query plus every row they reference. It writes into `.data_seeds.part` and replaces `.data_seeds` with that folder only after the checks; it stops with `GuaranteeViolated` when a query whose join finds rows on the full dump finds none on the seeds, or when a foreign key is dangling. Every JOB query's seed query parses and runs on the committed schema. Tests: `tests/benchmarks/datasets/job/setup/test_downscale_job_data.py`.
+
+- `[✅]` *Verify the JOB download*
+  `download_job_data` fetches over HTTPS with a timeout, stops when the server sends more or fewer bytes than the archive's size, checks the SHA-256 of the archive and never extracts the archive's `schematext.sql`: every JOB load runs the committed `job/schematext.sql`. Tests: `tests/benchmarks/datasets/job/setup/test_download_job_data.py`.

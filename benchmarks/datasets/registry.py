@@ -20,9 +20,10 @@
 """The registry of every dataset."""
 
 from benchmarks.datasets.dataset import DatasetDefinition
+from benchmarks.datasets.job.job_dataset import JOB_DATASETS
 from benchmarks.datasets.movies.movies_dataset import MOVIES
 from benchmarks.datasets.tpch.tpch_dataset import TPCH
 
 DATASETS: dict[str, DatasetDefinition] = {
-    definition.name: definition for definition in (MOVIES, TPCH)
+    definition.name: definition for definition in (MOVIES, *JOB_DATASETS, TPCH)
 }
