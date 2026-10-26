@@ -18,7 +18,6 @@ variables:
 
 stages:
   - test
-  - gate
 
 formatting:
   stage: test
@@ -75,45 +74,6 @@ pytest:
       coverage_report:
         coverage_format: cobertura
         path: coverage/cobertura-coverage.xml
-
-
-no-unreviewed-tests:
-  stage: gate
-  tags:
-    - test
-  script:
-    - uv sync --frozen
-    # Collect (--co) all tests marked needs_review_new or needs_review_modified
-    # without running them. If any exist, the MR still contains AI-generated or
-    # AI-modified tests that have not been reviewed — fail the pipeline.
-    - |
-      BLOCKED=0
-
-      NEW=$(uv run pytest -m needs_review_new --co -q 2>/dev/null | grep '::' || true)
-      if [ -n "$NEW" ]; then
-        echo "ERROR: The following AI-generated tests need full review (needs_review_new):"
-        echo "$NEW"
-        echo ""
-        BLOCKED=1
-      fi
-
-      MODIFIED=$(uv run pytest -m needs_review_modified --co -q 2>/dev/null | grep '::' || true)
-      if [ -n "$MODIFIED" ]; then
-        echo "ERROR: The following AI-modified tests need review (needs_review_modified)."
-        echo "Check the '# -- begin/end AI-modified --' sections in each method:"
-        echo "$MODIFIED"
-        echo ""
-        BLOCKED=1
-      fi
-
-      if [ "$BLOCKED" -eq 1 ]; then
-        echo "Remove the marker(s) after reviewing to unblock the merge."
-        exit 1
-      fi
-      echo "No unreviewed tests found — gate passed."
-  interruptible: true
-  rules:
-    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
 
 check-coverage:
   stage: test

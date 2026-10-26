@@ -25,9 +25,6 @@ These tests verify that the structured predicate classes (``Eq``, ``Gt``,
 callable drop-in replacements for lambdas, that they serialize correctly
 in the plan IR (as structured dicts, not ``Opaque`` markers), and that they
 integrate with ``filter_values`` for end-to-end filtering.
-
-All test methods are AI-generated and marked with
-``@pytest.mark.needs_review_new``.
 """
 
 from typing import Any

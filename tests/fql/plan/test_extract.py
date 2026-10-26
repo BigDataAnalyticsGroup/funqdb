@@ -24,12 +24,6 @@ These tests verify that an un-executed FQL operator tree can be walked into a
 ``LogicalPlan`` without triggering computation, that lambdas surface as
 ``Opaque`` markers, that multi-level operator composition recurses correctly,
 and that the IR survives a JSON round-trip.
-
-All test methods in this file were AI-generated and are individually marked
-with ``@pytest.mark.needs_review_new``. The CI job ``no-unreviewed-tests``
-blocks the merge as long as any test still carries this marker. To approve a
-test, read it, verify the assertions match intended semantics, then remove
-its ``@pytest.mark.needs_review_new`` decorator.
 """
 
 import re

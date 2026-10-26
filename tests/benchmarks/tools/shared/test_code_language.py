@@ -130,7 +130,6 @@ def test_code_language_pretty_keeps_pretty_sql_unchanged():
 
 
 def test_code_language_pretty_joins_sql_statements_with_semicolons():
-    # -- end AI-modified --
     """A script keeps its statements apart, each formatted on its own."""
     pretty = CodeLanguage.SQL.pretty("SELECT a FROM t; SELECT b FROM u")  # two
 

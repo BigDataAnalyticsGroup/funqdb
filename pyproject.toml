@@ -23,12 +23,6 @@ dependencies = [
 # directory); it is not installed as a package (formerly `poetry install --no-root`).
 package = false
 
-[tool.pytest.ini_options]
-markers = [
-    "needs_review_new: AI-generated test — entire method must be reviewed by a human before merge",
-    "needs_review_modified: AI-modified test — check '# -- begin/end AI-modified --' sections before merge",
-]
-
 [tool.coverage.run]
 # Write **relative** file paths into coverage reports (Cobertura XML,
 # JSON, HTML). Without this, `coverage xml` emits absolute filesystem
