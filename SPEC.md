@@ -458,5 +458,8 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` *Reject a foreign key without a target row*
   `open()` raises `ValueError` naming table, column and count, and closes its connection. A reference from or to a table without a primary key raises `ValueError` naming that table; a reference on a column its table does not have raises `ValueError` naming table and column. For `tpch`, `open()` raises `duckdb.IOException` when DuckDB's `tpch` extension is not installed and cannot be downloaded.
 
+- `[✅]` *Read the 113 JOB queries*  
+  `benchmarks.job.job_query_files()` returns the query files of `benchmarks/job/queries/`, copied unchanged from `viktorleis/job`, sorted by file name (`10a.sql` before `1a.sql`). Hidden files and anything that is not a file, such as a folder or a broken link, are left out; a folder without a query file raises `FileNotFoundError`. Test: `tests/benchmarks/job/test_job_queries.py`.
+
 - `[✅]` *Compare SQL and FQL results*
   `QueryResult.check_matches` compares rows as a multiset, or in order, with Python's `==`: `1`, `1.0` and `True` are equal, but `Decimal("0.1")` and the float `0.1` are not. Columns align by name; a single column aligns by position only with the unnamed column of an FQL scalar. The empty result of a statement without rows (`from_statement`) matches nothing.

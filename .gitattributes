@@ -1,0 +1,2 @@
+# the JOB queries are kept byte for byte as upstream has them: no line-ending conversion
+benchmarks/job/queries/*.sql -text
