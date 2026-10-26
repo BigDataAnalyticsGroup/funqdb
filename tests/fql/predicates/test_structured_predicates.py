@@ -592,7 +592,7 @@ def test_and_or_not_from_dict_repr():
         Eq("note", "(voice)"),  # JOB 9b
         Lt("episode_nr", 100),  # JOB 16a
         Like("note", "%(presents)%"),  # JOB 1a
-        In("note", ["(voice)", "(voice: English version)"]),  # JOB 18a
+        In("note", ["(voice)", "(voice: English version)"]),  # JOB 9a, shortened
         Eq("person_role.name", "Queen"),  # path through a missing reference, JOB 29a
     ],
     ids=repr,

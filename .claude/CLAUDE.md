@@ -28,8 +28,10 @@ at this stage; clarity and faithfulness to the FDM/FQL ideas are.
     - `fql/plan/` — logical IR and extractor for FQL operator pipelines
 - `store/` — persistence layer (currently `SqliteDict` as key/blob store)
 - `tests/` — pytest suite, mirrors the `fdm` / `fql` / `store` layout
-- `benchmarks/job/` — Join Order Benchmark experiments, incl. the
-  `SQL vs FQL.md` comparison
+- `benchmarks/job/` — the 113 Join Order Benchmark queries (`queries/`, MIT, from
+  `viktorleis/job`; read them with `job_query_files()`) and the `SQL vs FQL.md` comparison
+- `benchmarks/datasets/` — the datasets the benchmarks run on (e.g. `movies`, `tpch`,
+  `job`, `job_seeds`), each as an FDM database and a DuckDB reference; see its README
 - `docs/tutorial/` — work-in-progress tutorial (often mirrors test examples)
 - `examples/` — standalone example scripts (e.g. schema visualization)
 - `scripts/` — CLI tools (e.g. `funqdb-viz`)

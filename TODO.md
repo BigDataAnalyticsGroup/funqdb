@@ -53,7 +53,7 @@
 - [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
   stream of
   the contents of an AF)
-- [ ] TPC-H and/or TPC-C queries in FQL, one JOB query exists [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
+- [ ] TPC-H and/or TPC-C queries in FQL; so far one JOB query is written in FQL [here](benchmarks/job/queries/SQL%20vs%20FQL.md)
 - [ ] query optimization, in particular Yannakakis-style query processing and optimization
 - [x] semijoin/subdatabase: should output RFs carry over constraints (ForeignValueConstraint etc.) from the input?
 - [ ] `__setitem__` / `__delitem__` roll back only on `ConstraintViolationError`; a values-constraint that

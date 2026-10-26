@@ -1,6 +1,6 @@
 ## Example Comparison of SQL and FQL for a Join Query
 
-query <a href="https://raw.githubusercontent.com/gregrahn/join-order-benchmark/refs/heads/master/10c.sql">10 c</a>
+query <a href="10c.sql">10 c</a>
 <table style="overflow-x: hidden!important;">
 <tr>
 <td> 
@@ -10,13 +10,18 @@ SQL </td> <td> FQL (syntax in progress)</td>
 <td style="vertical-align: top;">
 
 ```SQL
-SELECT MIN(chn.name) AS character,
-       MIN(t.title) AS movie_with_american_producer
-FROM char_name AS chn, cast_info AS ci, company_name AS cn, company_type AS ct, movie_companies AS mc, role_type AS rt, title AS t
-WHERE ci.note LIKE '%(producer)%'
+SELECT min(chn.name) AS CHARACTER,
+       min(t.title) AS movie_with_american_producer
+FROM char_name AS chn,
+     cast_info AS ci,
+     company_name AS cn,
+     company_type AS ct,
+     movie_companies AS mc,
+     role_type AS rt,
+     title AS t
+WHERE ci.note like '%(producer)%'
   AND cn.country_code = '[us]'
-  AND t.production_year
-    > 1990
+  AND t.production_year > 1990
   AND t.id = mc.movie_id
   AND t.id = ci.movie_id
   AND ci.movie_id = mc.movie_id
@@ -24,8 +29,6 @@ WHERE ci.note LIKE '%(producer)%'
   AND rt.id = ci.role_id
   AND cn.id = mc.company_id
   AND ct.id = mc.company_type_id;
-
-
 ```
 
 Yes, you need to find a way to integrate this SQL into your programming language.
