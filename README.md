@@ -28,6 +28,10 @@ For the moment there is the option to clone or download a zip of the repository 
 through [uv](https://docs.astral.sh/uv/), i.e. through `uv sync` in the project directory. Run commands inside the
 project environment with `uv run`, e.g. `uv run pytest`.
 
+### Benchmark datasets
+
+see the [datasets](benchmarks/datasets/README.md) that the benchmarks and the SQL-to-FQL transpiler run on
+
 ### Tutorial
 
 see the [tutorial](docs/tutorial/README.md) which is work in progress

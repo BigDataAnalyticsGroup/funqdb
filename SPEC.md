@@ -447,3 +447,16 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` *Pickle serialisation for stored blobs*  
   `SqliteDict` transparently handles pickle serialization and deserialization of stored blobs. The `Store` does not call pickle directly; all serialization is delegated to `SqliteDict`. The `__getstate__` / `__setstate__` protocol on AFs (see FDM section) controls what is included in the pickled representation.
+
+---
+
+## Benchmark datasets
+
+- `[✅]` *Open a registered dataset as an FDM database and a DuckDB reference*
+  `DATASETS[name].open()` returns a `LoadedDataset`. Its FDM rows are read out of the DuckDB connection, keyed by the declared primary keys, with each declared foreign key swizzled into a `Reference` to the target tuple. A `DECIMAL` stays a `Decimal` on both sides. Tests: `tests/benchmarks/datasets/test_dataset.py`, `tests/benchmarks/datasets/movies/test_movies_dataset.py`.
+
+- `[✅]` *Reject a foreign key without a target row*
+  `open()` raises `ValueError` naming table, column and count, and closes its connection. A reference from or to a table without a primary key raises `ValueError` naming that table.
+
+- `[✅]` *Compare SQL and FQL results*
+  `QueryResult.check_matches` compares rows as a multiset, or in order, with Python's `==`: `1`, `1.0` and `True` are equal, but `Decimal("0.1")` and the float `0.1` are not. Columns align by name; a single column aligns by position only with the unnamed column of an FQL scalar. The empty result of a statement without rows (`from_statement`) matches nothing.
