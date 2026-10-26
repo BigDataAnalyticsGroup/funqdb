@@ -21,5 +21,8 @@
 
 from benchmarks.datasets.dataset import DatasetDefinition
 from benchmarks.datasets.movies.movies_dataset import MOVIES
+from benchmarks.datasets.tpch.tpch_dataset import TPCH
 
-DATASETS: dict[str, DatasetDefinition] = {MOVIES.name: MOVIES}
+DATASETS: dict[str, DatasetDefinition] = {
+    definition.name: definition for definition in (MOVIES, TPCH)
+}

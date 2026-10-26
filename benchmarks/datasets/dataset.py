@@ -59,7 +59,8 @@ class DatasetDefinition:
         """A new dataset with its own copy of `primary_keys`; a `LoadedDataset` when
         `has_data`, whose FDM rows are read out of the connection, so both sides
         hold the same data. Raises `ValueError` for a foreign key without a target
-        row; the connection is closed then."""
+        row or a reference that `build_dbf` rejects, checked against the columns
+        DuckDB declares; the connection is closed then."""
         references = _copy_references(self.references)
         primary_keys = dict(self.primary_keys)
         if self.build_connection is None:
@@ -68,7 +69,8 @@ class DatasetDefinition:
         connection = self.build_connection()
         try:
             rows = read_rows(connection, primary_keys)
-            dbf = build_dbf(self.name, rows, references, primary_keys)
+            columns = read_sql_schema(connection, primary_keys)
+            dbf = build_dbf(self.name, rows, references, primary_keys, columns)
         except Exception:
             connection.close()
             raise
@@ -185,18 +187,31 @@ class LoadedDataset(Dataset):
 
     @override
     def _sql_schema(self) -> SqlSchema:
-        tables = self._connection.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
-        ).fetchall()
-        return {
-            table: {
-                name: type_
-                for name, type_, *_ in self._connection.execute(
-                    f'DESCRIBE "{table}"'
-                ).fetchall()
-            }
-            for (table,) in tables
+        return read_sql_schema(self._connection)
+
+
+def read_sql_schema(
+    connection: duckdb.DuckDBPyConnection, tables: Iterable[str] | None = None
+) -> SqlSchema:
+    """The columns and SQL types of `tables`, as DuckDB declares them, also for a
+    table without rows; without `tables`, of every table in schema `main`. Each of
+    `tables` is keyed by its name as given and found as a query finds it, so
+    regardless of case and along DuckDB's search path."""
+    if tables is None:
+        tables = [
+            table
+            for (table,) in connection.execute(
+                "SELECT table_name FROM information_schema.tables"
+                " WHERE table_schema = 'main'"
+            ).fetchall()
+        ]
+    return {
+        table: {
+            name: type_
+            for name, type_, *_ in connection.execute(f'DESCRIBE "{table}"').fetchall()
         }
+        for table in tables
+    }
 
 
 def read_rows(
@@ -227,14 +242,19 @@ def build_dbf(
     rows: DatasetRowData,
     references: References,
     primary_keys: dict[str, PrimaryKey],
+    columns: SqlSchema | None = None,
 ) -> DBF:
     """`rows` as an FDM `DBF`, keying each relation by its primary key and
     swizzling every foreign key in `references` into a direct reference to the
     target relation's TF (mirroring the DuckDB rows). The FDM has no NULL: a NULL
     column, foreign key or not, leaves its attribute unmapped.
+    `columns` holds each table's columns as the reference database declares them;
+    without it, a table's columns are the keys of its first row, so a table
+    without rows is then not checked for its foreign key columns.
     Raises `ValueError` naming table, column and count when a non-NULL foreign key
-    refers to no row, and naming the table when a reference starts or ends at a
-    table without a primary key."""
+    refers to no row, naming the table when a reference starts or ends at a table
+    without a primary key, and naming table and column when the table has no such
+    column."""
     relations: dict[str, RF] = {
         table: RF(
             {
@@ -257,6 +277,8 @@ def build_dbf(
                     f"{table}.{fk_column} refers to {reference.target_table!r}, "
                     "which has no primary key"
                 )
+            if not _has_column(table, fk_column, rows, columns):
+                raise ValueError(f"{table}.{fk_column} is no column of {table!r}")
             target = relations[reference.target_table]
             _check_targets_exist(table, fk_column, relation, target)
             for item in relation:
@@ -267,6 +289,17 @@ def build_dbf(
             relation.references(reference.reference_name, target)
 
     return DBF(relations, lineage=[f"DBF({name})"], frozen=False)
+
+
+def _has_column(
+    table: str, column: str, rows: DatasetRowData, columns: SqlSchema | None
+) -> bool:
+    """True when `table` has `column`: in `columns` when given, else in its first
+    row; a table without rows and without `columns` counts as having it."""
+    if columns is not None:
+        return column in columns[table]
+    # a NULL leaves its attribute unmapped, so ask the rows, not the tuples
+    return not rows[table] or column in rows[table][0]
 
 
 def _check_targets_exist(table: str, column: str, relation: RF, target: RF) -> None:

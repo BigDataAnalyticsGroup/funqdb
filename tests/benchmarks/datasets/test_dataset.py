@@ -36,7 +36,12 @@ from benchmarks.datasets import (
     NotATable,
     PrimaryKey,
 )
-from benchmarks.datasets.dataset import build_dbf, declare_primary_keys, read_rows
+from benchmarks.datasets.dataset import (
+    build_dbf,
+    declare_primary_keys,
+    read_rows,
+    read_sql_schema,
+)
 
 ID = PrimaryKey.of("id")  # the key of most tables below
 
@@ -442,6 +447,128 @@ def test_build_dbf_reference_to_table_without_primary_key_raises_ValueError():
 
     with pytest.raises(ValueError, match=r"movie\.genre_id refers to 'genre'"):
         build_dbf("cinema", rows, mapping, keys)  # names the reference and target
+
+
+def test_build_dbf_reference_on_missing_column_raises_ValueError():
+    """A reference must name a column of its table: a misspelled one is no NULL."""
+    rows = {
+        "genre": [{"id": 1}],
+        "movie": [{"id": 1, "genre_id": 1}],
+    }  # movie has a genre_id column
+    mapping = {"movie": {"genre_idd": Reference("genre", "genre")}}  # misspelled
+    keys = {"genre": ID, "movie": ID}  # both keyed by id
+
+    with pytest.raises(ValueError, match=r"movie\.genre_idd is no column"):  # named
+        build_dbf("cinema", rows, mapping, keys)  # refuses the unknown column
+
+
+def test_build_dbf_reference_on_all_NULL_column_swizzles_nothing():
+    """A column that is NULL in every row exists: its reference maps nothing."""
+    rows = {
+        "genre": [{"id": 1}],
+        "movie": [{"id": 1, "genre_id": None}],
+    }  # the only movie has no genre
+    mapping = {"movie": {"genre_id": Reference("genre", "genre")}}  # movie -> genre
+    keys = {"genre": ID, "movie": ID}  # both keyed by id
+
+    dbf = build_dbf("cinema", rows, mapping, keys)  # no error
+
+    assert "genre_id" not in dbf.movie[1]  # the NULL key is unmapped
+    assert "genre" not in dbf.movie[1]  # and no reference is added
+
+
+def test_build_dbf_reference_on_missing_column_of_empty_table_raises_ValueError():
+    """With the declared columns, a table without rows is checked too."""
+    rows = {"genre": [], "movie": []}  # no rows: the rows name no column
+    columns = {
+        "genre": {"id": "INTEGER"},
+        "movie": {"id": "INTEGER", "genre_id": "INTEGER"},
+    }  # as the reference database declares them
+    mapping = {"movie": {"genre_idd": Reference("genre", "genre")}}  # misspelled
+    keys = {"genre": ID, "movie": ID}  # both keyed by id
+
+    with pytest.raises(ValueError, match=r"movie\.genre_idd is no column"):  # named
+        build_dbf("cinema", rows, mapping, keys, columns)  # refuses it all the same
+
+
+def test_DatasetDefinition_open_checks_foreign_key_columns_of_empty_tables():
+    """`open` checks a reference against the columns DuckDB declares, so a
+    misspelled column fails also while its table has no rows."""
+
+    def build() -> duckdb.DuckDBPyConnection:
+        """Two empty tables, a -> b."""
+        connection = duckdb.connect()  # a fresh in-memory database
+        connection.execute("CREATE TABLE a (id INTEGER, b_id INTEGER)")  # a -> b
+        connection.execute("CREATE TABLE b (id INTEGER)")  # the target
+        return connection  # for open() to read
+
+    definition = DatasetDefinition(
+        name="a",
+        references={"a": {"b_idd": Reference("b", "b")}},  # misspelled
+        primary_keys={"a": ID, "b": ID},  # both keyed by id
+        build_connection=build,
+    )  # a dataset whose tables have no rows yet
+
+    with pytest.raises(ValueError, match=r"a\.b_idd is no column"):  # named
+        definition.open()  # refuses the unknown column
+
+
+def test_read_sql_schema_names_columns_of_every_table_also_without_rows():
+    """The columns come from DuckDB's declaration, not from the rows."""
+    connection = duckdb.connect()  # a fresh in-memory database
+    connection.execute("CREATE TABLE a (id INTEGER, label VARCHAR)")  # no rows
+    connection.execute("CREATE TABLE b (id INTEGER)")  # a second table
+    connection.execute("INSERT INTO b VALUES (1)")  # with a row
+
+    schema = read_sql_schema(connection)  # DuckDB's columns of every table
+    connection.close()  # the test owns this connection
+
+    assert schema == {
+        "a": {"id": "INTEGER", "label": "VARCHAR"},
+        "b": {"id": "INTEGER"},
+    }  # both tables, with and without rows
+
+
+def test_read_sql_schema_finds_given_tables_as_a_query_does():
+    """Given tables are found regardless of case and keyed by the name given."""
+    connection = duckdb.connect()  # a fresh in-memory database
+    connection.execute("CREATE TABLE movie (id INTEGER)")  # stored as movie
+    connection.execute("CREATE TABLE extra (id INTEGER)")  # not asked for
+
+    schema = read_sql_schema(connection, ["Movie"])  # asked for as Movie
+    connection.close()  # the test owns this connection
+
+    assert schema == {"Movie": {"id": "INTEGER"}}  # under the given name only
+
+
+def test_DatasetDefinition_open_finds_tables_as_queries_do():
+    """A table declared in another case than DuckDB stores it opens as before:
+    the column check finds it the same way the rows are read."""
+
+    def build() -> duckdb.DuckDBPyConnection:
+        """movie -> genre, with one row each, created in lower case."""
+        connection = duckdb.connect()  # a fresh in-memory database
+        connection.execute("CREATE TABLE genre (id INTEGER)")  # the target
+        connection.execute(
+            "CREATE TABLE movie (id INTEGER, genre_id INTEGER)"  # movie -> genre
+        )
+        connection.execute("INSERT INTO genre VALUES (1)")  # genre 1
+        connection.execute("INSERT INTO movie VALUES (1, 1)")  # movie 1 -> genre 1
+        return connection  # for open() to read
+
+    definition = DatasetDefinition(
+        name="cinema",
+        references={"Movie": {"genre_id": Reference("genre_id", "genre")}},
+        primary_keys={"Movie": ID, "genre": ID},  # Movie in another case
+        build_connection=build,
+    )  # declared as Movie, stored as movie
+
+    dataset = definition.open()  # no KeyError, no ValueError
+    fql = "dbf['Movie'][1]['genre_id'] is dbf.genre[1]"  # movie 1's genre, a bool
+    same = dataset.execute_fql(fql)  # read under the declared name
+    dataset.close()  # the test owns this dataset
+
+    assert same.rows == ((True,),)  # the reference is swizzled
 
 
 def test_build_dbf_reference_from_table_without_primary_key_raises_ValueError():
