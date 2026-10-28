@@ -32,6 +32,8 @@ All four operators return a new DBF with freshly cloned RFs; the input DBF
 and its RFs are never mutated. Intra-DBF references (ForeignValueConstraint
 and ReverseForeignObjectConstraint pointing to other relations in the same
 DBF) are re-bound to the cloned RFs so the returned DBF is self-consistent.
+All four raise `NotImplementedError` on a DBF that holds one RF under several
+names (aliases): the clones would no longer be the same relation.
 
 Join predicates can be given as ordinary Python callables (``lambda``) or as
 structured predicates from ``fql.predicates.predicates`` (``Eq``, ``Gt``,
@@ -69,9 +71,38 @@ _DropRFConstraint = Callable[
 _DropDBFConstraint = Callable[[AttributeFunctionConstraint], bool]
 
 
+def _refuse_aliases(relations: Mapping[str, RF], operator_name: str) -> None:
+    """Refuse a DBF that holds one RF under several names (aliases).
+
+    `_clone_dbf_rebinding_refs` copies each name separately and rebinds every
+    reference into the RF to the copy under its *last* name, so the aliases
+    would silently become different relations: an aliased self-reference
+    (e.g. `title.episode_of_id`) would turn into an edge between two aliases.
+
+    @param relations: The DBF's relations by name, as the cloner iterates them.
+    @param operator_name: Operator name for the error message.
+    @raises NotImplementedError: If some RF is entered under several names.
+    """
+    uuid_to_names: dict[int, list[str]] = {}
+    for name, rf in relations.items():
+        uuid_to_names.setdefault(rf.uuid, []).append(name)
+    alias_groups: list[str] = [
+        ", ".join(sorted(names)) for names in uuid_to_names.values() if len(names) > 1
+    ]
+    if alias_groups:
+        raise NotImplementedError(
+            f"{operator_name}: one relation is entered under several names "
+            f"({'; '.join(sorted(alias_groups))}); copying the DBF would split "
+            f"them into different relations. Enter every name as its own "
+            f"relation, e.g. `rf.where(lambda i: True)` for each, so the "
+            f"original RF itself is not in the DBF."
+        )
+
+
 def _clone_dbf_rebinding_refs(
     dbf: DBF,
     *,
+    operator_name: str,
     drop_rf_constraint: _DropRFConstraint | None = None,
     drop_dbf_constraint: _DropDBFConstraint | None = None,
 ) -> tuple[DBF, dict[str, RF]]:
@@ -94,6 +125,7 @@ def _clone_dbf_rebinding_refs(
 
     @param dbf: Source DBF. Iterated via the public protocol so computed
         relations (if any) are included — consistent with semijoin/subdatabase.
+    @param operator_name: The calling operator, for error messages.
     @param drop_rf_constraint: Optional filter (name, constraint,
         old_uuid_to_name) → True to skip copying that constraint into the
         cloned RF.
@@ -104,8 +136,11 @@ def _clone_dbf_rebinding_refs(
     @return: (new DBF, {name -> new RF}). The DBF and its RFs are returned
         unfrozen; callers are expected to freeze them after any further
         mutations (add_values_constraint etc.) that they perform.
+    @raises NotImplementedError: If one RF is entered under several names
+        (see `_refuse_aliases`).
     """
     name_to_old: dict[str, RF] = {item.key: item.value for item in dbf}
+    _refuse_aliases(name_to_old, operator_name)
     old_uuid_to_name: dict[int, str] = {
         rf.uuid: name for name, rf in name_to_old.items()
     }
@@ -216,6 +251,8 @@ class add_reference[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     the cloned target RF — the same effect as the eager `RF.references()`
     method, but on clones so the input DBF stays intact.
 
+    Raises `NotImplementedError` on aliases (see the module docstring).
+
     Returns a new DBF with cloned RFs.
     """
 
@@ -250,7 +287,9 @@ class add_reference[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         dbf: DBF = _require_dbf(
             self._resolve_input(self.input_function), "add_reference"
         )
-        new_dbf, name_to_new = _clone_dbf_rebinding_refs(dbf)
+        new_dbf, name_to_new = _clone_dbf_rebinding_refs(
+            dbf, operator_name="add_reference"
+        )
 
         if self.source not in name_to_new:
             raise ValueError(
@@ -288,6 +327,7 @@ class drop_reference[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     names surface immediately. If you need idempotent "drop if
     present" semantics, use `drop_join_predicate`'s matcher mode for
     predicates or add a dedicated matcher-mode variant here later.
+    Raises `NotImplementedError` on aliases (see the module docstring).
 
     Returns a new DBF with cloned RFs.
     """
@@ -363,7 +403,7 @@ class drop_reference[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             source=self.source, ref_key=self.ref_key, target=self.target
         )
         new_dbf, name_to_new = _clone_dbf_rebinding_refs(
-            dbf, drop_rf_constraint=drop_filter
+            dbf, operator_name="drop_reference", drop_rf_constraint=drop_filter
         )
         return _freeze_result(new_dbf, name_to_new)
 
@@ -468,7 +508,9 @@ class add_join_predicate[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         dbf: DBF = _require_dbf(
             self._resolve_input(self.input_function), "add_join_predicate"
         )
-        new_dbf, name_to_new = _clone_dbf_rebinding_refs(dbf)
+        new_dbf, name_to_new = _clone_dbf_rebinding_refs(
+            dbf, operator_name="add_join_predicate"
+        )
 
         missing: list[str] = [r for r in self.relations if r not in name_to_new]
         if missing:
@@ -582,7 +624,7 @@ class drop_join_predicate[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         drop_filter: _DropDBFConstraint = self._build_drop_filter()
         new_dbf, name_to_new = _clone_dbf_rebinding_refs(
-            dbf, drop_dbf_constraint=drop_filter
+            dbf, operator_name="drop_join_predicate", drop_dbf_constraint=drop_filter
         )
         return _freeze_result(new_dbf, name_to_new)
 

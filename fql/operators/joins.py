@@ -226,7 +226,7 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
 
         1. isolated relations (no edges at all),
         2. disconnected reference graph (more than one component),
-        3. non-tree graph (diamond, cycle, parallel or self reference).
+        3. non-tree graph (diamond, cycle, or parallel reference).
 
         Topology queries live on `JoinGraph` (`isolated_nodes`,
         `connected_components`, `is_tree`, `pure_sources`); this method encodes
@@ -257,13 +257,13 @@ class join[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
             )
 
         # Non-tree: connected but with more than n-1 edges — a diamond, a
-        # cycle, or a parallel/self reference. Enumerating these needs a
+        # cycle, or a parallel reference. Enumerating these needs a
         # residual-edge consistency check that is deferred; caught here rather
         # than mid-walk so the bidirectional generator can assume a tree.
         if not graph.is_tree():
             raise NotImplementedError(
                 f"join: reference graph is not a tree (diamond, cycle, "
-                f"parallel reference, or self-reference). {_FOLLOWUP_HINT}"
+                f"or parallel reference). {_FOLLOWUP_HINT}"
             )
 
         pure_sources: set[str] = graph.pure_sources()

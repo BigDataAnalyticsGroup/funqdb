@@ -6,13 +6,15 @@
 ### The join graph
 
 Every DBF has a **join graph**: one node per relation, one directed edge per reference (`.references(ref_key,
-target)` or [`add_reference`](constraints.md)); a DBF without references has a graph without edges. The
+target)` or [`add_reference`](constraints.md)); a DBF without references has a graph without edges. A relation's
+reference to itself (e.g. `title.episode_of_id → title`) is no edge, and a reference into one relation entered under
+several names (aliases) is refused, because nothing tells which alias it means. The
 [join](join.md) and [subdatabase](subdatabase.md) operators read their join structure from it:
 
 ```python
 from fql.plan.join_graph import JoinGraph
 
-graph = JoinGraph.from_dbf(dbf)   # any DBF; nodes: relation names, edges: references
+graph = JoinGraph.from_dbf(dbf)   # nodes: relation names, edges: references
 ```
 
 ### Aggregate boxes

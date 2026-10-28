@@ -116,3 +116,6 @@ not the `cogroup` operator.
   now-obsolete "raises" test into the positive full-join test.
 
 <!-- notes below: skill never overwrites past this marker -->
+
+- 2026-10-28, MR !71: self-references are no longer edges (feature 013, see
+  `docs/changes/013-self-reference-edge-policy/`), so the tree gate no longer sees them.

@@ -191,10 +191,14 @@ its subtypes unless a subtype entry explicitly says otherwise.
   When multiple rows reference the same target tuple through a `ForeignValueConstraint`, all those rows receive the same TF instance (verifiable with Python's `is` operator). This eliminates redundant copying and ensures that modifications to the shared instance propagate to all referencing rows.
 
 - `[✅]` *Validates graph topology; rejects non-tree, disconnected, and isolated-relation graphs*  
-  The join operator inspects the reference graph extracted from `ForeignValueConstraint` metadata and raises `NotImplementedError` with an explicit hint, in order, if the graph has isolated relations with no references, more than one connected component, or is not an undirected tree (a diamond / non-tree acyclic graph, a cycle, or a parallel / self reference). Multiple pure-source relations are **no longer** rejected — see the multi-source entry below.
+  The join operator inspects the reference graph extracted from `ForeignValueConstraint` metadata and raises
+  `NotImplementedError` with an explicit hint, in order, if the graph has isolated relations with no references, more
+  than one connected component, or is not an undirected tree (a diamond / non-tree acyclic graph, a cycle, or a
+  parallel reference). A self-reference is no edge (feature 013), so it never forms a rejected self-edge. Multiple
+  pure-source relations are **no longer** rejected — see the multi-source entry below.
 
 - `[✅]` ***multi-source** flattening join over any undirected-tree orientation* (feature 003)  
-  Lifts the "exactly one pure source" restriction: the join now walks the reference tree bidirectionally (forward via the inline FK pointer, backward from a hub tuple to its referencing source tuples via an object-identity scan of the reduced source), so a graph with several relations referencing a shared hub (e.g. JOB's `ci→t, mc→t`) flattens to the fan-in cross product. In scope: any connected graph that is an undirected tree in any edge orientation. Diamonds / non-tree, disconnected, and cyclic graphs still raise `NotImplementedError` (diamonds deferred to a follow-up 004). See `test_join_multi_source_fan_in_cross_product` and `test_join_flattens_all_edge_orientations`.
+  Lifts the "exactly one pure source" restriction: the join now walks the reference tree bidirectionally (forward via the inline FK pointer, backward from a hub tuple to its referencing source tuples via an object-identity scan of the reduced source), so a graph with several relations referencing a shared hub (e.g. JOB's `ci→t, mc→t`) flattens to the fan-in cross product. In scope: any connected graph that is an undirected tree in any edge orientation. Diamonds / non-tree, disconnected, and cyclic graphs still raise `NotImplementedError` (diamonds deferred to a follow-up MR). See `test_join_multi_source_fan_in_cross_product` and `test_join_flattens_all_edge_orientations`.
 
 - `[✅]` *Backlinks are reconstructed **after** Yannakakis reduction, never stored* (feature 003)  
   The bidirectional walk needs, for every hub tuple, the source tuples that reference it — the "backward"
@@ -217,7 +221,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   If the input DBF carries any `JoinPredicate` constraints, the join operator raises `NotImplementedError` rather than silently ignoring them. Predicate pushdown — applying user-supplied join conditions during the tuple combination phase — is deferred to a follow-up implementation.
 
 - `[⚠️]` *Non-tree acyclic graphs / diamond references (deferred)*  
-  The join operator assumes the reference graph forms an undirected tree. If a relation is reachable via two or more distinct paths (a diamond pattern or non-tree acyclic graph), the operator raises `NotImplementedError`. Handling such graphs would require enumerating over a spanning tree plus a residual-edge consistency check and is deferred to a follow-up implementation (004).
+  The join operator assumes the reference graph forms an undirected tree. If a relation is reachable via two or more distinct paths (a diamond pattern or non-tree acyclic graph), the operator raises `NotImplementedError`. Handling such graphs would require enumerating over a spanning tree plus a residual-edge consistency check and is deferred to a follow-up implementation.
 
 - `[✅]` *Edge direction independent: every orientation of a tree reference graph is joinable*  
   Because the walk is bidirectional (feature 003), edge direction no longer decides joinability — it only decides which relation is embedded where. For the tree A-C, B-C, C-D all 2³ = 8 orientations flatten, each to the same full join (with one tuple per relation, a single row nesting all four). Multi-source orientations (two or more pure sources) are handled by entering the shared hub's other edges backward. See `test_join_flattens_all_edge_orientations`. This matches `subdatabase`, which is likewise direction-independent.
@@ -315,7 +319,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   Adds a foreign-key relationship within a DBF by installing a `ForeignValueConstraint` on a source RF (keyed by a reference attribute) pointing to a target RF, and a symmetric `ReverseForeignObjectConstraint` on the target. The input DBF is cloned with fresh RFs so the original remains unchanged; the returned DBF is self-consistent with rebound intra-DBF references.
 
 - `[✅]` ***drop_reference** — remove a foreign-key reference from a DBF*  
-  Removes a foreign-key reference from a DBF by dropping the `ForeignValueConstraint` on the source RF and the matching `ReverseForeignObjectConstraint` on the target RF. The input DBF is cloned before modification. Raises `ValueError` if the source relation, target relation, or the reference itself does not exist. This also serves as the **blacklist for parallel references**: `join` turns every schema reference into a mandatory edge, so a relation carrying two references to the *same* target (e.g. `movie_link.movie_id → title` and `movie_link.linked_movie_id → title`) yields a parallel edge and `join` rejects the non-tree graph; a query that joins along only one of them drops the unused edge before `join` to restore a tree — the opt-out dual of SQL naming each join it wants. (End-to-end verification against the join operator is a separate follow-up.)
+  Removes a foreign-key reference from a DBF by dropping the `ForeignValueConstraint` on the source RF and the matching `ReverseForeignObjectConstraint` on the target RF. The input DBF is cloned before modification. Raises `ValueError` if the source relation, target relation, or the reference itself does not exist. This also serves as the **blacklist for parallel references**: `join` turns every schema reference (except a self-reference, feature 013) into a mandatory edge, so a relation carrying two references to the *same* target (e.g. `movie_link.movie_id → title` and `movie_link.linked_movie_id → title`) yields a parallel edge and `join` rejects the non-tree graph; a query that joins along only one of them drops the unused edge before `join` to restore a tree — the opt-out dual of SQL naming each join it wants. (End-to-end verification against the join operator is a separate follow-up.)
 
 - `[✅]` ***add_join_predicate** — register a cross-relation predicate on a DBF (evaluated lazily by join)*  
   Registers a `JoinPredicate` constraint on a DBF spanning one or more named relations, accepting either a plain callable (lambda) or a structured predicate (e.g., `Gt("users.age", Ref("departments.min_age"))`). The predicate is never evaluated during DBF mutations; it is held for lazy evaluation by the join operator when assembling tuple combinations.
@@ -403,7 +407,34 @@ its subtypes unless a subtype entry explicitly says otherwise.
 ### JoinGraph
 
 - `[✅]` *Build join graph from DBF via `ForeignValueConstraint` inspection*  
-  `JoinGraph.from_dbf(dbf)` iterates the DBF's named RFs and scans each RF's constraints for `ForeignValueConstraint` instances. For each constraint whose target AF is also a named relation in the DBF, an edge is added recording the source RF, target RF, and the reference attribute name (`ref_key`).
+  `JoinGraph.from_dbf(dbf)` iterates the DBF's named RFs and scans each RF's constraints for `ForeignValueConstraint`
+  instances. For each constraint whose target AF is also a named relation in the DBF, an edge is added recording the
+  source RF, target RF, and the reference attribute name (`ref_key`). Two exceptions follow below: a relation's
+  self-reference, and a reference into an RF entered under several names.
+
+- `[✅]` *Self-reference is not an automatic join edge (feature 013)*  
+  A `ForeignValueConstraint` from a relation to **itself** (e.g. JOB's `title.episode_of_id → title`) is an
+  object-identity pointer, not a join request, so `from_dbf` does not turn it into an edge. A self-referencing hub
+  such as an unfiltered `title` now joins (previously the self-loop forced a cycle that `is_tree` /
+  `check_acyclicity` rejected); a relation whose only reference is to itself is a plain one-relation DBF. Only the
+  exact RF counts as "itself": a filtered copy (`title.where(...)`) still references the original `title`, which
+  MR !79 resolves. See `test_join_self_reference_sharing_its_name_with_an_incoming_reference`,
+  `test_join_accepts_self_referencing_pure_source`, `test_join_passes_a_sole_self_referencing_relation_through`, and
+  `test_subdatabase_keeps_sole_self_referencing_relation_unchanged`.
+
+- `[✅]` *Refuses references into an RF entered under several DBF names (aliases)*  
+  If one RF is entered under several names (as in SQL's `FROM t AS a, t AS b`) and another relation references it,
+  nothing tells which alias the reference means, so `from_dbf` raises `NotImplementedError` instead of guessing (a
+  pairing by DBF order gave wrong answers, e.g. JOB 13a). Enter every name as its own relation, e.g.
+  `info_type.where(lambda i: True)` for each (including the first, so the original RF is not in the DBF), and bind
+  each reference with `add_reference`. `from_dbf` does not refuse aliases linked only by their own self-references,
+  nor an aliased RF that only references others. The four constraint operators (`add_reference`, `drop_reference`,
+  `add_join_predicate`, `drop_join_predicate`) refuse a DBF with aliases, because their copies would not keep the
+  aliases the same relation. An explicit alias binding is a follow-up (TODO.md). See
+  `test_from_dbf_refuses_a_referenced_relation_under_several_names`,
+  `test_aliases_as_own_relations_join_in_any_dbf_order`, `test_from_dbf_allows_aliases_linked_only_by_self_references`,
+  `test_from_dbf_aliased_source_with_outgoing_reference_edges_per_alias`, and
+  `test_constraint_operators_refuse_aliases`.
 
 - `[✅]` *Detect acyclicity (Kahn's topological sort)*  
   `check_acyclicity()` computes in-degree for all edge-participating nodes, seeds a queue with zero-in-degree nodes, and repeatedly dequeues nodes while decrementing target in-degrees. If fewer nodes are visited than participate in edges, a cycle exists and `ValueError` is raised.

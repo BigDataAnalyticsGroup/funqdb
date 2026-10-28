@@ -40,14 +40,32 @@
 - [ ] `partition`: a partition key value containing `__` (e.g. `"a__b"`) is split
   as a path when written into the result DBF and raises `AttributeError`
   (pre-existing; noted in 008).
-- [ ] flattening joins — follow-up MR to lift the two NotImplementedError
-  paths that MR 2's minimal POC explicitly declines: (a) JoinPredicate
-  pushdown during the join walk, firing predicates as soon as all their
-  participating relations are in the accumulator; (b) multi-source
-  reference graphs (e.g. JOB's `ci→t`, `mc→t`) and diamond-shaped
-  acyclic graphs via a BFS-spanning-tree walk with an on-the-fly
-  reverse index. Also: Cartesian fallback for multi-RF DBFs with zero
-  references, if anyone ever asks for it.
+- [ ] flattening joins — follow-up MR to lift the remaining NotImplementedError
+  paths. The join now handles any connected undirected tree in any edge
+  orientation, multi-source included (MR 003; e.g. JOB's `ci→t`, `mc→t`). Still
+  out of scope: (a) JoinPredicate pushdown during the join walk, firing
+  predicates as soon as all their participating relations are in the
+  accumulator; (b) diamonds / non-tree acyclic graphs (→ a later MR); (c)
+  disconnected graphs / Cartesian across components, including the trivial
+  zero-reference multi-RF DBF, if anyone ever asks for it; (d) cyclic graphs.
+- [ ] explicit alias binding — let one RF be entered under several DBF names and bind
+  each reference to a specific alias, like SQL's `FROM t AS a JOIN t AS b`. Today
+  `JoinGraph.from_dbf` refuses a reference into an aliased RF (MR !71: a pairing by
+  DBF order gave wrong answers, e.g. JOB 13a), and the four constraint operators
+  refuse a DBF with aliases (their copies rebind every reference to the last alias).
+  The working route is one relation per name, `rf.where(lambda i: True)` for every
+  name including the first, plus `add_reference`. A binding would be DBF-level (`AliasReference` constraint +
+  `add_alias_reference` operator, see
+  `docs/changes/013-self-reference-edge-policy/DECISION.md`); it must also let a
+  cross-alias self-reference (`t1.episode_of_id → t2`) be requested explicitly.
+- [ ] `subdatabase` silently returns an inconsistent reduction on non-tree graphs, e.g.
+  a parallel reference (`dept.manager → emp`, `dept.head → emp`): it keeps a `dept`
+  tuple but drops its manager. `join` refuses these graphs; `subdatabase` should too.
+- [ ] bug: `test_DictionaryAttributeFunction` (`tests/fdm/attribute_functions/test_basic.py`)
+  asserts `daf.uuid == 0`, which only holds when the global uuid counter starts at 0.
+  Passes in isolation, fails whenever earlier tests have advanced the counter. Fix:
+  reset the counter in a fixture, or assert relative uuid behaviour instead of an
+  absolute value.
 - [ ] foreign object constraints through the store (similar problem as observers)
 - [ ] transactions
 - [ ] ordering/order by (does not make sense conceptually on a function, but of course we could create a sorted items
@@ -152,7 +170,7 @@
   as a node annotation.
 - [ ] `repr()` of an `RF` raises `TypeError: __repr__ returned non-string (type ABCMeta)`, so
   any `JoinGraph` / `AggregateBox` repr fails too (unreadable pytest failure output).
-- [ ] `fql/plan/join_graph.py` lacks the AGPL header and a module docstring.
+- [ ] `fql/plan/join_graph.py` lacks a module docstring.
 - [ ] promote the definedness check onto the FDM type (`tf.defined(path)` /
   `tf.get(path, default)`), deferred in 004 until a third consumer appears;
   with `Attr` (007) there are three (predicates, aggregates, expressions).
@@ -173,6 +191,14 @@
 ---
 
 ### DONE
+- [x] multi-source flattening join (MR 003 of the join-rework): the `join`
+  operator now walks the reduced reference graph **bidirectionally** (forward
+  via the inline pointer, backward from a referenced hub tuple to its sources),
+  so any connected undirected tree in any edge orientation joins — including
+  multi-source trees with several pure sources (e.g. JOB's `ci→t`, `mc→t`).
+  Diamonds / non-tree acyclic graphs remain deferred (a later MR).
+- [x] self-references are no automatic join edges (feature 013, MR !71); a reference
+  into an RF entered under several DBF names is refused instead of guessed.
 - [x] SQL-style flat join results (`flatten` operator, MR 3 of the join-rework):
   standalone `flatten` class in `fql/operators/flatten.py`. Accepts any RF
   whose row values are nested TFs (typically the output of `join`) and emits

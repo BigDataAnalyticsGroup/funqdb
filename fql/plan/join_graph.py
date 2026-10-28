@@ -1,3 +1,23 @@
+#
+#    This is funqDB, a query processing library and system built around FDM and FQL.
+#
+#    Copyright (C) 2026 Prof. Dr. Jens Dittrich, Saarland University
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as
+#    published by the Free Software Foundation, either version 3 of the
+#    License, or (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#
+
 from __future__ import annotations
 
 from collections import deque
@@ -268,9 +288,17 @@ class JoinGraph:
         """Extract the join graph from a DBF by inspecting ForeignValueConstraint
         on each RF.
 
+        A relation's self-reference (source RF is the target RF, e.g.
+        `title.episode_of_id -> title`) is not turned into an edge: a reference
+        is a pointer, not a join request (feature 013, see
+        `docs/changes/013-self-reference-edge-policy/DECISION.md`).
+
         @param dbf: The input DBF to extract the join graph from.
         @return: A JoinGraph with nodes and edges. Edges only include references
             where both endpoints are relations in the DBF.
+        @raises NotImplementedError: If an RF entered under several DBF names
+            (aliases) is referenced by another relation: nothing tells which
+            alias the reference means, and guessing would give wrong answers.
         """
         graph = cls()
 
@@ -282,12 +310,12 @@ class JoinGraph:
         }
         graph.nodes.update(join_nodes)
 
-        # build a lookup from RF uuid to relation name so we can resolve
-        # the target_attribute_function stored in each ForeignValueConstraint
-        # back to a named node in this graph
-        uuid_to_name: dict[int, str] = {
-            node.rf.uuid: name for name, node in join_nodes.items()
-        }
+        # build a lookup from RF uuid to every relation name it is entered
+        # under, so we can resolve the target_attribute_function stored in each
+        # ForeignValueConstraint back to a named node in this graph
+        uuid_to_names: dict[int, list[RelationName]] = {}
+        for name, node in join_nodes.items():
+            uuid_to_names.setdefault(node.rf.uuid, []).append(name)
 
         # scan each RF's values_constraints for ForeignValueConstraint instances;
         # these are created by .references() and encode source_rf[ref_key] -> target_rf
@@ -295,9 +323,26 @@ class JoinGraph:
             for constraint in node.rf.__dict__["values_constraints"]:
                 if isinstance(constraint, ForeignValueConstraint):
                     target_uuid: int = constraint.target_attribute_function.uuid
+                    # a self-reference is no edge (feature 013)
+                    if target_uuid == node.rf.uuid:
+                        continue
+                    target_names: list[RelationName] = uuid_to_names.get(
+                        target_uuid, []
+                    )
+                    # an aliased target: refuse rather than guess the alias
+                    if len(target_names) > 1:
+                        raise NotImplementedError(
+                            f"join graph: '{name}.{constraint.key}' references a "
+                            f"relation entered under several names "
+                            f"{sorted(target_names)}; the reference does not say "
+                            f"which one it means. Enter every name as its own "
+                            f"relation, e.g. `rf.where(lambda i: True)` for each, "
+                            f"so the original RF itself is not in the DBF, and "
+                            f"bind the reference with add_reference."
+                        )
                     # only include edges where the target is also in this DBF
-                    if target_uuid in uuid_to_name:
-                        target_name: str = uuid_to_name[target_uuid]
+                    if target_names:
+                        target_name: RelationName = target_names[0]
                         graph.edges.append(
                             Edge(
                                 source=node,
@@ -533,16 +578,14 @@ class JoinGraph:
         A tree is weakly connected (exactly one connected component) and has
         exactly ``len(nodes) - 1`` edges. This is the shape the flattening
         `join` accepts in any edge orientation; anything else (a diamond, a
-        cycle, a parallel reference, a self-reference, or a disconnected
-        graph) has a different edge count or component count and returns
-        False.
+        cycle, a parallel reference, or a disconnected graph) has a different
+        edge count or component count and returns False.
 
         Note this is deliberately **not** `check_acyclicity()`: that tests
         *directed* acyclicity, but a diamond (``A->B, A->C, B->D, C->D``) is
         directed-acyclic while being undirected-cyclic. The edge-count test
         here is the correct undirected-tree test. On a multigraph (parallel
-        or self edges) the edge count exceeds ``n - 1``, so those are
-        rejected too.
+        edges) the edge count exceeds ``n - 1``, so those are rejected too.
         """
         return (
             len(self.connected_components()) == 1

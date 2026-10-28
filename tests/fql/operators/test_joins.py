@@ -18,11 +18,21 @@
 #
 #
 
+from collections.abc import Callable
+from dataclasses import dataclass
+
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
-from fql.operators.constraints import add_join_predicate, add_reference
+from fql.operators.constraints import (
+    add_join_predicate,
+    add_reference,
+    drop_join_predicate,
+    drop_reference,
+)
 from fql.operators.joins import join
+from fql.operators.subdatabases import subdatabase
+from fql.plan.join_graph import JoinGraph
 from tests.fql.operators.orientation_helpers import (
     build_directed_tree,
     orientation_params,
@@ -34,7 +44,12 @@ from tests.fql.operators.orientation_helpers import (
 
 
 def _single_rf_dbf() -> DBF:
-    """DBF with just one RF, no references."""
+    """DBF with just one RF, no references.
+
+    Join graph (one relation, no reference edges)::
+
+        users        (u1, u2 — no references)
+    """
     users: RF = RF(
         {"u1": TF({"name": "Alice"}), "u2": TF({"name": "Bob"})},
         frozen=True,
@@ -44,7 +59,12 @@ def _single_rf_dbf() -> DBF:
 
 def _two_rels_no_refs_dbf() -> DBF:
     """DBF with two independent RFs and no references between them —
-    used to exercise the multi-RF-without-edges NotImplementedError path."""
+    used to exercise the multi-RF-without-edges NotImplementedError path.
+
+    Join graph (two independent relations, no reference edges)::
+
+        a          b        (no references between them)
+    """
     a: RF = RF({1: TF({"x": 1})}, frozen=True)
     b: RF = RF({1: TF({"y": 2})}, frozen=True)
     return DBF({"a": a, "b": b}, frozen=True)
@@ -54,6 +74,13 @@ def _users_departments_dbf(
     *, extra_unreferenced_department: bool = False
 ) -> tuple[DBF, RF, RF]:
     """users → departments via .references('dept', …).
+
+    Join graph::
+
+        users
+          │ dept
+          ▼
+        departments        (extra unreferenced d3 reduced away if requested)
 
     If `extra_unreferenced_department` is set, adds a third department
     that no user references — used to prove that the internal
@@ -81,7 +108,18 @@ def _users_departments_dbf(
 
 
 def _tasks_projects_departments_dbf() -> tuple[DBF, RF, RF, RF]:
-    """Linear chain: tasks → projects → departments, preref via .references()."""
+    """Linear chain: tasks → projects → departments, preref via .references().
+
+    Join graph (linear chain)::
+
+        tasks
+          │ project
+          ▼
+        projects
+          │ dept
+          ▼
+        departments
+    """
     departments: RF = RF({"d1": TF({"name": "Dev"})}, frozen=False)
     projects: RF = RF(
         {"p1": TF({"title": "Alpha", "dept": departments["d1"]})},
@@ -105,7 +143,16 @@ def _tasks_projects_departments_dbf() -> tuple[DBF, RF, RF, RF]:
 
 
 def _orders_star_dbf() -> tuple[DBF, RF, RF, RF]:
-    """Single-source star: orders → customers, orders → products."""
+    """Single-source star: orders → customers, orders → products.
+
+    Join graph (single-source star)::
+
+              orders
+         customer │ product
+            ┌─────┴─────┐
+            ▼           ▼
+        customers    products
+    """
     customers: RF = RF(
         {"c1": TF({"name": "Alice"}), "c2": TF({"name": "Bob"})},
         frozen=False,
@@ -150,6 +197,12 @@ def _orders_star_dbf() -> tuple[DBF, RF, RF, RF]:
 def _multi_source_star_dbf() -> DBF:
     """Two independent sources pointing at a shared target — JOB-style.
 
+    Join graph (two pure sources fan in on hub t)::
+
+        ci            mc
+          │ t          │ t
+          ╰────▶ t ◀───╯
+
     Shape: `ci → t` and `mc → t`, no edge between ci and mc — a multi-source
     tree (two pure sources `ci`, `mc`; one hub `t`). Both sources fan in on
     the single target `t1`: two `ci` tuples and two `mc` tuples all reference
@@ -180,6 +233,18 @@ def _multi_source_star_dbf() -> DBF:
 
 def _diamond_dbf() -> DBF:
     """Single-pure-source diamond: A → B, A → C, B → D, C → D.
+
+    Join graph (single-source diamond; d reached via both b and c)::
+
+               a
+         b_ref │ c_ref
+            ┌──┴──┐
+            ▼     ▼
+            b     c
+       d_ref│     │d_ref
+            └──┐┌─┘
+               ▼▼
+               d
 
     Used to exercise the NotImplementedError path for non-tree acyclic
     graphs with a unique pure source — the walk reaches D via both B
@@ -213,6 +278,13 @@ def _diamond_dbf() -> DBF:
 def _isolated_extra_rf_dbf() -> DBF:
     """One referenced pair (users → departments) plus an isolated RF.
 
+    Join graph (one edge plus an isolated relation)::
+
+        users              loose
+          │ dept           (no edges — isolated)
+          ▼
+        departments
+
     The isolated RF has no edges at all — it exercises the explicit
     "isolated relations" NotImplementedError path.
     """
@@ -231,6 +303,16 @@ def _isolated_extra_rf_dbf() -> DBF:
 
 def _make_chain_dbf(length: int) -> DBF:
     """Factory: linear chain of `length` relations.
+
+    Join graph (linear chain; shown for length 3, generalizes)::
+
+        r0
+          │ to_r1
+          ▼
+        r1
+          │ to_r2
+          ▼
+        r2
 
     Produces `r0 → r1 → ... → r(n-1)` where each `ri` contains a
     single tuple whose `to_r{i+1}` attribute references the only
@@ -280,6 +362,14 @@ def _make_chain_dbf(length: int) -> DBF:
 def _make_star_dbf(num_arms: int) -> DBF:
     """Factory: single-source star with `num_arms` outgoing arms.
 
+    Join graph (single-source star; shown for 3 arms, generalizes)::
+
+                  center
+            ┌───────┼───────┐
+      arm_0 │ arm_1 │ arm_2 │
+            ▼       ▼       ▼
+          arm_0   arm_1   arm_2
+
     Produces `center → arm_0`, `center → arm_1`, …,
     `center → arm_{n-1}`. Center holds one tuple referencing exactly
     one tuple per arm. Matches the spirit of the external
@@ -313,6 +403,13 @@ def _make_star_dbf(num_arms: int) -> DBF:
 
 def _two_independent_pairs_dbf() -> DBF:
     """Two disconnected reference pairs: R → S and T → U.
+
+    Join graph (two disconnected components)::
+
+        R            T
+          │ s_ref     │ u_ref
+          ▼           ▼
+        S            U
 
     Every relation has a reference (so no isolated nodes), but the
     graph splits into two components. Used to exercise the
@@ -471,7 +568,15 @@ def test_join_explicit_root_accepts_pure_source() -> None:
 
 
 def test_join_pipeline_composition_with_add_reference() -> None:
-    """join composes lazily with add_reference (no intermediate .result)."""
+    """join composes lazily with add_reference (no intermediate .result).
+
+    Join graph (edge added lazily via add_reference)::
+
+        users
+          │ dept
+          ▼
+        departments
+    """
     departments: RF = RF(
         {"d1": TF({"name": "Dev"})},
         frozen=True,
@@ -723,6 +828,11 @@ def test_join_flattens_all_edge_orientations(
 def _cyclic_dbf() -> DBF:
     """Two relations referencing each other: A → B and B → A (a 2-cycle).
 
+    Join graph (2-cycle; a and b reference each other)::
+
+        a  ──b──▶  b        a → b via ref_key "b"
+        a  ◀──a──  b        b → a via ref_key "a"
+
     Built by embedding B's tuple into A's after both exist, so the references
     form a directed cycle. Used to prove the join rejects cyclic graphs (they
     are non-trees) rather than looping.
@@ -760,6 +870,15 @@ def test_join_cyclic_graph_raises_not_implemented() -> None:
 
 def _mixed_fan_in_forward_chain_dbf() -> tuple[DBF, RF]:
     """Tree A→C, B→C, C→D combining a backward fan-in with a forward chain.
+
+    Join graph (fan-in a, b → c, then forward c → d)::
+
+        a            b
+          │ c          │ c
+          ╰────▶ c ◀───╯
+                 │ d
+                 ▼
+                 d
 
     C is the hub: A and B reference it (walked backward from C), and C
     references D (walked forward). A and B each have two tuples pointing at the
@@ -858,6 +977,543 @@ def test_join_drops_source_tuples_missing_the_reference() -> None:
 
     assert len(out) == 1  # only u1 has a partner; u2 is dropped, not an error
     assert out[0]["users"] is users["u1"]  # the one row carries u1 by reference
+
+
+# ---------------------------------------------------------------------------
+# Feature 013 — self-reference edge policy. A relation that references itself
+# (JOB's `title.episode_of_id -> title`) does NOT become a join edge: a
+# self-reference is an object-identity pointer, not a join request. A
+# self-referencing relation still joins via its real edges to other relations,
+# and on its own it is a plain one-relation DBF that `join` and `subdatabase`
+# pass through.
+# ---------------------------------------------------------------------------
+
+
+def _sole_self_referencing_title(*, freeze: bool = True) -> RF:
+    """A `title` RF whose only reference is a self-reference.
+
+    Relation shape (the episode points at its series inside the same RF)::
+
+         title ◀─┐
+           │     │ episode_of_id   (ep points at series)
+           └─────┘
+
+    @param freeze: Freeze the RF before returning it (default). Pass False if
+        another relation still has to reference it: `.references()` also
+        writes onto the target.
+    """
+    title: RF = RF(  # the only relation, carrying nothing but a self-reference
+        {
+            "series": TF({"name": "The Show"}),  # the series title
+            "ep": TF({"name": "Pilot", "episode_of_id": None}),  # an episode
+        },
+        frozen=False,
+    )
+    title["ep"]["episode_of_id"] = title["series"]  # the episode points at its series
+    title = title.references("episode_of_id", title)  # the sole link: a self-reference
+    if freeze:  # callers that add references themselves freeze it afterwards
+        title.freeze()  # frozen DBF requires frozen members
+    return title  # ready to be entered into a DBF
+
+
+def test_join_passes_a_sole_self_referencing_relation_through() -> None:
+    """`join` returns one row per tuple of a relation linked only to itself.
+
+    Join graph (a single node whose only reference is a self-reference)::
+
+         title ◀─┐
+           │     │ episode_of_id   (self-ref: no edge)
+           └─────┘
+
+    A self-reference is no join request, so this is a plain one-relation DBF and
+    every title tuple comes back as its own row. Would fail if the
+    self-reference became an edge (the self-loop is no tree, so `join`
+    would raise) or if `join` refused such a relation instead of passing it
+    through.
+    """
+    title: RF = _sole_self_referencing_title()  # series and ep; ep -> series
+    dbf: DBF = DBF({"title": title}, frozen=True)  # one relation, no other reference
+
+    out: RF = join(dbf).result  # the one-relation path, no self-join
+
+    assert len(out) == 2  # one row per title tuple: series and ep
+    assert all(  # each row nests nothing but the title tuple
+        {entry.key for entry in item.value} == {"title"} for item in out
+    )
+    assert {item.value["title"].uuid for item in out} == {  # the very tuples, by uuid
+        title["series"].uuid,
+        title["ep"].uuid,
+    }
+
+
+def test_subdatabase_keeps_sole_self_referencing_relation_unchanged() -> None:
+    """`subdatabase` returns a relation linked only by a self-reference unchanged.
+
+    Join graph (a single node whose only reference is a self-reference)::
+
+         title ◀─┐
+           │     │ episode_of_id   (self-ref: no edge)
+           └─────┘
+
+    Without an edge there is nothing to reduce along, so the very same RF
+    object must come back. Would fail if the self-reference became an edge
+    (a semijoin of title with itself would build a new, reduced RF) or if
+    `subdatabase` refused the input.
+    """
+    title: RF = _sole_self_referencing_title()  # fresh RF for this test
+    dbf: DBF = DBF({"title": title}, frozen=True)  # one relation, no other reference
+
+    reduced: DBF = subdatabase(dbf).result  # no edge, so nothing to reduce along
+    assert reduced["title"] is title  # the very same RF object, not a reduced copy
+
+
+def test_join_accepts_self_referencing_pure_source() -> None:
+    """A self-referential relation with an outgoing real edge joins via that edge.
+
+    Join graph (self-reference: no edge; the outgoing edge links title)::
+
+         title ◀─┐
+           │     │ episode_of_id   (self-ref: no edge)
+           ├─────┘
+           │ kind_id
+           ▼
+        kind_type
+
+    Would fail if `from_dbf` turned `title.episode_of_id -> title` into an edge
+    (the self-loop is no tree, so `join` would raise), or if skipping the
+    self-reference also skipped title's real reference to kind_type.
+    """
+    kind_type: RF = RF({"kt1": TF({"kind": "tv series"})}, frozen=False)  # the kind
+    title: RF = RF(  # a title that self-references AND references kind_type
+        {
+            "series": TF({"name": "The Show", "kind_id": kind_type["kt1"]}),  # series
+            "ep": TF(  # an episode of the series, of the same kind
+                {"name": "Pilot", "episode_of_id": None, "kind_id": kind_type["kt1"]}
+            ),
+        },
+        frozen=False,
+    )
+    title["ep"]["episode_of_id"] = title["series"]  # the episode points at its series
+    title = title.references("episode_of_id", title)  # self-reference: no edge
+    title = title.references("kind_id", kind_type)  # the real edge title -> kind_type
+
+    for af in (kind_type, title):  # freeze members before building the frozen DBF
+        af.freeze()  # frozen DBF requires frozen members
+
+    dbf: DBF = DBF(  # title is a pure source here: nothing references it back
+        {"title": title, "kind_type": kind_type},
+        frozen=True,
+    )
+
+    graph: JoinGraph = JoinGraph.from_dbf(dbf)  # title still has an outgoing edge
+
+    edge_triples: set[tuple[str, str, str]] = {  # each edge as (source, target, key)
+        (edge.source.name, edge.target.name, edge.ref_key) for edge in graph.edges
+    }
+    assert edge_triples == {("title", "kind_type", "kind_id")}  # only the real edge
+    assert len(graph.edges) == 1  # no self-loop, and no duplicate of the real edge
+
+    out: RF = join(dbf).result  # end-to-end: the tree must flatten, not raise
+    assert len(out) == 2  # each of the two title tuples nests its referenced kind_type
+    assert all(  # every flattened row carries both relations as nested entries
+        {entry.key for entry in item.value} == {"title", "kind_type"} for item in out
+    )
+    assert all(  # the nested kind_type is the exact hub tuple, shared by identity
+        item.value["kind_type"] is kind_type["kt1"] for item in out
+    )
+
+
+def test_join_self_reference_sharing_its_name_with_an_incoming_reference() -> None:
+    """A skipped self-reference with the same name as a real edge joins correctly.
+
+    Join graph (self-reference: no edge; both references are called `manager`)::
+
+        dept ──manager──▶ emp ◀─┐
+                           │    │ manager   (self-ref: no edge)
+                           └────┘
+
+    As the self-reference is no edge, the graph is the single edge dept -> emp,
+    a tree, so `join` reduces it. Would fail if `from_dbf` kept the self-loop as
+    an edge, or (0 rows) if the reduction guessed the edge's direction from the
+    name `manager`: both relations carry it, and the guess picks the wrong side
+    (fixed in MR !100, which this case depends on).
+    """
+    boss: TF = TF({"name": "Boss"})  # the top of the hierarchy
+    boss["manager"] = boss  # the boss manages itself
+    alice: TF = TF({"name": "Alice", "manager": boss})  # alice reports to the boss
+    emp: RF = RF({"e0": boss, "e1": alice}, frozen=False)  # the employees
+    emp = emp.references("manager", emp)  # self-reference: no edge
+    dept: RF = RF(  # one department, managed by alice
+        {"d1": TF({"title": "R&D", "manager": alice})}, frozen=False
+    )
+    dept = dept.references("manager", emp)  # the real edge dept -> emp
+
+    for af in (emp, dept):  # freeze members before building the frozen DBF
+        af.freeze()  # frozen DBF requires frozen members
+
+    dbf: DBF = DBF({"dept": dept, "emp": emp}, frozen=True)  # the join input
+
+    graph: JoinGraph = JoinGraph.from_dbf(dbf)  # the graph `join` works on
+    edge_triples: set[tuple[str, str, str]] = {  # each edge as (source, target, key)
+        (edge.source.name, edge.target.name, edge.ref_key) for edge in graph.edges
+    }
+    assert edge_triples == {("dept", "emp", "manager")}  # the real edge, no emp loop
+    assert len(graph.edges) == 1  # no duplicate edge hides behind the set comparison
+
+    out: RF = join(dbf).result  # end-to-end: reduce, then flatten the tree
+    assert len(out) == 1  # one department, one manager: exactly one row
+    assert out[0]["dept"] is dept["d1"]  # the row carries the department itself
+    assert out[0]["emp"] is alice  # and its manager alice, by identity
+
+
+# ---------------------------------------------------------------------------
+# One RF entered under several DBF names (aliases), as JOB 12a enters
+# `info_type` as `it1` and `it2`. A reference into such an RF does not say
+# which name it means, so `JoinGraph.from_dbf` refuses it instead of guessing
+# (a guess, e.g. by DBF position, can join `mi` with the rating copy, and
+# JOB 12a then returns 0 rows instead of 1). The way to go: enter each name as
+# its own relation and bind every reference into it with `add_reference`. A
+# reference OUT of an aliased relation and an alias's self-reference leave no
+# doubt about their target, so both stay allowed.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Job12aRelations:
+    """The relations of JOB 12a in miniature, before they are entered into a DBF."""
+
+    info_type: RF  # g = genres, r = rating; JOB 12a needs it twice, as it1 and it2
+    title: RF  # the shared hub t, with the one title t1
+    movie_info: RF  # mi: one genres row mi1 on t1
+    movie_info_idx: RF  # mi_idx: one rating row mix1 on t1
+
+
+def _job_12a_relations() -> Job12aRelations:
+    """JOB 12a in miniature: two relations reference one `info_type` RF.
+
+    References (mi and mi_idx both point at info_type and at title)::
+
+                  info_type      g = genres, r = rating
+                  ▲       ▲
+     info_type_id │       │ info_type_id
+                  │       │
+                 mi     mi_idx   mi1 -> g, mix1 -> r
+                  │       │
+                t │       │ t
+                  ▼       ▼
+                   title         t1
+
+    @return: The four frozen RFs, not yet entered into a DBF, so each test
+        decides under which names they appear.
+    """
+    info_type: RF = RF(  # JOB 12a needs one info_type row per side
+        {"g": TF({"info": "genres"}), "r": TF({"info": "rating"})},
+        frozen=False,
+    )
+
+    title: RF = RF({"t1": TF({"title": "Movie"})}, frozen=False)  # the linking hub
+
+    movie_info: RF = RF(  # mi: one row on title t1, with info type g
+        {
+            "mi1": TF(
+                {"info": "Drama", "info_type_id": info_type["g"], "t": title["t1"]}
+            )
+        },
+        frozen=False,
+    )
+    movie_info = movie_info.references("info_type_id", info_type)  # mi -> info_type
+    movie_info = movie_info.references("t", title)  # edge to the hub t
+
+    movie_info_idx: RF = RF(  # mi_idx: one row on title t1, with info type r
+        {"mix1": TF({"info": "8.5", "info_type_id": info_type["r"], "t": title["t1"]})},
+        frozen=False,
+    )
+    movie_info_idx = movie_info_idx.references("info_type_id", info_type)  # same RF
+    movie_info_idx = movie_info_idx.references("t", title)  # edge to the hub t
+
+    for af in (info_type, title, movie_info, movie_info_idx):  # freeze every member
+        af.freeze()  # a frozen DBF requires frozen members
+
+    return Job12aRelations(  # named result, no anonymous tuple
+        info_type=info_type,
+        title=title,
+        movie_info=movie_info,
+        movie_info_idx=movie_info_idx,
+    )
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        pytest.param(JoinGraph.from_dbf, id="from_dbf"),
+        pytest.param(lambda dbf: join(dbf).result, id="join"),
+        pytest.param(lambda dbf: subdatabase(dbf).result, id="subdatabase"),
+    ],
+)
+def test_from_dbf_refuses_a_referenced_relation_under_several_names(
+    run: Callable[[DBF], object],
+) -> None:
+    """A reference into an RF entered under two names is refused, not guessed.
+
+    Join graph (it1, it2 = one info_type RF; which name does each reference mean?)::
+
+                   it1 / it2        one info_type RF under two names
+                  ▲         ▲
+     info_type_id │         │ info_type_id
+                 mi       mi_idx
+                t │         │ t
+                  ▼         ▼
+                      t
+
+    Both `join` and `subdatabase` build their graph with `from_dbf`, so all
+    three must raise. The DBF lists mi before mi_idx, so the first reference
+    checked, and named in the message, is `mi.info_type_id`. Would fail if
+    `from_dbf` picked one of the names for each reference (by DBF position, mi
+    can meet the rating copy: 0 rows instead of 1 when mi_idx comes before mi)
+    or if `join` / `subdatabase` bypassed the check.
+    """
+    rels: Job12aRelations = _job_12a_relations()  # info_type, title, mi, mi_idx
+    dbf: DBF = DBF(  # JOB 12a's FROM list: info_type under two names it1, it2
+        {
+            "it1": rels.info_type,
+            "it2": rels.info_type,
+            "mi": rels.movie_info,
+            "mi_idx": rels.movie_info_idx,
+            "t": rels.title,
+        },
+        frozen=True,
+    )
+
+    with pytest.raises(  # the join-graph message, naming the reference and both names
+        NotImplementedError,
+        match=r"'mi\.info_type_id' references a relation entered under several "
+        r"names \['it1', 'it2'\].*add_reference",
+    ):
+        run(dbf)  # refused before any row is produced
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        pytest.param(["it1", "it2", "mi", "mi_idx", "t"], id="from-order"),
+        pytest.param(["it1", "it2", "mi_idx", "mi", "t"], id="mi_idx-before-mi"),
+    ],
+)
+def test_aliases_as_own_relations_join_in_any_dbf_order(order: list[str]) -> None:
+    """Each alias entered as its own relation and bound by name joins correctly.
+
+    Join graph (it1, it2 = two filtered copies of info_type, bound by name)::
+
+           it1 (genres)       it2 (rating)
+                  ▲               ▲
+     info_type_id │               │ info_type_id   (each bound with add_reference)
+                 mi            mi_idx
+                t │               │ t
+                  ▼               ▼
+                          t
+
+    The route the alias refusal points to. A `where` copy is a new RF, and
+    mi / mi_idx still reference the original info_type, which is not in the
+    DBF; so each reference into an alias needs its own `add_reference` (without
+    it, `join` refuses it1 and it2 as isolated). Would fail if a reference were
+    matched to a relation by DBF position instead of by the given name: with
+    mi_idx first, mi would meet the rating copy and the join would return
+    0 rows instead of 1.
+    """
+    rels: Job12aRelations = _job_12a_relations()  # info_type, title, mi, mi_idx
+    relations: dict[str, RF] = {  # every alias is its own, filtered relation
+        "it1": rels.info_type.where(lambda i: i.value["info"] == "genres"),  # {g}
+        "it2": rels.info_type.where(lambda i: i.value["info"] == "rating"),  # {r}
+        "mi": rels.movie_info,  # references the original info_type and title
+        "mi_idx": rels.movie_info_idx,  # likewise
+        "t": rels.title,  # the hub, entered under one name
+    }
+    dbf: DBF = DBF({name: relations[name] for name in order})  # names in `order`
+
+    bound_mi: DBF = add_reference(  # first binding: mi.info_type_id means it1
+        dbf, source="mi", ref_key="info_type_id", target="it1"
+    ).result
+    bound: DBF = add_reference(  # second binding: mi_idx.info_type_id means it2
+        bound_mi, source="mi_idx", ref_key="info_type_id", target="it2"
+    ).result
+
+    out: RF = join(bound).result  # tree it1 <- mi -> t <- mi_idx -> it2
+
+    assert len(out) == 1  # one mi row and one mi_idx row on the one title
+    row: TF = out[0]  # the flattened row
+    assert row["it1"] is rels.info_type["g"]  # it1 is the genres tuple mi points at
+    assert row["it2"] is rels.info_type["r"]  # it2 is the rating tuple of mi_idx
+    assert row["mi"] is rels.movie_info["mi1"]  # the mi side, by identity
+    assert row["mi_idx"] is rels.movie_info_idx["mix1"]  # the mi_idx side
+    assert row["t"] is rels.title["t1"]  # the shared hub, not a copy
+
+
+@pytest.mark.parametrize(
+    ("name", "run"),
+    [
+        pytest.param(  # binds the reference cast_info.movie_id to the name t1
+            "add_reference",
+            lambda dbf: add_reference(
+                dbf, source="cast_info", ref_key="movie_id", target="t1"
+            ).result,
+            id="add_reference",
+        ),
+        pytest.param(  # drops the existing reference cast_info -> t1
+            "drop_reference",
+            lambda dbf: drop_reference(
+                dbf, source="cast_info", ref_key="movie_id", target="t1"
+            ).result,
+            id="drop_reference",
+        ),
+        pytest.param(  # registers an always-true predicate over cast_info and t1
+            "add_join_predicate",
+            lambda dbf: add_join_predicate(
+                dbf, "cast_info", "t1", predicate=lambda row: True
+            ).result,
+            id="add_join_predicate",
+        ),
+        pytest.param(  # matches no predicate: a call that changes nothing
+            "drop_join_predicate",
+            lambda dbf: drop_join_predicate(dbf, matcher=lambda c: False).result,
+            id="drop_join_predicate",
+        ),
+    ],
+)
+def test_constraint_operators_refuse_aliases(
+    name: str, run: Callable[[DBF], DBF]
+) -> None:
+    """All four constraint operators refuse a DBF holding one RF under two names.
+
+    DBF shape (t1, t2 = one title RF, which references itself)::
+
+        cast_info
+            │ movie_id
+            ▼
+         t1 / t2 ◀─┐       one title RF under two names
+            │      │ episode_of_id   (self-ref: no edge)
+            └──────┘
+
+    Every operator copies the DBF name by name, so t1 and t2 would come back
+    as two different RFs, and the self-reference would point at one of them:
+    an edge t1 -> t2 nobody asked for, along which `join` would lose rows.
+    `drop_join_predicate` with a matcher that matches nothing shows that even
+    a call that changes nothing copies the DBF. Would fail if any of the four
+    operators stopped checking for aliases and returned such a copy.
+    """
+    title: RF = _sole_self_referencing_title(freeze=False)  # cast_info points at it
+    cast_info: RF = RF(  # Alice plays in the pilot
+        {"ci1": TF({"actor": "Alice", "movie_id": title["ep"]})},
+        frozen=False,
+    )
+    cast_info = cast_info.references("movie_id", title)  # cast_info -> title
+    for af in (title, cast_info):  # freeze members before building the frozen DBF
+        af.freeze()  # frozen DBF requires frozen members
+    dbf: DBF = DBF(  # title under two names; cast_info's reference exists
+        {"t1": title, "t2": title, "cast_info": cast_info}, frozen=True
+    )
+
+    with pytest.raises(  # this operator's own alias message, naming t1 and t2
+        NotImplementedError,
+        match=rf"{name}: one relation is entered under several names \(t1, t2\)",
+    ):
+        run(dbf)  # without aliases a valid call; .result runs the lazy operator
+
+
+def test_from_dbf_allows_aliases_linked_only_by_self_references() -> None:
+    """Aliases whose only reference is their self-reference are not refused.
+
+    Join graph (t1, t2 = one title RF; its self-reference is no edge)::
+
+         t1 ◀─┐        t2 ◀─┐
+          │   │         │   │
+          └───┘         └───┘
+         episode_of_id (both loops: self-ref, no edge)
+
+    A self-reference points into its own RF, so there is no name to pick and
+    `from_dbf` builds two nodes without edges. Would fail if the alias refusal
+    also counted self-references. `join` then reports two relations without
+    references, like for any two unlinked relations, instead of returning
+    unjoined rows.
+    """
+    title: RF = _sole_self_referencing_title()  # series and ep; ep -> series
+    dbf: DBF = DBF({"t1": title, "t2": title}, frozen=True)  # one RF, two names
+
+    graph: JoinGraph = JoinGraph.from_dbf(dbf)  # must not raise
+
+    assert set(graph.nodes) == {"t1", "t2"}  # each name is its own node
+    assert graph.edges == []  # the self-reference became no edge under either name
+
+    with pytest.raises(  # the usual error for relations without references
+        NotImplementedError, match="2 relations but no references between them"
+    ):
+        join(dbf).result  # no edge, so no join
+
+
+def test_from_dbf_aliased_source_with_outgoing_reference_edges_per_alias() -> None:
+    """An aliased SOURCE is allowed: each alias node gets its own edge.
+
+    Join graph (an aliased SOURCE emits one edge per alias)::
+
+        a1            a2        one source RF {s1, s2} under two names
+          │ h          │ h
+          ╰────▶ h ◀───╯        single-name hub {h1}; s1 -> h1, s2 -> h1
+
+    A reference out of an RF entered under two names (`a1`, `a2`) points at a
+    single-name hub, so its target is clear and `from_dbf` produces `a1 -> h`
+    and `a2 -> h`. `join` treats a1 and a2 as two relations meeting at h1, so
+    every pair of source tuples is a row: 2 × 2 = 4. Would fail if the alias
+    refusal also fired for aliased sources, if the two edges collapsed into
+    one, or (2 rows) if `join` merged the two names back into one relation.
+    """
+    hub: RF = RF({"h1": TF({})}, frozen=False)  # single-name target of the source
+    source: RF = RF(  # aliased below; both tuples point at the one hub tuple
+        {"s1": TF({"h": hub["h1"]}), "s2": TF({"h": hub["h1"]})}, frozen=False
+    )
+    source = source.references("h", hub)  # the single outgoing reference into the hub
+
+    for af in (hub, source):  # freeze members before building the frozen DBF
+        af.freeze()  # frozen DBF requires frozen members
+
+    dbf: DBF = DBF(  # `source` is entered under two names a1, a2; hub under one name h
+        {"a1": source, "a2": source, "h": hub},
+        frozen=True,
+    )
+
+    graph: JoinGraph = JoinGraph.from_dbf(dbf)  # must not raise for this safe shape
+
+    assert set(graph.nodes) == {"a1", "a2", "h"}  # both source aliases plus the hub
+    assert graph.nodes["a1"].rf is graph.nodes["a2"].rf  # both wrap one source RF
+
+    edge_triples: set[tuple[str, str, str]] = {  # each edge as (source, target, key)
+        (edge.source.name, edge.target.name, edge.ref_key) for edge in graph.edges
+    }
+    assert edge_triples == {  # one edge per alias into the hub, both along `h`
+        ("a1", "h", "h"),
+        ("a2", "h", "h"),
+    }
+    assert len(graph.edges) == 2  # no duplicate edge hides behind the set comparison
+
+    out: RF = join(dbf).result  # end-to-end: the tree a1 -> h <- a2 flattens
+    assert len(out) == 4  # every (a1, a2) pair of source tuples meets at h1
+    keys_by_uuid: dict[int, str] = {  # source tuple uuid -> its key, to label rows
+        source[key].uuid: key for key in ("s1", "s2")
+    }
+    pairings: set[tuple[str, str]] = {  # each row's (a1 tuple, a2 tuple) labels
+        (keys_by_uuid[item.value["a1"].uuid], keys_by_uuid[item.value["a2"].uuid])
+        for item in out
+    }
+    assert pairings == {  # the full 2 × 2 cross product, nothing missing or spurious
+        ("s1", "s1"),
+        ("s1", "s2"),
+        ("s2", "s1"),
+        ("s2", "s2"),
+    }
+    assert all(  # every row nests exactly the three names
+        {entry.key for entry in item.value} == {"a1", "a2", "h"} for item in out
+    )
+    assert all(  # the hub is the very tuple h1 in every row, not a copy
+        item.value["h"] is hub["h1"] for item in out
+    )
 
 
 # ---------------------------------------------------------------------------

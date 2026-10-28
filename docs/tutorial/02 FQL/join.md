@@ -4,7 +4,7 @@
 > connected graph that is an **undirected tree** in any edge orientation —
 > zero, one, or several pure sources. Arbitrary `JoinPredicate` pushdown and
 > diamond / non-tree / disconnected / cyclic graphs raise `NotImplementedError`
-> with a pointer at the follow-up MR (004).
+> with a pointer at the follow-up MR.
 
 ### Form: DBF → RF
 
@@ -159,7 +159,8 @@ Two subtleties make the identity scan sound:
 In-scope for this MR:
 
 - Zero-edge fallback: a single-RF DBF passes each tuple through as a
-  one-entry row.
+  one-entry row (also when the relation references itself: a
+  self-reference is no join edge).
 - Any connected graph that is an **undirected tree** in any edge
   orientation — linear chains, single-source stars, and multi-source
   fan-ins (JOB-style `ci → t, mc → t`) alike, with zero, one, or several
@@ -174,20 +175,26 @@ Explicitly raises `NotImplementedError` on:
 - **`JoinPredicate` on the input DBF** — predicate pushdown is
   deferred. See [constraints.md](constraints.md#evaluation-model--who-consumes-a-joinpredicate-and-who-ignores-it).
 - **Diamonds and other non-tree acyclic graphs** — a relation reachable
-  via two or more distinct paths (deferred to follow-up 004).
+  via two or more distinct paths (deferred to a follow-up MR).
 - **Parallel references** — a relation carrying two references to the
   *same* target (e.g. `movie_link.movie_id → title` and
   `movie_link.linked_movie_id → title`) makes the graph a non-tree. If the
   query joins along only one of them, **blacklist the unused edge** with
   [`drop_reference`](constraints.md#blacklisting-a-parallel-reference-before-a-join)
-  before the join. (Joining along *both* is a two-alias self-join — a
-  separate deferred feature.)
+  before the join. (Joining along *both* needs the target twice: enter it
+  as two relations, `title.where(lambda i: True)` each, and bind each
+  reference with [`add_reference`](constraints.md).)
 - **Disconnected reference graphs** — that would be a Cartesian product
   across components.
 - **Cyclic reference graphs** — rejected by the undirected-tree gate.
+- **References into one relation entered under several names** (aliases,
+  e.g. `{it1: info_type, it2: info_type}`) — nothing tells which alias a
+  reference means. Enter each alias as its own relation
+  (`info_type.where(lambda i: True)`) and bind each reference with
+  [`add_reference`](constraints.md).
 - Multi-RF DBFs with zero references at all (also a Cartesian product).
 
-The follow-up MR (004) will add `JoinPredicate` pushdown during the walk
+A follow-up MR will add `JoinPredicate` pushdown during the walk
 (firing predicates as soon as every participating relation is in the
 accumulator) plus diamond / non-tree support via a spanning tree with a
 residual-edge consistency check.

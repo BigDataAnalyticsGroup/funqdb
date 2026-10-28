@@ -34,7 +34,10 @@ extractable way:
 All four operators return a **new DBF with freshly cloned RFs**; the input
 DBF is never mutated. Intra-DBF references (`ForeignValueConstraint` and
 its reverse) are re-bound to the cloned RFs so the output DBF is
-internally consistent.
+internally consistent. A DBF that holds one RF under several names
+(aliases) is refused with `NotImplementedError`, because the clones would no
+longer be the same relation: enter every name as its own relation,
+e.g. `rf.where(lambda i: True)` for each.
 
 ## add_reference
 
@@ -85,8 +88,8 @@ matching FVC — silent no-ops on typos are rejected by design.
 
 ### Blacklisting a parallel reference before a join
 
-The FDM carries *every* schema reference, and `join` turns each into a
-mandatory edge. When one relation carries two references to the **same**
+The FDM carries *every* schema reference, and `join` turns each (except a
+self-reference) into a mandatory edge. When one relation carries two references to the **same**
 target — e.g. `movie_link.movie_id → title` and
 `movie_link.linked_movie_id → title` — the join graph has a *parallel edge*
 and `join` rejects it as a non-tree
@@ -106,9 +109,9 @@ This is the opt-out dual of SQL's opt-in: SQL names each join it wants,
 whereas FQL inherits every schema reference and the query subtracts the
 ones it does not join along. Dropping an edge the query does not use
 restores the query's intended (looser) join without changing its result.
-(If the query genuinely joins along *both* references, that is a self-join
-of the target under two aliases — a separate, deferred feature, not a
-blacklist.)
+(If the query genuinely joins along *both* references, it needs the target
+twice: enter it as two relations, `title.where(lambda i: True)` each, and
+bind each reference with `add_reference` instead of blacklisting.)
 
 ## add_join_predicate
 
