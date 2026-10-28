@@ -214,10 +214,10 @@ class Edge:
 class Neighbor:
     """An entry in an adjacency list: a neighbor relation connected via ref_key.
 
-    Shared value type for `outgoing_adjacency()` (neighbor is the edge target),
-    `incoming_adjacency()` (neighbor is the edge source), and the undirected
-    adjacency built inside `build_semijoin_cascade`. `ref_key` is always the
-    attribute on the *source* tuple, regardless of which map the entry is in.
+    Shared value type for `outgoing_adjacency()` (neighbor is the edge target)
+    and `incoming_adjacency()` (neighbor is the edge source). `ref_key` is
+    always the attribute on the *source* tuple, regardless of which map the
+    entry is in.
     """
 
     name: RelationName
@@ -495,8 +495,8 @@ class JoinGraph:
         Built once per call from the edges list — O(|edges|).
         `build_semijoin_cascade` builds its own *undirected* variant
         internally because Yannakakis's spanning-tree BFS needs both
-        directions; the two helpers are intentionally separate but
-        share `Neighbor` as the value type.
+        directions; it keeps the `Edge`s themselves, because each
+        semijoin step needs the edge's direction.
         """
         adjacency: dict[RelationName, list[Neighbor]] = {}
         for edge in self.edges:
@@ -640,11 +640,12 @@ class JoinGraph:
 
         Constructs a rooted BFS tree from the undirected version of the join graph,
         then generates:
-        - Bottom-up (post-order): each tree edge once, reduce the target by its source.
-        - Top-down (pre-order): each tree edge once, reduce the source by its target.
+        - Bottom-up (post-order): each tree edge once, reduce the parent by its child.
+        - Top-down (pre-order): each tree edge once, reduce the child by its parent.
 
-        The semijoin operator auto-detects the FDM reference direction via constraints,
-        so only reduce/by/ref_key are needed.
+        Parent and child are positions in the BFS tree, not the FDM direction. Each
+        step carries the edge's FDM source (`SemijoinStep.source`, the relation whose
+        tuples hold `ref_key`), so the semijoin operator never guesses it.
 
         This method checks the cyclicity of the graph and throws a ValueError if it detects a cycle.
 
@@ -653,34 +654,32 @@ class JoinGraph:
         """
         self.check_acyclicity()
 
-        # build undirected adjacency list from edges
-        adjacency: dict[str, list[Neighbor]] = {name: [] for name in self.nodes}
+        # build undirected adjacency list from edges; each edge is listed at
+        # both endpoints and keeps its direction for the semijoin steps
+        adjacency: dict[str, list[Edge]] = {name: [] for name in self.nodes}
         for edge in self.edges:
-            adjacency[edge.source.name].append(
-                Neighbor(name=edge.target.name, ref_key=edge.ref_key)
-            )
-            adjacency[edge.target.name].append(
-                Neighbor(name=edge.source.name, ref_key=edge.ref_key)
-            )
+            adjacency[edge.source.name].append(edge)
+            adjacency[edge.target.name].append(edge)
 
-        # BFS from the root to build a rooted spanning tree (children_map).
-        # Each node discovered for the first time becomes a source of the node
+        # BFS from the root to build a rooted spanning tree (child_edges).
+        # Each node discovered for the first time becomes a child of the node
         # that discovered it, turning the undirected adjacency list into a
-        # directed target→children mapping suitable for the post-order (bottom-up)
+        # parent→child-edges mapping suitable for the post-order (bottom-up)
         # and pre-order (top-down) traversals of the Yannakakis algorithm.
-        children_map: dict[str, list[Neighbor]] = {}
+        child_edges: dict[str, list[Edge]] = {}
         visited: set[str] = {root}
         queue: deque[str] = deque([root])
 
         while queue:
             node = queue.popleft()
-            for nb in adjacency[node]:
-                if nb.name in visited:
+            for edge in adjacency[node]:
+                child: str = _other_end(edge, node)
+                if child in visited:
                     continue  # already discovered — skip to avoid cycles in the tree
-                visited.add(nb.name)
-                queue.append(nb.name)
-                # record nb as a source of node in the rooted tree
-                children_map.setdefault(node, []).append(nb)
+                visited.add(child)
+                queue.append(child)
+                # record the edge to child under its parent in the rooted tree
+                child_edges.setdefault(node, []).append(edge)
 
         # check that all edge-participating nodes were reached by BFS
         edge_nodes: set[str] = {edge.source.name for edge in self.edges} | {
@@ -697,20 +696,32 @@ class JoinGraph:
         steps: list[SemijoinStep] = []
 
         def _post_order(current: str) -> None:
-            """Bottom-up: reduce target by source."""
-            for nb in children_map.get(current, []):
-                _post_order(nb.name)
+            """Bottom-up: reduce each parent by its child."""
+            for edge in child_edges.get(current, []):
+                child: str = _other_end(edge, current)
+                _post_order(child)
                 steps.append(
-                    SemijoinStep(reduce=current, by=nb.name, ref_key=nb.ref_key)
+                    SemijoinStep(
+                        reduce=current,
+                        by=child,
+                        ref_key=edge.ref_key,
+                        source=edge.source.name,
+                    )
                 )
 
         def _pre_order(current: str) -> None:
-            """Top-down: reduce source by target."""
-            for nb in children_map.get(current, []):
+            """Top-down: reduce each child by its parent."""
+            for edge in child_edges.get(current, []):
+                child: str = _other_end(edge, current)
                 steps.append(
-                    SemijoinStep(reduce=nb.name, by=current, ref_key=nb.ref_key)
+                    SemijoinStep(
+                        reduce=child,
+                        by=current,
+                        ref_key=edge.ref_key,
+                        source=edge.source.name,
+                    )
                 )
-                _pre_order(nb.name)
+                _pre_order(child)
 
         _post_order(root)
         _pre_order(root)
@@ -748,10 +759,25 @@ def _group_key_references(
     )
 
 
+def _other_end(edge: Edge, name: str) -> str:
+    """The endpoint of `edge` that is not `name` (the edge walked undirected).
+
+    @param edge: An edge with `name` as one of its endpoints.
+    @param name: The relation the walk comes from.
+    @return: The relation at the other end of `edge`.
+    """
+    return edge.target.name if edge.source.name == name else edge.source.name
+
+
 @dataclass(frozen=True)
 class SemijoinStep:
-    """A single step in a Yannakakis semijoin cascade."""
+    """A single step in a Yannakakis semijoin cascade.
+
+    `source` names the relation whose tuples hold `ref_key` (either `reduce`
+    or `by`), taken from the graph's edge, so `semijoin` need not guess it.
+    """
 
     reduce: str
     by: str
     ref_key: str
+    source: str

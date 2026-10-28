@@ -38,25 +38,51 @@ class RefDirection(Enum):
     BY = "by"
 
 
+def _has_reference(rf: RF, ref_key: str) -> bool:
+    """Whether `rf` carries a ForeignValueConstraint on `ref_key` (any target).
+
+    The target UUID is not checked: after semijoin chaining, reduced RFs get new
+    UUIDs but inherit the original constraints, which still point at the
+    unreduced relations.
+
+    @param rf: The relation to inspect.
+    @param ref_key: The referencing attribute name.
+    @return: True iff `rf` holds a reference on `ref_key`.
+    """
+    return any(
+        isinstance(constraint, ForeignValueConstraint) and constraint.key == ref_key
+        for constraint in rf.__dict__["values_constraints"]
+    )
+
+
 def _find_ref_direction(reduce_rf: RF, by_rf: RF, ref_key: str) -> RefDirection:
     """Determine which RF is the source by inspecting ForeignValueConstraints.
 
-    The source is the RF that holds a ForeignValueConstraint with the given ref_key.
-    The target UUID is not checked — ref_key alone is sufficient to identify the source
-    side, and this makes the function robust after semijoin chaining where reduced RFs
-    get new UUIDs but inherit the original constraints.
+    The source is the RF that holds a ForeignValueConstraint with the given
+    ref_key (matched by name only, see `_has_reference`). Used only when the
+    caller of `semijoin` does not name the source.
 
-    Returns RefDirection.REDUCE if reduce_rf is the source (has ref_key),
-    or RefDirection.BY if by_rf is the source (has ref_key).
-    Raises ValueError if neither RF has the constraint.
+    @param reduce_rf: The relation to reduce.
+    @param by_rf: The relation it is reduced by.
+    @param ref_key: The referencing attribute name.
+    @return: RefDirection.REDUCE if reduce_rf is the source (has ref_key),
+        RefDirection.BY if by_rf is the source (has ref_key).
+    @raises ValueError: If neither RF has the constraint, or if both have one:
+        the name alone cannot tell which side is the source, so the caller must
+        pass `source=` to `semijoin` instead of letting it guess.
     """
-    for constraint in reduce_rf.__dict__["values_constraints"]:
-        if isinstance(constraint, ForeignValueConstraint) and constraint.key == ref_key:
-            return RefDirection.REDUCE
-
-    for constraint in by_rf.__dict__["values_constraints"]:
-        if isinstance(constraint, ForeignValueConstraint) and constraint.key == ref_key:
-            return RefDirection.BY
+    reduce_has_reference: bool = _has_reference(reduce_rf, ref_key)
+    by_has_reference: bool = _has_reference(by_rf, ref_key)
+    if reduce_has_reference and by_has_reference:
+        raise ValueError(
+            f"Both relations carry a reference '{ref_key}', so the direction is "
+            f"ambiguous. Pass source= to semijoin to name the relation whose "
+            f"tuples hold '{ref_key}'."
+        )
+    if reduce_has_reference:
+        return RefDirection.REDUCE
+    if by_has_reference:
+        return RefDirection.BY
 
     raise ValueError(
         f"No ForeignValueConstraint with ref_key='{ref_key}' found "
@@ -73,7 +99,9 @@ class semijoin[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     The join relationship is based on FDM references (set via .references()).
     In FDM, references are object identity: child_tuple[ref_key] ``is`` a TF
     in the target RF. The direction (which side is source, which is target) is
-    determined automatically from the ForeignValueConstraint metadata.
+    given by `source`; if omitted, it is determined from the
+    ForeignValueConstraint metadata, which fails if both relations carry a
+    reference on `ref_key`.
 
     Input: DBF.  Output: DBF with the reduced relation replaced.
     """
@@ -85,25 +113,36 @@ class semijoin[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         reduce: str,
         by: str,
         ref_key: str,
+        source: str | None = None,
         origin: str | None = None,
     ):
         """Initialize the semijoin operator.
         @param input_function: A DBF containing both relations involved in the semi-join.
         @param reduce: Name of the relation in the DBF to reduce (i.e. filter).
-        @param by: Name of the relation in the DBF used as the filter source.
+        @param by: Name of the relation in the DBF whose tuples decide which
+            `reduce` tuples survive.
         @param ref_key: The attribute name that establishes the FDM reference between
-            the two relations (set via .references()). The direction (which relation
-            is the source holding ref_key, which is the target being referenced) is
-            determined automatically from the ForeignValueConstraint metadata.
+            the two relations (set via .references()).
+        @param source: Name of the relation whose tuples hold `ref_key` (either
+            `reduce` or `by`). If omitted, it is determined from the
+            ForeignValueConstraint metadata; that fails if both relations carry a
+            reference on `ref_key`. `subdatabase` always passes it.
         @param origin: Optional tag indicating which target operator generated this
             semijoin (e.g. "subdatabase"). Surfaces in the extracted plan via
             _plan_params() so that generated semijoins are distinguishable from
             user-created ones.
+        @raises ValueError: If `source` names neither `reduce` nor `by`.
         """
+        if source is not None and source not in (reduce, by):
+            raise ValueError(
+                f"semijoin: source must be '{reduce}' (reduce) or '{by}' (by), "
+                f"got '{source}'."
+            )
         self.input_function = input_function
         self.reduce = reduce
         self.by = by
         self.ref_key = ref_key
+        self.source = source
         self.origin = origin
 
     def _compute(self) -> OUTPUT_AttributeFunction:
@@ -111,7 +150,23 @@ class semijoin[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         reduce_rf: RF = dbf[self.reduce]
         by_rf: RF = dbf[self.by]
 
-        direction: RefDirection = _find_ref_direction(reduce_rf, by_rf, self.ref_key)
+        direction: RefDirection
+        if self.source is None:
+            direction = _find_ref_direction(reduce_rf, by_rf, self.ref_key)
+        else:
+            # the caller named the source; a source without a reference on
+            # ref_key (e.g. a misspelt ref_key) is rejected instead of silently
+            # emptying a relation
+            direction = (
+                RefDirection.REDUCE if self.source == self.reduce else RefDirection.BY
+            )
+            source_rf: RF = reduce_rf if direction is RefDirection.REDUCE else by_rf
+            if not _has_reference(source_rf, self.ref_key):
+                raise ValueError(
+                    f"semijoin: No ForeignValueConstraint with "
+                    f"ref_key='{self.ref_key}' found on source relation "
+                    f"'{self.source}'."
+                )
 
         reduced_rf: RF = RF(frozen=False)
 
@@ -142,7 +197,8 @@ class semijoin[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                     reduced_rf[item.key] = item.value
         else:
             raise ValueError(f"Unknown direction '{direction}'")
-        # copy constraints from original RF so chained semijoins can detect direction
+        # copy constraints from original RF so chained semijoins can detect the
+        # direction and check an explicit `source` on the reduced relation
         for constraint in reduce_rf.__dict__["values_constraints"]:
             reduced_rf.add_values_constraint(constraint)
         reduced_rf.freeze()

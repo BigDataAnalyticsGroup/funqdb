@@ -87,6 +87,7 @@ class subdatabase[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
                 reduce=step.reduce,
                 by=step.by,
                 ref_key=step.ref_key,
+                source=step.source,
                 origin="subdatabase",
             )
 

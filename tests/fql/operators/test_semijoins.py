@@ -298,3 +298,193 @@ def test_semijoin_chaining_three_level() -> None:
     assert {item.key for item in step2.departments} == {"d1"}
     assert {item.key for item in step2.projects} == {"p1"}
     assert {item.key for item in step2.tasks} == {"t1", "t2"}
+
+
+# ---------------------------------------------------------------------------
+# Both relations carry a reference with the same name (ref_key ambiguity)
+# ---------------------------------------------------------------------------
+
+
+def _ambiguous_ref_key_dbf() -> DBF:
+    """Two relations that BOTH carry a reference named `k`; only a's `k` stays inside the DBF.
+
+    DBF {a, b}; c is referenced by b but lives outside the DBF::
+
+        a   (a1)
+        │ k            a1 -> b1
+        ▼
+        b   (b1, b2)   b2 is referenced by no a-tuple
+        │ k            b1 -> c1, b2 -> c1
+        ▼
+        c   (c1)       NOT in the DBF
+
+    So the only reference edge between a and b is `a -k-> b`, yet looking at
+    b alone one also finds a reference called `k`. The RFs are reachable as
+    `dbf.a` / `dbf.b`.
+    """
+    c: RF = RF(
+        {"c1": TF({"name": "Gamma"})}, frozen=False
+    )  # target of b.k, kept out of the DBF
+    b: RF = RF(  # b carries its own `k`, pointing at c
+        {"b1": TF({"k": c["c1"]}), "b2": TF({"k": c["c1"]})},
+        frozen=False,
+    ).references("k", c)
+    a: RF = RF({"a1": TF({"k": b["b1"]})}, frozen=False).references(
+        "k", b
+    )  # a.k points at b1; nobody points at b2
+    for rf in (a, b, c):  # freeze all three relations before wrapping them
+        rf.freeze()  # frozen RFs, as in the other fixtures
+    return DBF({"a": a, "b": b}, frozen=True)  # c deliberately left out
+
+
+def test_semijoin_without_source_raises_when_both_relations_carry_ref_key() -> None:
+    """Without `source`, a ref_key that both relations carry is ambiguous and must raise.
+
+        a   (a1)
+        │ k
+        ▼
+        b   (b1, b2)
+        │ k
+        ▼
+        c   (outside the DBF)
+
+    Symptom: `_find_ref_direction` looks at `reduce` first, so for reduce="b",
+    by="a" it takes b's own `k` (which points at c) as the reference between a
+    and b, finds no b-tuple pointing into a, and empties b.
+    Repro: `semijoin(dbf, reduce="b", by="a", ref_key="k").result`.
+    Expected: ValueError saying the direction is ambiguous.
+    Observed on main: no error, and b is reduced to the empty set.
+    """
+    dbf: DBF = _ambiguous_ref_key_dbf()  # a and b both carry a reference named k
+    op = semijoin[DBF, DBF](
+        dbf, reduce="b", by="a", ref_key="k"
+    )  # no `source`: the direction would have to be guessed
+    with pytest.raises(
+        ValueError, match="ambiguous"
+    ):  # the direction is resolved at compute time, so the error surfaces there
+        _ = op.result  # computing must refuse to guess instead of emptying b
+
+
+@pytest.mark.parametrize(
+    "reduce, by, expected_keys",
+    [
+        pytest.param("users", "departments", {"u1", "u2", "u3"}, id="source-is-reduce"),
+        pytest.param("departments", "users", {"d1", "d2"}, id="source-is-by"),
+    ],
+)
+def test_semijoin_explicit_source_matches_auto_detection(
+    reduce: str, by: str, expected_keys: set[str]
+) -> None:
+    """An explicit `source` naming the referencing relation gives the same result as auto-detection.
+
+        users        (u1 -> d1, u2 -> d1, u3 -> d2)
+        │ dept
+        ▼
+        departments  (d1, d2, d3)   d3 is referenced by no user
+
+    Would fail if `source` were wired to the wrong side, either when it equals
+    `reduce` (users reduced by departments) or when it equals `by`
+    (departments reduced by users).
+    """
+    dbf, _, _ = _dept_users_dbf()  # unambiguous: only users carries `dept`
+
+    auto: DBF = semijoin[DBF, DBF](
+        dbf, reduce=reduce, by=by, ref_key="dept"
+    ).result  # direction detected from the constraint, as before the fix
+    explicit: DBF = semijoin[DBF, DBF](
+        dbf, reduce=reduce, by=by, ref_key="dept", source="users"
+    ).result  # direction stated by the caller: users holds `dept`
+
+    assert {
+        item.key for item in explicit[reduce]
+    } == expected_keys  # the explicit variant reduces correctly
+    assert {item.key for item in explicit[reduce]} == {
+        item.key for item in auto[reduce]
+    }  # and exactly like auto-detection
+
+
+@pytest.mark.parametrize(
+    "reduce, by, expected_keys",
+    [
+        pytest.param("b", "a", {"b1"}, id="source-is-by"),
+        pytest.param("a", "b", {"a1"}, id="source-is-reduce"),
+    ],
+)
+def test_semijoin_explicit_source_resolves_ambiguous_ref_key(
+    reduce: str, by: str, expected_keys: set[str]
+) -> None:
+    """With `source="a"` the semijoin follows a's `k`, although b carries a `k` too.
+
+        a   (a1)
+        │ k
+        ▼
+        b   (b1, b2)
+        │ k
+        ▼
+        c   (outside the DBF)
+
+    Reducing b by a keeps only b1 (the one b-tuple a1 points at); reducing a
+    by b keeps a1. Would fail if an explicit `source` still ran the ambiguity
+    check (raising) or followed b's own `k` (emptying the relation, the bug
+    on main).
+    """
+    dbf: DBF = _ambiguous_ref_key_dbf()  # a and b both carry a reference named k
+
+    result: DBF = semijoin[DBF, DBF](
+        dbf, reduce=reduce, by=by, ref_key="k", source="a"
+    ).result  # a is the relation whose `k` links a and b
+
+    assert {
+        item.key for item in result[reduce]
+    } == expected_keys  # only the tuples connected via a.k survive
+    assert result[by] is dbf[by]  # the `by` relation is passed through untouched
+
+
+def test_semijoin_source_naming_neither_relation_raises() -> None:
+    """A `source` that is neither `reduce` nor `by` is rejected when the operator is built.
+
+    Would fail if a misspelt `source` were accepted and only surfaced later
+    (or never) during computation.
+    """
+    dbf, _, _ = _dept_users_dbf()  # any valid DBF; the check is on the arguments
+    with pytest.raises(
+        ValueError, match="source must be"
+    ):  # raised in __init__, before any `.result`
+        semijoin[DBF, DBF](
+            dbf, reduce="departments", by="users", ref_key="dept", source="x"
+        )  # "x" names neither of the two relations
+
+
+def test_semijoin_explicit_source_with_unknown_ref_key_raises() -> None:
+    """With `source` given, that relation must carry a reference called `ref_key`.
+
+    Would fail if an explicit `source` skipped the constraint lookup and
+    reduced by a misspelt attribute (silently dropping every tuple).
+    """
+    dbf, _departments, _users = _dept_users_dbf()  # users holds `dept`, not `deptt`
+    op = semijoin[DBF, DBF](
+        dbf, reduce="departments", by="users", ref_key="deptt", source="users"
+    )  # `source` is valid, but the ref_key is misspelt
+    with pytest.raises(
+        ValueError, match="No ForeignValueConstraint"
+    ):  # same error as without `source`, raised at compute time
+        _ = op.result  # computing must reject the unknown reference
+
+
+def test_semijoin_explicit_source_without_the_reference_raises() -> None:
+    """A `source` that does not hold `ref_key` is rejected, even if the key is valid.
+
+        users ──dept──▶ departments      (only users holds `dept`)
+
+    Would fail if the check only asked whether *either* relation carries
+    `ref_key`: naming departments as the source would then reduce by an
+    attribute its tuples do not have and silently empty departments.
+    """
+    dbf, _, _ = _dept_users_dbf()  # users holds `dept`, departments holds none
+    op = semijoin[DBF, DBF](
+        dbf, reduce="departments", by="users", ref_key="dept", source="departments"
+    )  # valid ref_key, but the wrong relation named as source
+    with pytest.raises(
+        ValueError, match="on source relation 'departments'"
+    ):  # the named source must hold the reference itself
+        _ = op.result  # computing must reject the wrong source

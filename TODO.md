@@ -60,14 +60,6 @@
   raises another exception (e.g. `ForeignValueConstraint` on a value missing the ref key raises `AttributeError`)
   leaves a half-applied write. Pre-existing; newly reachable via unfrozen `where()` results that now carry FKs.
 - [ ] semijoin: auto-detect ref_key when there is only one ForeignValueConstraint between the two relations
-- [ ] semijoin: `_find_ref_direction` matches constraints by ref_key only
-  and silently picks the first hit. That enforces a hidden invariant that
-  every `ref_key` must be unique across the whole DBF — reusing the same
-  name (e.g. `"next"` on every hop of a chain) silently returns the wrong
-  direction and breaks Yannakakis reduction for chains of length ≥ 3.
-  The invariant is load-bearing and should be self-policing: either raise
-  when two RFs carry the same `ref_key`, or index constraints by
-  `(ref_key, target_rf.uuid)` so the lookup is unambiguous.
 - [ ] need to wrap access to ItemValues such that when an AF is accessed, it checks if it is loaded, otherwise loads it
   from the store
 
@@ -222,6 +214,10 @@
 - [x] schema definitions for larger examples
 - [x] looking up relationship functions, e.g. set of related items for a given item, e.g. all items that are related to
   item X through relationship function Y
+- [x] bug: semijoin's `_find_ref_direction` matched constraints by ref_key only and silently
+  picked the first hit, so two relations carrying the same ref_key (e.g. `"next"` on every hop
+  of a chain) were reduced in the wrong direction — fixed: `SemijoinStep` carries the edge's
+  source, `subdatabase` passes `source=`, and the auto-detection raises when it is ambiguous.
 - [x] bug: `filter_items_scan_complement` (`filters.py`) had `lambda x: not filter_predicate`
   instead of `lambda x: not filter_predicate(x)` — fixed, test now covers actual filtering.
 - [x] bug: `RSF.related_values(subkey_index, subkey)` filters and returns at the **same**

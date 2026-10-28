@@ -18,13 +18,16 @@
 #
 #
 
+from typing import Any, Mapping
+
 import pytest
 
 from fdm.attribute_functions import TF, RF, DBF
 from fql.operators.subdatabases import (
     subdatabase,
 )
-from fql.plan.join_graph import Node, JoinNode, Edge, JoinGraph
+from fql.plan.ir import PlanChild, PlanNode
+from fql.plan.join_graph import Node, JoinNode, Edge, JoinGraph, SemijoinStep
 from tests.fql.operators.orientation_helpers import (
     build_directed_tree,
     orientation_params,
@@ -513,7 +516,8 @@ def test_subdatabase_plan_shows_semijoin_cascade() -> None:
     (star around tasks with 3 dimensions, 4 relations total)
 
     The join tree has 3 edges, so Yannakakis produces 3 bottom-up + 3 top-down
-    = 6 semijoin steps.
+    = 6 semijoin steps. Each step's params also name its `source`, the relation
+    whose tuples hold the reference (e.g. tasks for the tasks/projects steps).
     """
     dbf: DBF = _four_relation_dbf()
 
@@ -558,6 +562,36 @@ def test_subdatabase_plan_shows_semijoin_cascade() -> None:
     assert all(
         o == "subdatabase" for o in semijoin_origins
     ), f"Expected all semijoin origins to be 'subdatabase', got {semijoin_origins}"
+
+    # every semijoin node must also say which of its two relations holds the
+    # reference (`source`), so another backend need not guess the direction
+    def _collect_semijoin_params(node: PlanChild) -> list[Mapping[str, Any]]:
+        """Params of all semijoin nodes below `node`, in plan-walk order."""
+        found: list[Mapping[str, Any]] = []  # params collected in this subtree
+        if isinstance(node, PlanNode):  # leaves (LeafRef) carry no params
+            if node.op == "semijoin":  # only semijoin nodes are of interest
+                found.append(node.params)  # keep this node's params
+            for child in node.inputs:  # descend into the pipeline
+                found.extend(_collect_semijoin_params(child))  # gather the subtree
+        return found  # all semijoin params of this subtree
+
+    referencing: dict[frozenset[str], str] = {  # {source, target} -> source
+        frozenset({edge.source.name, edge.target.name}): edge.source.name
+        for edge in JoinGraph.from_dbf(dbf).edges  # the 3 reference edges
+    }
+    semijoin_params: list[Mapping[str, Any]] = _collect_semijoin_params(
+        plan.root
+    )  # one params mapping per semijoin step
+    assert len(semijoin_params) == 6  # same 6 steps as counted above
+    for params in semijoin_params:  # check every step of the cascade
+        assert "source" in params  # the direction is part of the plan
+        assert params["source"] in (
+            params["reduce"],
+            params["by"],
+        )  # source is one of the two relations the step touches
+        assert (
+            params["source"] == referencing[frozenset({params["reduce"], params["by"]})]
+        )  # ...and it is the relation whose tuples hold the reference
 
 
 def test_extract_join_graph_four_relations() -> None:
@@ -747,3 +781,191 @@ def test_subdatabase_works_for_all_edge_orientations(
         "C": {"c1"},
         "D": {"d1"},
     }  # fully-connected single tuples survive regardless of edge direction
+
+
+# ---------------------------------------------------------------------------
+# Several relations carry a reference with the same name (ref_key reuse)
+# ---------------------------------------------------------------------------
+
+
+def _ambiguous_ref_key_dbf() -> DBF:
+    """Two relations that BOTH carry a reference named `k`; only a's `k` stays inside the DBF.
+
+    DBF {a, b}; c is referenced by b but lives outside the DBF::
+
+        a   (a1)
+        │ k            a1 -> b1
+        ▼
+        b   (b1, b2)   b2 is referenced by no a-tuple
+        │ k            b1 -> c1, b2 -> c1
+        ▼
+        c   (c1)       NOT in the DBF
+
+    The join graph therefore has the single edge `a -k-> b`. The RFs are
+    reachable as `dbf.a` / `dbf.b`.
+    """
+    c: RF = RF(
+        {"c1": TF({"name": "Gamma"})}, frozen=False
+    )  # target of b.k, kept out of the DBF
+    b: RF = RF(  # b carries its own `k`, pointing at c
+        {"b1": TF({"k": c["c1"]}), "b2": TF({"k": c["c1"]})},
+        frozen=False,
+    ).references("k", c)
+    a: RF = RF({"a1": TF({"k": b["b1"]})}, frozen=False).references(
+        "k", b
+    )  # a.k points at b1; nobody points at b2
+    for rf in (a, b, c):  # freeze all three relations before wrapping them
+        rf.freeze()  # frozen RFs, as in the other fixtures
+    return DBF({"a": a, "b": b}, frozen=True)  # c deliberately left out
+
+
+def _same_ref_key_chain_dbf() -> DBF:
+    """A three-relation chain whose two hops are both called `next`.
+
+    DBF {a, b, c}::
+
+        a   (a1)       a1 -> b1
+        │ next
+        ▼
+        b   (b1, b2)   b1 -> c1, b2 -> c2; no a-tuple points at b2
+        │ next
+        ▼
+        c   (c1, c2)   c2 is reached only via the unconnected b2
+
+    The full join is the single path a1 -> b1 -> c1. The RFs are reachable as
+    `dbf.a` / `dbf.b` / `dbf.c`.
+    """
+    c: RF = RF(
+        {"c1": TF({"name": "Gamma"}), "c2": TF({"name": "Delta"})}, frozen=False
+    )  # end of the chain
+    b: RF = RF(  # middle of the chain: b.next points into c
+        {"b1": TF({"next": c["c1"]}), "b2": TF({"next": c["c2"]})},
+        frozen=False,
+    ).references("next", c)
+    a: RF = RF({"a1": TF({"next": b["b1"]})}, frozen=False).references(
+        "next", b
+    )  # start of the chain: a.next points into b, with the same attribute name
+    for rf in (a, b, c):  # freeze all three relations before wrapping them
+        rf.freeze()  # frozen RFs, as in the other fixtures
+    return DBF({"a": a, "b": b, "c": c}, frozen=True)  # all three are in the DBF
+
+
+@pytest.mark.parametrize(
+    "root", [pytest.param(None, id="auto-root"), pytest.param("a", id="root-a")]
+)
+def test_subdatabase_when_target_also_carries_the_ref_key(root: str | None) -> None:
+    """subdatabase keeps a1 and b1 although b carries its own, unrelated `k`.
+
+        a   (a1)
+        │ k
+        ▼
+        b   (b1, b2)
+        │ k
+        ▼
+        c   (outside the DBF)
+
+    Symptom: every semijoin between a and b looks for "the" relation holding
+    `k`, checks `reduce` first and, when b is reduced, wrongly follows b's own
+    `k` (into c), so b is emptied; the next step then empties a.
+    Repro: `subdatabase(dbf).result` (auto root b) or `subdatabase(dbf,
+    root="a").result` on the DBF above.
+    Expected: a == {a1}, b == {b1} (b2 is referenced by no a-tuple).
+    Observed on main: auto root gives a == {}, b == {}; root="a" gives
+    a == {a1}, b == {}.
+    """
+    dbf: DBF = _ambiguous_ref_key_dbf()  # a.k -> b, plus b.k -> c outside the DBF
+
+    result: DBF = subdatabase[DBF, DBF](
+        dbf, root=root
+    ).result  # Yannakakis reduction over the single edge a -k-> b
+
+    assert {item.key for item in result.a} == {"a1"}  # a1 reaches b1, so it stays
+    assert {item.key for item in result.b} == {
+        "b1"
+    }  # b1 is referenced by a1; b2 by nobody, so it is dropped
+
+
+@pytest.mark.parametrize(
+    "root", [pytest.param(None, id="auto-root"), pytest.param("a", id="root-a")]
+)
+def test_subdatabase_chain_with_same_ref_key_on_every_hop(root: str | None) -> None:
+    """A chain whose hops share one attribute name reduces to the connected path.
+
+        a   (a1)
+        │ next
+        ▼
+        b   (b1, b2)
+        │ next
+        ▼
+        c   (c1, c2)
+
+    Symptom: a and b both carry `next`, so the semijoin between them cannot
+    tell which side references the other and picks `reduce`; the wrong
+    reduction empties every relation.
+    Repro: `subdatabase(dbf).result` (auto root c) or `subdatabase(dbf,
+    root="a").result` on the DBF above.
+    Expected: a == {a1}, b == {b1}, c == {c1}; b2 is dropped because no
+    a-tuple references it, and c2 because only b2 referenced it.
+    Observed on main: auto root gives all three empty; root="a" gives
+    a == {a1}, b == {}, c == {}.
+    """
+    dbf: DBF = _same_ref_key_chain_dbf()  # a -next-> b -next-> c, all in the DBF
+
+    result: DBF = subdatabase[DBF, DBF](
+        dbf, root=root
+    ).result  # full Yannakakis reduction over both hops
+
+    assert {item.key for item in result.a} == {"a1"}  # the start of the only path
+    assert {item.key for item in result.b} == {
+        "b1"
+    }  # b2 is referenced by no a-tuple, so it is dropped
+    assert {item.key for item in result.c} == {
+        "c1"
+    }  # c2 hangs only off the dropped b2, so it is dropped as well
+
+
+@pytest.mark.parametrize(
+    "root_choice", [pytest.param("auto"), pytest.param("pure_source")]
+)
+@pytest.mark.parametrize("directed_edges", orientation_params())
+def test_semijoin_cascade_steps_name_the_referencing_relation(
+    directed_edges: list[tuple[str, str]], root_choice: str
+) -> None:
+    """Every cascade step records which of its two relations holds the reference.
+
+    Undirected join graph (fixed shape; each edge oriented per
+    `orientation_params`)::
+
+        A ── C ── D
+             │
+             B
+
+    For all 8 orientations, rooted both at the auto-selected root and at a
+    pure source, each edge yields one bottom-up and one top-down step, and
+    both must carry `source == edge.source.name`, whichever relation the step
+    reduces. Would fail if `build_semijoin_cascade` set `source` to the
+    reduced relation, to the BFS parent, or lost it in one of the two passes.
+    """
+    dbf: DBF = build_directed_tree(
+        directed_edges
+    )  # the 4-relation DBF for this orientation
+    graph: JoinGraph = JoinGraph.from_dbf(dbf)  # its 3 directed reference edges
+    root: str = (
+        graph.select_root(None)  # the root subdatabase picks by itself
+        if root_choice == "auto"
+        else sorted(graph.pure_sources())[0]  # a relation nothing references
+    )
+
+    steps: list[SemijoinStep] = graph.build_semijoin_cascade(
+        root
+    )  # bottom-up steps followed by top-down steps
+
+    for edge in graph.edges:  # check the steps of every reference edge
+        pair: set[str] = {edge.source.name, edge.target.name}  # the edge's relations
+        edge_steps: list[SemijoinStep] = [
+            step for step in steps if {step.reduce, step.by} == pair
+        ]  # the steps between exactly these two relations
+        assert len(edge_steps) == 2  # one bottom-up and one top-down step per edge
+        assert all(
+            step.source == edge.source.name for step in edge_steps
+        )  # both name the relation whose tuples hold the reference

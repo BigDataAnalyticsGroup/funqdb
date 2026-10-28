@@ -238,11 +238,9 @@ def _make_chain_dbf(length: int) -> DBF:
     Matches the spirit of the external `ChainQueryFactory` but on
     FDM DBFs.
 
-    Each hop uses a **distinct** ref_key (`to_r1`, `to_r2`, …) —
-    `semijoin._find_ref_direction` matches constraints by ref_key
-    only, so a chain that reused the same name for every hop would
-    confuse the direction lookup once the chain has three or more
-    relations.
+    Each hop uses a **distinct** ref_key (`to_r1`, `to_r2`, …) for
+    readable edge names; reusing one name on every hop is supported too
+    (see `test_subdatabase_chain_with_same_ref_key_on_every_hop`).
 
     @param length: number of relations in the chain (>= 2).
     @return: frozen DBF with keys `"r0"`, `"r1"`, ..., `"r{n-1}"`.
@@ -296,9 +294,8 @@ def _make_star_dbf(num_arms: int) -> DBF:
         RF({f"a{i}": TF({"tag": f"arm_{i}"})}, frozen=False) for i in range(num_arms)
     ]
     # Build the center tuple with a reference to the first tuple of
-    # every arm; the ref_keys `arm_0`, `arm_1`, … are distinct per
-    # the same ref_key-uniqueness invariant called out in
-    # `_make_chain_dbf`.
+    # every arm; the ref_keys `arm_0`, `arm_1`, … differ because the
+    # one center tuple holds one reference per arm.
     center_tf: TF = TF({"tag": "center"})
     for i, arm in enumerate(arms):
         center_tf[f"arm_{i}"] = arm[f"a{i}"]
@@ -861,3 +858,66 @@ def test_join_drops_source_tuples_missing_the_reference() -> None:
 
     assert len(out) == 1  # only u1 has a partner; u2 is dropped, not an error
     assert out[0]["users"] is users["u1"]  # the one row carries u1 by reference
+
+
+# ---------------------------------------------------------------------------
+# Target relation carries a reference with the same name (ref_key reuse)
+# ---------------------------------------------------------------------------
+
+
+def _ambiguous_ref_key_dbf() -> DBF:
+    """Two relations that BOTH carry a reference named `k`; only a's `k` stays inside the DBF.
+
+    DBF {a, b}; c is referenced by b but lives outside the DBF::
+
+        a   (a1)
+        │ k            a1 -> b1
+        ▼
+        b   (b1, b2)   b2 is referenced by no a-tuple
+        │ k            b1 -> c1, b2 -> c1
+        ▼
+        c   (c1)       NOT in the DBF
+
+    The join graph therefore has the single edge `a -k-> b`. The RFs are
+    reachable as `dbf.a` / `dbf.b`.
+    """
+    c: RF = RF(
+        {"c1": TF({"name": "Gamma"})}, frozen=False
+    )  # target of b.k, kept out of the DBF
+    b: RF = RF(  # b carries its own `k`, pointing at c
+        {"b1": TF({"k": c["c1"]}), "b2": TF({"k": c["c1"]})},
+        frozen=False,
+    ).references("k", c)
+    a: RF = RF({"a1": TF({"k": b["b1"]})}, frozen=False).references(
+        "k", b
+    )  # a.k points at b1; nobody points at b2
+    for rf in (a, b, c):  # freeze all three relations before wrapping them
+        rf.freeze()  # frozen RFs, as in the other fixtures
+    return DBF({"a": a, "b": b}, frozen=True)  # c deliberately left out
+
+
+def test_join_when_target_also_carries_the_ref_key() -> None:
+    """join yields the row (a1, b1) although b carries its own, unrelated `k`.
+
+        a   (a1)
+        │ k
+        ▼
+        b   (b1, b2)
+        │ k
+        ▼
+        c   (outside the DBF)
+
+    Symptom: join first reduces its input with subdatabase, whose semijoins
+    follow b's own `k` (into c) instead of a's `k` when reducing b; that
+    empties a and b, so the join has nothing left to walk.
+    Repro: `join(dbf).result` on the DBF above.
+    Expected: exactly one row, a1 joined with b1 (b2 has no partner).
+    Observed on main: 0 rows.
+    """
+    dbf: DBF = _ambiguous_ref_key_dbf()  # a.k -> b, plus b.k -> c outside the DBF
+
+    out: RF = join(dbf).result  # flattening join along the single edge a -k-> b
+
+    assert len(out) == 1  # one a-tuple with one partner -> one row
+    assert out[0]["a"] is dbf.a["a1"]  # the row carries the original a1 by reference
+    assert out[0]["b"] is dbf.b["b1"]  # ...and the b1 that a1 points at

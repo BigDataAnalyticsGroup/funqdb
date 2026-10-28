@@ -224,8 +224,8 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 ### Semijoin & Subdatabase
 
-- `[✅]` ***semijoin** — reduce one RF to tuples that participate in a join; auto-detects reference direction*  
-  Filters one relation in a DBF to keep only tuples that participate in a join with another relation, based on FDM references installed via `add_reference`. The reference direction (which relation holds the foreign key) is determined automatically by inspecting `ForeignValueConstraint` metadata. Returns a new DBF with the reduced relation swapped in; constraints are copied to enable chaining.
+- `[✅]` ***semijoin** — reduce one RF to tuples that participate in a join; reference direction given or detected*  
+  Filters one relation in a DBF to keep only tuples that participate in a join with another relation, based on FDM references installed via `add_reference`. The reference direction (which relation holds the reference) is given by `source=`; if omitted, it is determined by inspecting `ForeignValueConstraint` metadata, and `ValueError` is raised if both relations carry a reference with that attribute name (ambiguous) or neither does. `subdatabase` always passes `source`. See `test_semijoin_without_source_raises_when_both_relations_carry_ref_key` and `test_subdatabase_chain_with_same_ref_key_on_every_hop`. Returns a new DBF with the reduced relation swapped in; constraints are copied to enable chaining.
 
 - `[✅]` ***subdatabase** — compute minimal subdatabase via Yannakakis semi-join reduction; extracts join graph from ForeignValueConstraints*  
   Accepts a DBF and returns a new DBF containing only tuples that participate in the full join across all relations, computed via the Yannakakis semi-join reduction algorithm. The join graph is extracted automatically from `ForeignValueConstraint` metadata. The reduction is expressed as a cascade of `semijoin` operators, making the computation inspectable via the plan IR. Only acyclic graphs are supported; input constraints are preserved in the output.
@@ -415,7 +415,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   `select_root(root)` accepts a user-provided root name (asserting it exists in the graph) or auto-selects by finding a node with no incoming references. If no such node exists, the first node in insertion order is chosen as a fallback. The root is the starting point for join-tree construction.
 
 - `[✅]` *Build Yannakakis semijoin cascade (bottom-up + top-down passes)*  
-  `build_semijoin_cascade(root)` performs a BFS from the root to construct a rooted spanning tree, then generates two passes: a bottom-up post-order traversal (reducing targets by sources) followed by a top-down pre-order traversal (reducing sources by targets). Each step is a `SemijoinStep(reduce, by, ref_key)` consumed by the `semijoin` operator to progressively filter the DBF.
+  `build_semijoin_cascade(root)` performs a BFS from the root to construct a rooted spanning tree, then generates two passes: a bottom-up post-order traversal (reducing each tree parent by its child) followed by a top-down pre-order traversal (reducing each child by its parent). Each step is a `SemijoinStep(reduce, by, ref_key, source)` consumed by the `semijoin` operator to progressively filter the DBF. `source` is the edge's referencing relation, so the direction is never guessed.
 
 - `[✅]` *Aggregate and projection boxes (011)*  
   `AggregateBox` is a node that holds a nested `JoinGraph` (its subgraph), named grouping keys (paths such as
