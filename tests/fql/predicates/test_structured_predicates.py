@@ -50,6 +50,7 @@ from fql.predicates.predicates import (
     And,
     Or,
     Not,
+    satisfies,
 )
 from tests.lib import _create_testdata
 
@@ -639,3 +640,54 @@ def test_exists_disambiguates_absent_from_nonmatching():
     assert predicate(hugo) is False  # present but equals Hugo -> excluded
     assert predicate(egon) is True  # present and differs -> selected
     assert predicate(absent) is False  # absent -> excluded (Exists is False)
+
+
+class _AttributeErrorPredicate(Predicate):
+    """A faulty structured predicate that raises ``AttributeError`` on every call."""
+
+    def __call__(self, value: Any) -> bool:
+        raise AttributeError("faulty predicate")  # a bug, not an unmapped attribute
+
+    def to_dict(self) -> dict:
+        return {"type": "predicate", "op": "faulty"}  # never serialized in these tests
+
+    @classmethod
+    def _from_dict(cls, data: dict) -> Predicate:
+        return cls()  # never deserialized in these tests
+
+
+def test_satisfies_structured_predicate_does_not_swallow_attribute_error():
+    """A structured predicate is exception-free by design, so its own error surfaces."""
+    with pytest.raises(AttributeError):  # the guard is only for plain callables
+        satisfies(_AttributeErrorPredicate(), TF({}))  # the faulty predicate raises
+
+
+def test_satisfies_lambda_does_not_swallow_other_errors():
+    """Only an ``AttributeError`` means "no match"; a wrongly typed value still raises."""
+    with pytest.raises(TypeError):  # `in` on an int raises TypeError
+        satisfies(lambda v: "x" in v.note, TF({"note": 42}))  # note maps an int
+
+
+def test_satisfies_lambda_on_missing_attribute_is_not_satisfied():
+    """A lambda that reads an unmapped attribute does not hold (two-valued, no NULL)."""
+    assert satisfies(lambda v: v.note == "x", TF({})) is False  # v.note raises
+
+
+def test_satisfies_negated_lambda_on_missing_attribute_is_not_satisfied():
+    """The read raises before `not` is applied, so a negated lambda does not hold either."""
+    assert satisfies(lambda v: not v.note == "x", TF({})) is False  # v.note raises
+
+
+def test_satisfies_structured_predicate_on_missing_attribute_is_not_satisfied():
+    """A structured comparison over an unmapped attribute is a plain False."""
+    assert satisfies(Eq("note", "x"), TF({})) is False  # no mapping, no match
+
+
+def test_satisfies_negated_structured_predicate_on_missing_attribute_is_satisfied():
+    """`Not` over an unmapped attribute is a plain True, unlike a negated lambda."""
+    assert satisfies(Not(Eq("note", "x")), TF({})) is True  # Eq False -> Not True
+
+
+def test_satisfies_returns_bool_of_a_truthy_result():
+    """A plain callable may return any truthy value; the result is a bool."""
+    assert satisfies(lambda v: v.note, TF({"note": "x"})) is True  # "x" is truthy

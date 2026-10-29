@@ -19,12 +19,11 @@
 #
 
 
-from collections.abc import Mapping
 from typing import Callable, Any, Iterable
 
 from fdm.schema import ForeignValueConstraint
 from fql.operators.APIs import Operator, OperatorInput
-from fql.predicates.predicates import Predicate
+from fql.predicates.predicates import Predicate, satisfies
 from fql.util import Item
 
 
@@ -49,6 +48,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         """Initialize the filter_items operator.
         @param input_function: The input attribute function to filter.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be kept, False otherwise.
+            A plain callable that raises ``AttributeError`` (an unmapped attribute) drops the item.
         @param output_factory: This factory function will be used to create the output instance.
         @param create_lineage: If True, create lineage information (not yet implemented).
         """
@@ -67,7 +67,7 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         assert input_function is not None
 
         # get the filtered items:
-        mapped_items: Iterable[Item] = filter(self.filter_predicate, input_function)
+        mapped_items: Iterable[Item] = filter(self._selects, input_function)
 
         if self.output_factory is None:
             # use same type as input function if no output factory is provided:
@@ -98,6 +98,10 @@ class filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         output_function.freeze()
         return output_function
 
+    def _selects(self, item: Item) -> bool:
+        """Return whether the predicate holds on the item; an unmapped attribute it reads means no match."""
+        return satisfies(self.filter_predicate, item)
+
 
 class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
@@ -115,18 +119,13 @@ class filter_values[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        self._user_predicate = filter_predicate
         super().__init__(
-            input_function,
-            lambda i: filter_predicate(i.value),
-            output_factory=output_factory,
+            input_function, filter_predicate, output_factory=output_factory
         )
 
-    def _plan_params(self) -> Mapping[str, Any]:
-        """Expose the original user predicate instead of the Item-wrapping lambda."""
-        params: dict[str, Any] = dict(super()._plan_params())
-        params["filter_predicate"] = self._user_predicate
-        return params
+    def _selects(self, item: Item) -> bool:
+        """Return whether the predicate holds on the item's value; an unmapped attribute it reads means no match."""
+        return satisfies(self.filter_predicate, item.value)
 
 
 class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
@@ -145,24 +144,19 @@ class filter_keys[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
         *,
         output_factory: Callable[..., OUTPUT_AttributeFunction] = None,
     ):
-        self._user_predicate = filter_predicate
         super().__init__(
-            input_function,
-            lambda i: filter_predicate(i.key),
-            output_factory=output_factory,
+            input_function, filter_predicate, output_factory=output_factory
         )
 
-    def _plan_params(self) -> Mapping[str, Any]:
-        """Expose the original user predicate instead of the Item-wrapping lambda."""
-        params: dict[str, Any] = dict(super()._plan_params())
-        params["filter_predicate"] = self._user_predicate
-        return params
+    def _selects(self, item: Item) -> bool:
+        """Return whether the predicate holds on the item's key; an attribute the key lacks means no match."""
+        return satisfies(self.filter_predicate, item.key)
 
 
 class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunction](
     filter_items[INPUT_AttributeFunction, OUTPUT_AttributeFunction]
 ):
-    """Computes the complement of the filter_values operator."""
+    """Computes the complement of the filter_items operator."""
 
     def __init__(
         self,
@@ -174,18 +168,13 @@ class filter_items_scan_complement[INPUT_AttributeFunction, OUTPUT_AttributeFunc
         """Initialize the filter_items_scan_complement operator.
         @param input_function: The input attribute function to filter.
         @param filter_predicate: A predicate that takes an Item and returns True if the item should be filtered out,
-        False otherwise.
+        False otherwise. A plain callable that raises ``AttributeError`` (an unmapped attribute) keeps the item.
         @param output_factory: This factory function will be used to create the output instance.
         """
-        self._user_predicate = filter_predicate
         super().__init__(
-            input_function,
-            lambda x: not filter_predicate(x),
-            output_factory=output_factory,
+            input_function, filter_predicate, output_factory=output_factory
         )
 
-    def _plan_params(self) -> Mapping[str, Any]:
-        """Expose the original user predicate instead of the negation-wrapping lambda."""
-        params: dict[str, Any] = dict(super()._plan_params())
-        params["filter_predicate"] = self._user_predicate
-        return params
+    def _selects(self, item: Item) -> bool:
+        """Return whether filter_items drops the item; an item whose unmapped attribute the predicate reads is kept."""
+        return not super()._selects(item)

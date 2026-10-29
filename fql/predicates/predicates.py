@@ -51,7 +51,7 @@ the existing ``.where()`` syntax on ``DictionaryAttributeFunction``.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 
 # ---------------------------------------------------------------------------
 # Attribute path resolution
@@ -281,6 +281,21 @@ class Predicate(ABC):
     def _from_dict(cls, data: dict) -> Predicate:
         """Subclass-specific deserialization. Called by ``from_dict``."""
         ...
+
+
+def satisfies(predicate: Callable[[Any], Any], subject: Any) -> bool:
+    """Evaluate a filter predicate under two-valued semantics.
+    @param predicate: A structured ``Predicate`` or a plain callable (e.g. a lambda).
+    @param subject: The Item, value or key the predicate is evaluated on.
+    @return: Whether the predicate holds. A plain callable that raises ``AttributeError`` (it read an unmapped
+        attribute, or a misspelled one) gives False. A structured ``Predicate`` is not guarded, so its errors surface.
+    """
+    if isinstance(predicate, Predicate):
+        return bool(predicate(subject))
+    try:
+        return bool(predicate(subject))
+    except AttributeError:
+        return False
 
 
 # ---------------------------------------------------------------------------

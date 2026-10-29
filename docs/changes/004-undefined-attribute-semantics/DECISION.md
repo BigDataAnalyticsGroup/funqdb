@@ -26,8 +26,9 @@ value and gets no skip privilege.
 
 Detection is exception-free and path-aware where the accessed path is known: a
 per-segment key-membership test (`key in af`) rather than `try/except`. Only an opaque
-Python callable (a `where` lambda), whose accessed path cannot be inspected, is guarded
-with `try/except AttributeError`.
+Python callable (a lambda passed to `where` or to a filter operator), whose accessed path
+cannot be inspected, is guarded with `try/except AttributeError`. The guard is the single
+helper `satisfies` in `fql/predicates/predicates.py`.
 
 Concrete semantics:
 
@@ -39,6 +40,11 @@ Concrete semantics:
   queryable (e.g. `And(Exists("name"), Not(Eq("name", "Hugo")))`).
 - **`where`** drops a tuple when a lambda predicate raises `AttributeError` on a missing
   attribute (structured predicates and kwargs are already exception-free).
+- **Filter operators** (`filter_items`, `filter_values`, `filter_keys`) do the same as
+  `where`: the guard sits once in `filter_items` and the subclasses inherit it. Added in
+  2026-10, for parity of the operator pipeline style with `where`.
+  `filter_items_scan_complement` is the true set complement of `filter_items`, so it
+  keeps a tuple whose lambda raises `AttributeError` (like `Not(<undefined>)` is `True`).
 - **Aggregates** fold only over mapped values. An empty bag makes the aggregate
   undefined, so its key is left out of the output TF — `Sum` included (absent, not `0`).
   `Count` is the exception: `Count("attr")` counts mapped values (SQL `COUNT(col)`),
@@ -59,8 +65,11 @@ Concrete semantics:
 **Negative:**
 - `Not(<undefined>)` selecting the tuple diverges from SQL and can surprise users who
   expect SQL semantics; mitigated by `Exists`/`Missing`.
-- The lambda `try/except` in `where` masks a genuine `AttributeError` (e.g. a typo) as
-  "no match"; structured predicates avoid this.
+- The lambda `try/except` in `where` and in the filter operators masks a genuine
+  `AttributeError` as "no match": a typo (`lambda v: v.nmae == "x"` gives an empty
+  result), or a value that is not an attribute function (an int has no `.note`).
+  In `filter_items_scan_complement` the same typo returns the whole input.
+  Structured predicates avoid this.
 - A stored `None` participating means `Min([None, 1972])` raises `TypeError` (wrong type)
   rather than skipping — intentional, but a sharp edge.
 

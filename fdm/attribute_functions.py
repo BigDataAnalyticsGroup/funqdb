@@ -30,7 +30,7 @@ from typing import Self
 from fdm.API import AttributeFunction, logger, AttributeFunctionSentinel
 from fdm.util import Observable, Observer
 from fql.predicates.constraints import AttributeFunctionConstraint
-from fql.predicates.predicates import Predicate
+from fql.predicates.predicates import Predicate, satisfies
 from fql.util import (
     Item,
     ConstraintViolationErrorFromOutside,
@@ -926,23 +926,9 @@ class DictionaryAttributeFunction[Key, Value](
         for item in self:
             # if predicate exists, evaluate it:
             if predicate is not None:
-                if is_structured:
-                    # Structured predicates check definedness without exceptions
-                    # (a missing attribute yields False, not an error).
-                    if not predicate(item.value):
-                        continue
-                else:
-                    # Plain callable (e.g. a lambda): reading a missing attribute
-                    # off item.value raises AttributeError. Two-valued semantics:
-                    # the tuple has no value to test, so it does not match and is
-                    # dropped, rather than the whole filter raising. An opaque
-                    # callable cannot be pre-checked, so we catch here.
-                    try:
-                        keep: bool = bool(predicate(item))
-                    except AttributeError:
-                        keep = False
-                    if not keep:
-                        continue
+                subject: Any = item.value if is_structured else item
+                if not satisfies(predicate, subject):
+                    continue
 
             # if kwargs conditions exist, evaluate them (Django ORM-style conjunct):
             match: bool = True

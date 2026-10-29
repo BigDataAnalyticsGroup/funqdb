@@ -47,7 +47,12 @@ from fql.operators.aggregates import (
     aggregate,
 )
 from fql.operators.constraints import drop_join_predicate
-from fql.operators.filters import filter_items, filter_values
+from fql.operators.filters import (
+    filter_items,
+    filter_items_scan_complement,
+    filter_keys,
+    filter_values,
+)
 from fql.operators.partition import group_by, partition
 from fql.operators.partition_and_aggregate import (
     group_by_aggregate,
@@ -106,9 +111,7 @@ def test_single_filter_values_extraction():
 
     root: PlanChild = plan.root
     assert isinstance(root, PlanNode)
-    # Note: filter_values subclasses filter_items and calls super().__init__()
-    # wrapping the user predicate, so the operator class reported here is the
-    # outer ``filter_values`` class name — that is the correct behaviour.
+    # filter_values subclasses filter_items; the plan reports the subclass name.
     assert root.op == "filter_values"
 
     # Exactly one source, which is the ``users`` leaf.
@@ -681,6 +684,25 @@ def test_filter_values_with_predicate_and_factory_has_no_opaques():
     plan_predicate: Any = root.params["filter_predicate"]  # predicate in the plan
     assert plan_predicate.to_dict() == predicate.to_dict()  # same structured predicate
     assert _find_opaques(root) == []  # nothing opaque left in the whole plan
+
+
+@pytest.mark.parametrize(
+    "operator_class",
+    [filter_items, filter_values, filter_keys, filter_items_scan_complement],
+    ids=lambda operator_class: operator_class.__name__,
+)
+def test_filter_operator_plan_exposes_the_user_predicate(operator_class: type):
+    """Every filter operator puts the user's predicate itself into the plan.
+    Would fail if a subclass wrapped the predicate in a lambda (an ``Opaque``)."""
+    users: RF = _users()  # frozen users relation
+    predicate: Eq = Eq("name", "Tom")  # structured predicate, kept for comparison
+    pipeline: Operator = operator_class(users, predicate)  # the operator under test
+    root: PlanChild = pipeline.to_plan().root  # extract without executing
+    assert isinstance(root, PlanNode)  # an operator node, not a leaf
+    assert root.op == operator_class.__name__  # the subclass name is reported
+    plan_predicate: Any = root.params["filter_predicate"]  # predicate in the plan
+    assert plan_predicate.to_dict() == predicate.to_dict()  # the user's predicate
+    assert _find_opaques(root) == []  # no wrapper lambda in the plan
 
 
 def test_explain_shows_readable_aggregations():
