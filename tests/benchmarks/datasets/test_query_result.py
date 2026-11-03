@@ -335,6 +335,74 @@ def test_QueryResult_check_matches_compares_multiset_unless_ordered():
         sql.check_matches(fewer)  # raises
 
 
+def test_QueryResult_in_column_order_of_unaligned_columns_keeps_own_order():
+    """Rows that cannot be aligned are shown as they are."""
+    sql = QueryResult(("title", "id"), [("Heat", 1)])  # two columns
+    fql = QueryResult(("id", "name"), [(1, "Heat")])  # another name
+
+    shown = fql.in_column_order_of(sql)  # no alignment
+
+    assert shown.columns == ("id", "name")  # its own columns
+    assert shown.rows == ((1, "Heat"),)  # in its own order
+
+
+def test_QueryResult_in_column_order_of_duplicate_name_keeps_own_order():
+    """Rows with a duplicate column name cannot be aligned by name."""
+    sql = QueryResult(("id", "id"), [(1, 2)])  # the same name twice
+    fql = QueryResult(("id",), [(1,)])  # one column of that name
+
+    shown = fql.in_column_order_of(sql)  # no alignment
+
+    assert shown is fql  # the rows are shown as they are
+
+
+def test_QueryResult_in_column_order_of_statement_result_keeps_own_order():
+    """A statement without rows has no columns to align, on either side."""
+    statement = QueryResult((), (), from_statement=True)  # e.g. an INSERT
+    named = QueryResult(("title",), (), from_statement=True)  # names `title` as well
+    sql = QueryResult(("title",), [("Heat",)])  # a SELECT
+
+    shown = statement.in_column_order_of(sql)  # no alignment
+    reverse = sql.in_column_order_of(named)  # the columns fit, the flag refuses
+
+    assert shown is statement  # still the statement result, `from_statement` kept
+    assert reverse is sql  # the flag of `other` alone keeps the SELECT rows
+
+
+def test_QueryResult_in_column_order_of_scalar_aligns_by_position():
+    """An FQL scalar's unnamed column takes the name of the single SQL column."""
+    sql = QueryResult(("count",), [(4,)])  # SQL names its one column
+    fql = QueryResult(("",), [(3,)])  # an FQL scalar has no column name
+
+    shown = fql.in_column_order_of(sql)  # aligned by position
+
+    assert shown.columns == ("count",)  # the SQL name
+    assert shown.rows == ((3,),)  # its own value, not the SQL value
+
+
+def test_QueryResult_in_column_order_of_shows_missing_column_as_None():
+    """A column FQL does not have is shown as None, so both sides read alike."""
+    sql = QueryResult(("title", "note"), [("Heat", "sequel")])  # SQL has a note
+    fql = QueryResult(("title",), [("Ronin",)])  # the note is unmapped
+
+    shown = fql.in_column_order_of(sql)  # aligned to the SQL columns
+
+    assert shown.columns == ("title", "note")  # the SQL columns
+    assert shown.rows == (("Ronin", None),)  # own title, the missing note as None
+
+
+def test_QueryResult_in_column_order_of_follows_other_column_order():
+    """FQL rows are shown in the SQL column order, so both read alike."""
+    sql = QueryResult(("title", "id"), [("Heat", 1)])  # SQL order
+    fql = QueryResult(("id", "title"), [(2, "Ronin")])  # FQL order
+
+    shown = fql.in_column_order_of(sql)  # reordered for display
+
+    assert shown.columns == ("title", "id")  # the SQL order
+    assert shown.rows == (("Ronin", 2),)  # own values follow their columns
+    assert fql.columns == ("id", "title")  # the original is unchanged
+
+
 class _PendingOperator(Operator):
     """An operator that was never applied."""
 

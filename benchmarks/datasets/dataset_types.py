@@ -25,10 +25,11 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Reference:
-    """A reference whose attribute is named `reference_name`, which
-    refers to the tuples of `target_table`."""
+    """A reference whose attribute is named `ref_key`, which refers to the tuples
+    of `target_table`. `ref_key` is not the foreign-key column: `References` maps
+    that column to its `Reference`, and the two names can differ."""
 
-    reference_name: str
+    ref_key: str
     target_table: str
 
 

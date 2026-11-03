@@ -100,9 +100,10 @@ class QueryResult:
 
     def check_matches(self, other: QueryResult, ordered: bool = False) -> None:
         """Raise `ResultMismatch` unless `other` holds the same rows, as a multiset
-        unless `ordered`. Two empty results match; a column `other` lacks reads as
-        `None` (SQL's NULL) and a column `self` lacks is a mismatch. A result
-        `from_statement`, on either side, never matches."""
+        unless `ordered`. Two empty results match. Otherwise `other` is put in the
+        column order of these rows, as `other.in_column_order_of(self)` does: a column
+        `other` lacks reads as `None` (SQL's NULL), and a column these rows lack is a
+        mismatch. A result `from_statement`, on either side, never matches."""
         if self.from_statement or other.from_statement:
             raise ResultMismatch("a statement without rows has no result to compare")
         if not self.rows and not other.rows:
@@ -119,8 +120,21 @@ class QueryResult:
         else:
             _check_same_multiset(self.rows, other_rows)
 
+    def in_column_order_of(self, other: QueryResult) -> QueryResult:
+        """These rows in the column order of `other`. A single unnamed column aligns by
+        position, other columns by name. A column of `other` that these rows lack is
+        `None`. When the rows do not align (a column `other` lacks, a duplicate name,
+        or a result `from_statement` on either side), it returns `self`."""
+        if not self._aligns_with(other):
+            return self
+
+        rows = self._rows_in(other.columns)
+        return QueryResult(other.columns, rows)
+
     def _aligns_with(self, other: QueryResult) -> bool:
         """True when these rows can be put in the column order of `other`."""
+        if self.from_statement or other.from_statement:
+            return False
         # a scalar's column is unnamed, so it aligns with any single column by position
         if len(self.columns) == 1 and len(other.columns) == 1:
             return (

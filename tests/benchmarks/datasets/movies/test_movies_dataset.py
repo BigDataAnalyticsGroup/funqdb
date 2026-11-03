@@ -80,7 +80,7 @@ def test_MOVIES_open_gives_both_sides_the_same_columns(movies):
         source_columns = set(first_row)  # the columns the data declares
         references = IMDB_REFERENCES.get(table, {})  # movies uses the IMDB FKs
         absent = {
-            foreign_key.reference_name
+            foreign_key.ref_key
             for fk, foreign_key in references.items()
             if first_row[fk] is None
         }  # a NULL fk swizzles into no attribute
@@ -104,7 +104,7 @@ def test_MOVIES_open_swizzles_foreign_keys_into_references(movies):
         for row in MOVIES_DATA[table]:  # every row of the table
             tf = f"dbf[{table!r}][{row['id']!r}]"  # that row's FDM tuple
             for fk_column, foreign_key in mapping.items():  # each FK
-                reference = foreign_key.reference_name  # the swizzled attribute
+                reference = foreign_key.ref_key  # the swizzled attribute
                 target = foreign_key.target_table  # the referenced relation
                 if row[fk_column] is None:  # a NULL key references nothing
                     absent = f"{reference!r} not in {tf}"  # FQL: no attribute

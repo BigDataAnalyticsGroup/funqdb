@@ -26,7 +26,11 @@ from benchmarks.datasets.dataset import (
     DatasetDefinition,
     LoadedDataset,
 )
-from benchmarks.datasets.fql_runtime import FQL_RUNTIME
+from benchmarks.datasets.fql_runtime import (
+    FQL_RUNTIME,
+    check_database_name,
+    is_python_name,
+)
 from benchmarks.datasets.query_result import (
     FQLExecutionFailed,
     NotATable,
@@ -36,7 +40,7 @@ from benchmarks.datasets.query_result import (
     ReferenceValue,
     ResultMismatch,
 )
-from benchmarks.datasets.registry import DATASETS
+from benchmarks.datasets.registry import DATASETS, LiveDatasets
 from benchmarks.datasets.schema import PrimaryKey, Schema
 from benchmarks.datasets.dataset_types import References, Reference, SqlSchema
 
@@ -49,6 +53,7 @@ __all__ = [
     "FQL_RUNTIME",
     "References",
     "Reference",
+    "LiveDatasets",
     "LoadedDataset",
     "NotATable",
     "NotExecuted",
@@ -59,4 +64,6 @@ __all__ = [
     "ResultMismatch",
     "Schema",
     "SqlSchema",
+    "check_database_name",
+    "is_python_name",
 ]

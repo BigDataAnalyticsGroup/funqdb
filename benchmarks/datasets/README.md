@@ -27,25 +27,46 @@ sql.check_matches(fql)  # raises ResultMismatch when the rows differ
 dataset.close()
 ```
 
+To share open datasets between callers, use `LiveDatasets`.
+After a script writes to a dataset, discard it, so that the next `get` opens a fresh copy.
+Do not `close()` a dataset from `LiveDatasets`: every later `get` would return the closed dataset; discard it instead.
+A caller that still holds a discarded dataset must call `get` again.
+`LiveDatasets` is not thread-safe: a caller that shares it between threads holds a lock around every call.
+
+```python
+from benchmarks.datasets import DATASETS, LiveDatasets
+
+live = LiveDatasets(DATASETS)
+dataset = live.get("movies")  # opens on first use, then reuses
+live.discard("movies")        # closes it; the next get opens a fresh copy
+live.close()                  # closes every open dataset
+```
+
 ## Interfaces
 
 | Name                                   | Purpose                                                                                                                                                |
 |----------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `DATASETS`                             | Every registered `DatasetDefinition`, by name.                                                                                                         |
+| `LiveDatasets`                         | Opens each dataset on first `get` and reuses it until `discard` or `close`. `close` closes the datasets for all callers.                               |
 | `DatasetDefinition`                    | The declaration of a dataset: name, foreign keys, primary keys, connection builder. `has_data` tells if it executes. `open()` returns a new `Dataset`. |
 | `Dataset`                              | An open dataset without data: `schema()` and `close()`. `schema()` returns copies, so a change to it does not change the dataset.                      |
 | `LoadedDataset`                        | A `Dataset` with data: also `execute_sql(sql)` and `execute_fql(fql, dbf_name="dbf")`.                                                                 |
 | `DatasetClosed`                        | Raised by every call on a closed dataset, except `close`: it returns `False` and does nothing.                                                         |
 | `Schema`, `PrimaryKey`                 | The keys, references and columns that a statement is parsed against.                                                                                   |
-| `References`, `Reference`, `SqlSchema` | The types of `Schema.references` (a `Reference` names the reference and its target table) and `Schema.columns`.                                        |
-| `QueryResult`                          | Rows under named columns. `check_matches` compares two results. A column the FQL side lacks is NULL.                                                 |
+| `References`, `Reference`, `SqlSchema` | The types of `Schema.references` (a `Reference` holds its `ref_key` and its target table) and `Schema.columns`.                                        |
+| `QueryResult`                          | Rows under named columns. `check_matches` compares two results; `in_column_order_of` aligns them for display. A column the FQL side lacks is NULL.     |
 | `FQLExecutionFailed`                   | The FQL string or the read of its result failed. The engine error is its cause.                                                                        |
 | `NotTabular`                           | The FQL result cannot be read as rows. Subtypes: `ReferenceValue`, `NotATable`, `NotExecuted`.                                                         |
 | `ResultMismatch`                       | Raised by `check_matches`.                                                                                                                             |
 | `FQL_RUNTIME`                          | Every name that an FQL string can use. FQL runs without other builtins.                                                                                |
+| `check_database_name`                  | Check a name before an FQL string reads the database under it. It rejects a non-Python name, a dunder name and every name in `FQL_RUNTIME`.            |
+| `is_python_name`                       | Whether Python reads a name as itself: an identifier, no keyword, and unchanged by NFKC normalization.                                                 |
+
+A `Reference`'s `ref_key` is the attribute that holds the referenced tuple, not the foreign-key column:
+in `join_graph`, the column `b_r_id` has the `ref_key` `renamed`.
 
 `execute_sql` raises DuckDB's own errors.
-`execute_fql` raises `FQLExecutionFailed` or `NotTabular`.
+`execute_fql` raises `FQLExecutionFailed` or `NotTabular`, and `ValueError` for an unusable `dbf_name`.
 Both raise `DatasetClosed` after `close`.
 `open()` raises `ValueError` for a foreign key without a target row, for a reference from or to a table
 without a primary key, or for a reference on a column its table does not have, and closes its connection.
@@ -60,7 +81,8 @@ A single column aligns by position only with the unnamed column of an FQL scalar
 
 - FQL is trusted code. `FQL_RUNTIME` withholds the builtins, but this is no security boundary:
   an FQL object reaches `__import__` through `__globals__`. Do not run FQL from an untrusted source.
-  A caller that puts an SQL literal into FQL writes it as `repr(value)`, never by string formatting.
+  Put strings and names into FQL as `repr(...)`, never by string formatting;
+  write dates and times as `date(...)`, `datetime(...)` and `timedelta(...)`.
 
 - A `Reference` covers one foreign key column. A multi-column foreign key, such as TPC-H `lineitem` to `partsupp`,
   cannot be declared.
@@ -77,8 +99,15 @@ A single column aligns by position only with the unnamed column of an FQL scalar
 | `job`                   | never                       | The full IMDB dump (about 4 GB of CSV), schema-only: 93 `aka_title.movie_id` values refer to no `title` row.                             |
 | `job_seeds`             | if `job/.data_seeds` exists | Up to 3 rows of the join of every JOB query, plus every row that they reference.                                                         |
 | `tpch`                  | after download, see Limits  | Derived from TPC-H: generated by DuckDB's `dbgen` at scale factor 0.01.                                                                  |
+| `special_names`         | always                      | One table `order details`. The names `order details` and `first name` need quotes in SQL. The column `class` is a Python keyword.        |
+| `no_tables`             | never                       | No tables.                                                                                                                               |
+| `join_graph`            | never                       | The synthetic tables `a`, `b`, `c`, `d` with self-references and a renamed reference.                                                    |
 
 All IMDB-based datasets share `imdb/schema.py`.
+
+In `special_names`, the column `project` shadows the FDM method `project`, the column `it's` holds a quote
+in its name, and one row holds a quote, a backslash and a line break.
+`join_graph` holds the cycle `a` <-> `b`, the diamond `a` -> `b` -> `d` / `a` -> `c` -> `d`, and parallel edges.
 
 ### JOB data setup
 
@@ -162,7 +191,7 @@ The data is generated by `dbgen`, which DuckDB's `tpch` extension ships under th
 A dataset subpackage is inside the package, so it can import the internal module `benchmarks.datasets.dataset`.
 
 1. Declare a `DatasetDefinition` in a new subpackage. Give it a `build_connection` that returns a populated
-   DuckDB connection.
+   DuckDB connection. Leave it out for a dataset without data, such as `join_graph`.
 2. In `build_connection`, call `declare_primary_keys` from `benchmarks.datasets.dataset`,
    so that DuckDB also rejects a duplicate key. The JOB datasets need not: `job/schematext.sql` declares the keys.
 3. Add the definition to `DATASETS` in `registry.py`.

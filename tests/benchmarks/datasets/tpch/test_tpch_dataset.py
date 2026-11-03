@@ -133,7 +133,7 @@ def test_TPCH_references_are_the_foreign_keys_of_the_spec():
         for column, reference in mapping.items()
     }  # what the dataset declares
     names = {
-        reference.reference_name == column
+        reference.ref_key == column
         for mapping in TPCH_REFERENCES.values()
         for column, reference in mapping.items()
     }  # whether each reference replaces its key column
@@ -155,7 +155,7 @@ def test_TPCH_open_swizzles_every_declared_reference(tpch):
             )
             *values, foreign_key = tpch.execute_sql(first).rows[0]  # DuckDB's row
             key = values[0] if len(values) == 1 else tuple(values)  # as key_of does
-            attribute = f"dbf.{table}[{key!r}][{reference.reference_name!r}]"  # FQL
+            attribute = f"dbf.{table}[{key!r}][{reference.ref_key!r}]"  # FQL
             target = f"dbf.{reference.target_table}[{foreign_key!r}]"  # FQL too
 
             result = tpch.execute_fql(f"{attribute} is {target}")  # FQL, a bool

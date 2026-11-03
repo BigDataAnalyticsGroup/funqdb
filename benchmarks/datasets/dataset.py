@@ -29,7 +29,7 @@ from typing import Any, Callable, Iterable, override
 
 import duckdb
 
-from benchmarks.datasets.fql_runtime import FQL_RUNTIME
+from benchmarks.datasets.fql_runtime import FQL_RUNTIME, check_database_name
 from benchmarks.datasets.query_result import (
     FQLExecutionFailed,
     QueryResult,
@@ -147,9 +147,10 @@ class LoadedDataset(Dataset):
     def execute_fql(self, fql: str, dbf_name: str = "dbf") -> QueryResult:
         """The rows of `fql`, trusted code that reads the database as `dbf_name`;
         an empty result `from_statement` when `fql` is not one expression. Raises
-        `DatasetClosed`, `FQLExecutionFailed` if the FQL fails to execute, and
-        `NotTabular` if the result is not tabular."""
+        `DatasetClosed`, `ValueError` for an unusable `dbf_name`, `FQLExecutionFailed`
+        if the FQL fails to execute, and `NotTabular` if the result is not tabular."""
         self._check_open()
+        check_database_name(dbf_name)
         namespace = self._build_namespace(dbf_name)
         source = textwrap.dedent(fql).strip()
         expression = _is_expression(source)
@@ -285,8 +286,8 @@ def build_dbf(
                 if fk_column not in item.value:
                     continue
                 foreign_key = item.value[fk_column]
-                item.value[reference.reference_name] = target[foreign_key]
-            relation.references(reference.reference_name, target)
+                item.value[reference.ref_key] = target[foreign_key]
+            relation.references(reference.ref_key, target)
 
     return DBF(relations, lineage=[f"DBF({name})"], frozen=False)
 

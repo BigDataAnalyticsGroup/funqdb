@@ -218,6 +218,13 @@ def test_LoadedDataset_execute_fql_after_close_raises_DatasetClosed(genre):
         dataset.execute_fql("1")  # would need the FDM database
 
 
+def test_LoadedDataset_execute_fql_unusable_dbf_name_raises_ValueError(dataset):
+    """The database name is checked before the FQL string runs."""
+
+    with pytest.raises(ValueError, match="cannot name the database"):  # refused
+        dataset.execute_fql("1 // 0", dbf_name="join")  # run first, it would fail
+
+
 def test_LoadedDataset_execute_fql_failing_statement_raises_FQLExecutionFailed(dataset):
     """FQL that is not one expression is executed; Python's error is the cause."""
 
