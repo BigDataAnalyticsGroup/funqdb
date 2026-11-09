@@ -512,3 +512,10 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` *Datasets for the transpiler: `special_names`, `no_tables`, `join_graph`*
   `special_names` holds one table `order details` whose names need quotes in SQL (`first name`) or are Python keywords (`class`), a column that shadows the FDM method `project`, a column `it's` with a quote in its name, and values that need escaping; SQL and FQL read the same rows. `no_tables` declares nothing. `join_graph` declares the tables `a` to `d` without data, with self-references, the cycle `a` <-> `b`, the diamond `a` -> `b` -> `d` / `a` -> `c` -> `d`, parallel edges and a renamed reference. Tests: `tests/benchmarks/datasets/special_names/test_special_names_dataset.py`, `tests/benchmarks/datasets/no_tables/test_no_tables_dataset.py`, `tests/benchmarks/datasets/join_graph/test_join_graph_dataset.py`.
+
+---
+
+## SQL transpiler
+
+- `[✅]` *Hold a statement as IR*
+  `Statement` and its subtypes hold one SQL statement in terms of FDM, without sqlglot nodes. `AliasGraph.tree()` turns the equalities between aliases into a `JoinTree` with at most one join, and `JoinTree.join` splits a condition over its roots. `Query` derives its condition (the tree's identities first), its join, its copied outputs and whether it is inlinable from its current clauses. Tests: `tests/benchmarks/tools/ir/`, `tests/benchmarks/datasets/test_schema.py`.

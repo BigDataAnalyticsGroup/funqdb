@@ -18,11 +18,29 @@
 #
 #
 
-"""The schema facts a statement is parsed against: primary keys."""
+"""The schema facts a statement is parsed against: primary keys and references."""
 
 import pytest
 
-from benchmarks.datasets import PrimaryKey
+from benchmarks.datasets import PrimaryKey, Reference, Schema
+
+# Each foreign-key column of movie, the ref key it reads as, and its target table:
+#
+#   movie ── genre_id (as genre) ──────▶ genre
+#   │
+#   └─────── studio_id (as studio_id) ─▶ studio
+#
+#   movie and genre have the key id; studio declares no key
+SCHEMA = Schema(
+    references={
+        "movie": {
+            "genre_id": Reference("genre", "genre"),
+            "studio_id": Reference("studio_id", "studio"),
+        }
+    },
+    primary_keys={"movie": PrimaryKey.of("id"), "genre": PrimaryKey.of("id")},
+    columns={},
+)  # movie references genre (renamed) and studio; genre references nothing
 
 
 def test_PrimaryKey_init_without_columns_raises_ValueError():
@@ -45,3 +63,13 @@ def test_PrimaryKey_key_of_returns_value_for_one_column_and_tuple_for_several():
     assert PrimaryKey(("id",)).key_of(row) == 7  # not the 1-tuple (7,)
     assert PrimaryKey(("id", "line")).key_of(row) == (7, 2)  # in key order
     assert PrimaryKey(("line", "id")).key_of(row) == (2, 7)  # order matters
+
+
+def test_Schema_references_of_returns_the_references_without_their_columns():
+    """The references of a table in declaration order, without the foreign-key columns;
+    none for a table without references."""
+    assert SCHEMA.references_of("genre") == ()  # no foreign keys
+    assert SCHEMA.references_of("movie") == (
+        Reference("genre", "genre"),
+        Reference("studio_id", "studio"),
+    )  # both foreign keys of movie, in declaration order

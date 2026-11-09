@@ -26,6 +26,7 @@ from typing import Any
 
 from benchmarks.datasets.dataset_types import (
     DatasetPrimaryKey,
+    Reference,
     References,
     SqlSchema,
 )
@@ -61,3 +62,7 @@ class Schema:
     references: References
     primary_keys: dict[str, PrimaryKey]
     columns: SqlSchema
+
+    def references_of(self, table: str) -> tuple[Reference, ...]:
+        """The references of the foreign keys of `table` in declaration order, on purpose without their column names."""
+        return tuple(self.references.get(table, {}).values())
