@@ -519,3 +519,15 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` *Hold a statement as IR*
   `Statement` and its subtypes hold one SQL statement in terms of FDM, without sqlglot nodes. `AliasGraph.tree()` turns the equalities between aliases into a `JoinTree` with at most one join, and `JoinTree.join` splits a condition over its roots. `Query` derives its condition (the tree's identities first), its join, its copied outputs and whether it is inlinable from its current clauses. Tests: `tests/benchmarks/tools/ir/`, `tests/benchmarks/datasets/test_schema.py`.
+
+- `[✅]` *Admit only baseline SQL*
+  `reject_non_baseline_sql` admits ISO SQL-92, what the JOB and TPC-H queries add, and the extensions accepted by decision: OFFSET and BOOLEAN. All other SQL raises `UnsupportedSql` with a `Limitation`: `DIALECT_SPECIFIC` for SQL outside the baseline, `UNSUPPORTED_STATEMENT` for SQL-92 without an FDM counterpart, `SCHEMA_QUALIFIED_TABLE` for a name with a schema, and `ALIAS_COLUMN_LIST` for an alias with a column list. All JOB queries and all TPC-H queries but Q13 pass. Test: `tests/benchmarks/tools/parse/test_sql_baseline.py`.
+
+- `[✅]` *Catalog every limitation of the transpiler*
+  `UnsupportedSql` carries one `Limitation` and its category. `benchmarks/tools/Limitations.md` lists every `Limitation` under its category, and a test fails when the names or categories disagree. Test: `tests/benchmarks/tools/test_limitations.py`.
+
+- `[✅]` *Prepare SQL for the parser*
+  `factor_common_conjuncts` moves the conjuncts common to all branches of an OR out of the OR. `ill_typed_sql_rule` runs the type checks on the statement as written, before a later rule coerces its values. Test: `tests/benchmarks/tools/sql/test_optimization.py`.
+
+- `[✅]` *Reject what SQL's types make FQL read otherwise*
+  `reject_ill_typed_sql` rejects what would silently give another result than SQL: a comparison across type families, a decimal literal against a float column or the reverse, a sub-day interval that does not directly shift a datetime, an interval divided or scaled by a value that is no whole number, and a cast to a date or datetime of a value that is neither a text literal nor of that type. Other ill-typed SQL is not looked for. A value of unknown type is trusted. Test: `tests/benchmarks/tools/parse/test_type_checks.py`.

@@ -1,6 +1,7 @@
 # Benchmark Tools
 
-This directory holds the SQL transpiler (`ir/`) and the code that writes reports (`report/`, `shared/`).
+This directory holds the SQL transpiler (`ir/`, `parse/`, `sql/`, `limitations.py`)
+and the code that writes reports (`report/`, `shared/`).
 See [report/README.md](report/README.md) for the reports. This file describes the transpiler.
 
 ## SQL Transpiler
@@ -8,7 +9,8 @@ See [report/README.md](report/README.md) for the reports. This file describes th
 The transpiler changes SQL into FQL. It shows which SQL FQL can already express.
 It is not an SQL interface for funqDB.
 
-So far, the transpiler consists of the IR: the form in which the transpiler holds one SQL statement.
+So far, the transpiler consists of the IR, the form in which the transpiler holds one SQL statement,
+and of the checks and rewrites that run on the SQL before the parser reads it.
 A parser and a renderer are planned. The parser will make the IR from SQL with the library sqlglot.
 The renderer will write the IR as FQL.
 
@@ -17,6 +19,12 @@ The renderer will write the IR as FQL.
 
 | Path                         | Purpose                                                                        |
 |------------------------------|--------------------------------------------------------------------------------|
+| `limitations.py`             | `Limitation`, the catalogue, and `UnsupportedSql`, the error that names one.   |
+| `Limitations.md`             | Each limitation and why it exists; a test compares it with `limitations.py`.   |
+| `sql/optimization.py`        | `factor_common_conjuncts`, and `OPTIMIZER_RULES`: sqlglot's rules, adapted.    |
+| `parse/sql_baseline.py`      | `reject_non_baseline_sql`: an allow-list of the SQL the transpiler looks at.   |
+| `parse/type_checks.py`       | `reject_ill_typed_sql`: rejects typed SQL that FQL would read otherwise.       |
+| `parse/node_args.py`         | Helpers for sqlglot nodes: `arg_names`, `sql_conjuncts`.                       |
 | `ir/statements.py`           | The IR of a statement: `Statement` and its subtypes.                           |
 | `ir/query.py`                | The IR of a query: `Query`, `Output`, `OrderKey`, `Limit`, `GeneratedColumns`. |
 | `ir/expressions.py`          | The IR of a value or condition: `Expression` and its subtypes.                 |
@@ -25,6 +33,31 @@ The renderer will write the IR as FQL.
 | `ir/paths.py`                | `Path`: how a query reaches the tuple of an alias.                             |
 | `ir/names.py`                | Names that the transpiler makes up: `fresh_name`, `as_python_name`.            |
 
+
+### Stages
+
+| Stage            | Code                                          | Result                                         |
+|------------------|-----------------------------------------------|------------------------------------------------|
+| SQL Parsing      | sqlglot                                       | An sqlglot AST.                                |
+| Baseline check   | `parse/sql_baseline.py`                       | `UnsupportedSql` for SQL outside the baseline. |
+| SQL Optimization | `sql/optimization.py`, `parse/type_checks.py` | A normalized AST.                              |
+
+1. **SQL Parsing.** sqlglot reads the text in its default dialect (`SQL_READ_DIALECT`).
+2. **Baseline check.** The baseline is ISO SQL-92, plus what the JOB and TPC-H queries use,
+   plus OFFSET and BOOLEAN. All JOB queries and all TPC-H queries but Q13 pass.
+   The check also rejects a name with a schema and an alias with a column list (as in Q13),
+   because the later stages would ignore them.
+3. **SQL Optimization.** `factor_common_conjuncts` moves conjuncts out of an OR,
+   then sqlglot's rules normalize the SELECT, in the SQLite dialect, which resolves names case-insensitively.
+   After `qualify`, every column names its alias.
+   The rule `ill_typed_sql_rule` then runs the type checks on the statement as written,
+   because later rules convert values.
+   Other ill-typed SQL is not looked for. `OPTIMIZER_RULES` leaves out two of sqlglot's rules:
+   - `unnest_subqueries` turns EXISTS and IN into a LEFT JOIN on a CTE, which do not translate.
+     The IR holds the subquery instead.
+   - `optimize_joins` raises a `Cycle error` when a subquery reuses an outer alias.
+
+The planned parser will read the normalized AST into a `Statement` from `ir/`.
 
 ### The IR
 
@@ -218,3 +251,16 @@ It is empty when a table has several members, as FQL refuses a relation entered 
 `tests/benchmarks/tools/` has the same layout as this directory, with at most one test file per source file.
 Modules of plain dataclasses, such as `ir/paths.py`, have none.
 The section `## SQL transpiler` of `SPEC.md` names the tests of each feature.
+
+### Limitations
+
+SQL that the transpiler cannot translate raises `UnsupportedSql` with one `Limitation`.
+[`Limitations.md`](Limitations.md) lists each limitation and why it exists.
+The limitations are categorized as:
+- `rejected`: SQL that is specifically rejected by the transpiler and is not intended to be transpiled.
+- `limitation (transpiler)`: SQL that the transpiler cannot translate
+  due to limitations in its implementation or design.
+- `limitation (fql)`: SQL that cannot be expressed in FQL due to limitations in FQL or the functional data model itself.
+
+Invalid SQL is catalogued, or raises `ValueError` or, for a name that does not resolve,
+sqlglot's `OptimizeError`.
