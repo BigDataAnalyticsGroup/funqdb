@@ -26,6 +26,7 @@ import duckdb
 import pytest
 
 from benchmarks.datasets import LoadedDataset
+from benchmarks.datasets.dataset import quote_identifier
 from benchmarks.datasets.imdb.schema import IMDB_REFERENCES
 from benchmarks.datasets.movies.movies_data import MOVIES_DATA
 from benchmarks.datasets.movies.movies_dataset import MOVIES, _table_columns
@@ -66,7 +67,8 @@ def test_MOVIES_open_holds_every_row_on_both_sides(movies):
     assert {row[0] for row in sql_tables} == set(MOVIES_DATA)  # DuckDB: every table
     assert fql_tables == ((True,),)  # FDM: every table
     for table, rows in MOVIES_DATA.items():  # one table at a time
-        count = f'SELECT COUNT(*) FROM "{table}"'  # the SQL count
+        quoted_table = quote_identifier(table)  # the table name, SQL-quoted
+        count = f"SELECT COUNT(*) FROM {quoted_table}"  # the SQL count
         sql_count = movies.execute_sql(count).rows  # DuckDB's
         fql_count = movies.execute_fql(f"len(dbf[{table!r}])").rows  # the FDM's
         assert sql_count == ((len(rows),),), table  # DuckDB holds every row
@@ -86,7 +88,8 @@ def test_MOVIES_open_gives_both_sides_the_same_columns(movies):
         }  # a NULL fk swizzles into no attribute
         nulls = {column for column, value in first_row.items() if value is None}
         absent |= nulls  # the FDM has no NULL: a NULL column is no attribute either
-        sql = f'SELECT * FROM "{table}" LIMIT 0'  # the columns, without rows
+        quoted_table = quote_identifier(table)  # the table name, SQL-quoted
+        sql = f"SELECT * FROM {quoted_table} LIMIT 0"  # the columns, without rows
         attributes = f"set(dbf[{table!r}][{first_row['id']!r}].keys())"  # FQL side
         expected = source_columns - absent  # every other column survives
         same_attributes = f"{attributes} == {expected!r}"  # FQL, a bool

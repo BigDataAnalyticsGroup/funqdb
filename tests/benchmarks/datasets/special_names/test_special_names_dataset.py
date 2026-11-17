@@ -26,6 +26,7 @@ import duckdb
 import pytest
 
 from benchmarks.datasets import DATASETS, LoadedDataset
+from benchmarks.datasets.dataset import quote_identifier
 from benchmarks.datasets.special_names.special_names_dataset import SPECIAL_NAMES
 
 
@@ -44,7 +45,7 @@ def test_SPECIAL_NAMES_is_registered():
 
 def test_SPECIAL_NAMES_open_duplicate_key_write_fails_in_sql(special_names):
     """The reference database enforces the key on the quoted table name."""
-    insert = "INSERT INTO \"order details\" VALUES (1, 'Alan', 'Enigma', 1, 40)"  # id 1
+    insert = 'INSERT INTO "order details" (id) VALUES (1)'  # id 1 again, key only
 
     with pytest.raises(duckdb.ConstraintException):  # id 1 exists
         special_names.execute_sql(insert)  # a duplicate key
@@ -78,13 +79,27 @@ def test_SPECIAL_NAMES_open_reads_column_that_shadows_method(special_names):
 def test_SPECIAL_NAMES_open_reads_column_with_quote_in_its_name(special_names):
     """A name with a quote, rendered with `repr`, reads the same rows on both sides."""
     column = "it's"  # would end an FQL string built by string formatting
-    sql = f'SELECT "{column}" FROM "order details" ORDER BY id'  # SQL's quotes
+    quoted_column = quote_identifier(column)  # SQL's quotes
+    sql = f'SELECT {quoted_column} FROM "order details" ORDER BY id'  # DuckDB reads it
     fql = f"dbf['order details'].project({column!r})"  # `repr` escapes the quote
 
     sql_result = special_names.execute_sql(sql)  # DuckDB's rows
     fql_result = special_names.execute_fql(fql)  # the FDM's rows
 
     assert sql_result.rows == ((10,), (20,), (30,))  # the values of the row inserts
+    sql_result.check_matches(fql_result)  # passes: both sides hold the same rows
+
+
+def test_SPECIAL_NAMES_open_reads_column_with_double_quote_in_its_name(special_names):
+    """A name with `"`, its quotes doubled in SQL, reads the same rows on both sides."""
+    sql = 'SELECT """quoted""" FROM "order details" ORDER BY id'  # `""` is one `"`
+    column = '"quoted"'  # a name with two double quotes
+    fql = f"dbf['order details'].project({column!r})"  # repr picks fitting quotes
+
+    sql_result = special_names.execute_sql(sql)  # DuckDB's rows
+    fql_result = special_names.execute_fql(fql)  # the FDM's rows
+
+    assert sql_result.rows == ((100,), (200,), (300,))  # the values of the row inserts
     sql_result.check_matches(fql_result)  # passes: both sides hold the same rows
 
 

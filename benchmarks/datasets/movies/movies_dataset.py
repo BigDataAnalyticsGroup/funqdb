@@ -23,7 +23,11 @@ from typing import Any
 
 import duckdb
 
-from benchmarks.datasets.dataset import DatasetDefinition, declare_primary_keys
+from benchmarks.datasets.dataset import (
+    DatasetDefinition,
+    declare_primary_keys,
+    quote_identifier,
+)
 from benchmarks.datasets.imdb.schema import IMDB_PRIMARY_KEYS, IMDB_REFERENCES
 from benchmarks.datasets.movies.movies_data import (
     MOVIES_DATA,
@@ -40,9 +44,11 @@ def build_movies_connection() -> duckdb.DuckDBPyConnection:
     declare_primary_keys(connection, IMDB_PRIMARY_KEYS)
     for table, rows in MOVIES_DATA.items():
         columns = _table_columns(table, rows)
+        quoted_table = quote_identifier(table)
+        quoted_columns = ", ".join(quote_identifier(column) for column in columns)
         placeholders = ", ".join("?" for _ in columns)
         connection.executemany(
-            f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})",
+            f"INSERT INTO {quoted_table} ({quoted_columns}) VALUES ({placeholders})",
             [tuple(row[column] for column in columns) for row in rows],
         )
 

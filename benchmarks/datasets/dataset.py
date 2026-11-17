@@ -206,13 +206,12 @@ def read_sql_schema(
                 " WHERE table_schema = 'main'"
             ).fetchall()
         ]
-    return {
-        table: {
-            name: type_
-            for name, type_, *_ in connection.execute(f'DESCRIBE "{table}"').fetchall()
-        }
-        for table in tables
-    }
+    schema = {}
+    for table in tables:
+        quoted_table = quote_identifier(table)
+        description = connection.execute(f"DESCRIBE {quoted_table}").fetchall()
+        schema[table] = {column: type_ for column, type_, *_ in description}
+    return schema
 
 
 def read_rows(
@@ -222,7 +221,8 @@ def read_rows(
     `Decimal`, like dates, ints and strings: every type stays native."""
     rows = {}
     for table in tables:
-        cursor = connection.execute(f'SELECT * FROM "{table}"')
+        quoted_table = quote_identifier(table)
+        cursor = connection.execute(f"SELECT * FROM {quoted_table}")
         columns = [description[0] for description in cursor.description]
         rows[table] = [dict(zip(columns, row)) for row in cursor.fetchall()]
     return rows
@@ -234,8 +234,19 @@ def declare_primary_keys(
     """Make the reference database enforce the keys the FDM stores its rows
     under, so a duplicate-key write fails there too instead of diverging."""
     for table, key in primary_keys.items():
-        columns = ", ".join(f'"{column}"' for column in key.columns)
-        connection.execute(f'ALTER TABLE "{table}" ADD PRIMARY KEY ({columns})')
+        quoted_table = quote_identifier(table)
+        quoted_columns = ", ".join(quote_identifier(column) for column in key.columns)
+        connection.execute(
+            f"ALTER TABLE {quoted_table} ADD PRIMARY KEY ({quoted_columns})"
+        )
+
+
+def quote_identifier(name: str) -> str:
+    """`name` as an SQL quoted identifier, each `"` in it doubled. Write every table,
+    column and alias name into SQL text through this: an undoubled `"` would end the
+    name early and let the rest run as SQL."""
+    escaped = name.replace('"', '""')
+    return f'"{escaped}"'
 
 
 def build_dbf(

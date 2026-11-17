@@ -31,6 +31,7 @@ from pathlib import Path
 
 import duckdb
 
+from benchmarks.datasets.dataset import quote_identifier
 from benchmarks.datasets.imdb.schema import IMDB_PRIMARY_KEYS, IMDB_REFERENCES
 from benchmarks.datasets.job.job_dataset import (
     JOB_ARCHIVE_NAME,
@@ -127,8 +128,10 @@ def _seed_query(query: str) -> str:
     body = _quote_aliases(query[from_start:], aliases)
 
     positions = range(len(aliases))
+    quoted_aliases = [quote_identifier(alias) for alias in aliases]
     projection = ", ".join(
-        f'"{alias}".id AS c{i}' for i, alias in zip(positions, aliases)
+        f"{quoted_alias}.id AS c{i}"
+        for i, quoted_alias in zip(positions, quoted_aliases)
     )
     order = ", ".join(f"c{position}" for position in positions)
     # no DISTINCT: the ids of all aliases already make every row of the join unique
@@ -145,11 +148,15 @@ def _quote_aliases(body: str, aliases: list[str]) -> str:
     parts = QUOTED_LITERAL.split(body)
     for index in range(0, len(parts), 2):
         for alias in aliases:
+            quoted_alias = quote_identifier(alias)
             parts[index] = re.sub(
-                rf"\bAS\s+{alias}\b", f'AS "{alias}"', parts[index], flags=re.IGNORECASE
+                rf"\bAS\s+{alias}\b",
+                f"AS {quoted_alias}",
+                parts[index],
+                flags=re.IGNORECASE,
             )
             parts[index] = re.sub(
-                rf"\b{alias}\.", f'"{alias}".', parts[index], flags=re.IGNORECASE
+                rf"\b{alias}\.", f"{quoted_alias}.", parts[index], flags=re.IGNORECASE
             )
     return "".join(parts)
 
@@ -171,11 +178,13 @@ def _close_seeds(
                 continue
 
             identifiers = _id_list(seeds[table])
+            quoted_table = quote_identifier(table)
             for column, foreign_key in references.items():
                 referenced = foreign_key.target_table
+                quoted_column = quote_identifier(column)
                 targets = connection.execute(
-                    f"SELECT DISTINCT {column} FROM {table}"
-                    f" WHERE id IN ({identifiers}) AND {column} IS NOT NULL"
+                    f"SELECT DISTINCT {quoted_column} FROM {quoted_table}"
+                    f" WHERE id IN ({identifiers}) AND {quoted_column} IS NOT NULL"
                 ).fetchall()
                 before = len(seeds[referenced])
                 seeds[referenced].update(target for (target,) in targets)
@@ -233,8 +242,9 @@ def _write(
         # `IN ()` is a syntax error, and `IN (NULL)` matches no row
         seeded = _id_list(seeds[table]) or "NULL"
         csv_path = sql_path_literal(target / f"{table}.csv")
+        quoted_table = quote_identifier(table)
         connection.execute(
-            f"COPY (SELECT * FROM {table} WHERE id IN ({seeded}))"
+            f"COPY (SELECT * FROM {quoted_table} WHERE id IN ({seeded}))"
             f" TO {csv_path} ({JOB_CSV_OPTIONS});"
         )
         print(f"  {table}: {len(seeds[table])} rows")
@@ -273,10 +283,13 @@ def _dangling_references(connection: duckdb.DuckDBPyConnection) -> dict[str, int
     row."""
     dangling = {}
     for table, references in IMDB_REFERENCES.items():
+        quoted_table = quote_identifier(table)
         for column, foreign_key in references.items():
+            quoted_column = quote_identifier(column)
+            quoted_target = quote_identifier(foreign_key.target_table)
             count = connection.execute(
-                f"SELECT count(*) FROM {table} WHERE {column} IS NOT NULL"
-                f" AND {column} NOT IN (SELECT id FROM {foreign_key.target_table})"
+                f"SELECT count(*) FROM {quoted_table} WHERE {quoted_column} IS NOT NULL"
+                f" AND {quoted_column} NOT IN (SELECT id FROM {quoted_target})"
             ).fetchone()[0]
             if count:
                 dangling[f"{table}.{column}"] = count

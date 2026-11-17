@@ -106,7 +106,8 @@ A single column aligns by position only with the unnamed column of an FQL scalar
 All IMDB-based datasets share `imdb/schema.py`.
 
 In `special_names`, the column `project` shadows the FDM method `project`, the column `it's` holds a quote
-in its name, and one row holds a quote, a backslash and a line break.
+in its name, the column `"quoted"` holds two double quotes in its name,
+and one row holds a quote, a backslash and a line break.
 `join_graph` holds the cycle `a` <-> `b`, the diamond `a` -> `b` -> `d` / `a` -> `c` -> `d`, and parallel edges.
 
 ### JOB data setup
@@ -194,4 +195,5 @@ A dataset subpackage is inside the package, so it can import the internal module
    DuckDB connection. Leave it out for a dataset without data, such as `join_graph`.
 2. In `build_connection`, call `declare_primary_keys` from `benchmarks.datasets.dataset`,
    so that DuckDB also rejects a duplicate key. The JOB datasets need not: `job/schematext.sql` declares the keys.
+   Write every name into SQL with `quote_identifier`, and every value as a `?` parameter.
 3. Add the definition to `DATASETS` in `registry.py`.

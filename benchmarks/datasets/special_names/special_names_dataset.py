@@ -21,7 +21,11 @@
 
 import duckdb
 
-from benchmarks.datasets.dataset import DatasetDefinition, declare_primary_keys
+from benchmarks.datasets.dataset import (
+    DatasetDefinition,
+    declare_primary_keys,
+    quote_identifier,
+)
 from benchmarks.datasets.dataset_types import DatasetRowData
 from benchmarks.datasets.schema import PrimaryKey
 
@@ -31,17 +35,33 @@ SPECIAL_NAMES_PRIMARY_KEYS: dict[str, PrimaryKey] = {
 }
 # `project` shadows the FDM method of that name, so FQL must read it by subscript;
 # `it's` ends an FQL string that holds it unless it is escaped;
+# `"quoted"` ends an SQL quoted identifier unless its quotes are doubled;
 # the last row holds values that break FQL or SQL unless they are escaped
 SPECIAL_NAMES_DATA: DatasetRowData = {
     SPECIAL_NAMES_TABLE: [
-        {"id": 1, "first name": "Ada", "project": "Apollo", "class": 2, "it's": 10},
-        {"id": 2, "first name": "Grace", "project": "Gemini", "class": 3, "it's": 20},
+        {
+            "id": 1,
+            "first name": "Ada",
+            "project": "Apollo",
+            "class": 2,
+            "it's": 10,
+            '"quoted"': 100,
+        },
+        {
+            "id": 2,
+            "first name": "Grace",
+            "project": "Gemini",
+            "class": 3,
+            "it's": 20,
+            '"quoted"': 200,
+        },
         {
             "id": 3,
             "first name": "O'Brien",
             "project": "back\\slash\nline",
             "class": 4,
             "it's": 30,
+            '"quoted"': 300,
         },
     ]
 }
@@ -50,17 +70,19 @@ SPECIAL_NAMES_DATA: DatasetRowData = {
 def build_special_names_connection() -> duckdb.DuckDBPyConnection:
     """A fresh DuckDB connection holding `SPECIAL_NAMES_DATA`."""
     connection = duckdb.connect()
+    quoted_table = quote_identifier(SPECIAL_NAMES_TABLE)
     connection.execute(
-        f'CREATE TABLE "{SPECIAL_NAMES_TABLE}" '
+        f"CREATE TABLE {quoted_table} "
         '(id INTEGER, "first name" TEXT, "project" TEXT, "class" INTEGER, '
-        '"it\'s" INTEGER)'
+        # """quoted""" is the column "quoted", each quote doubled
+        '"it\'s" INTEGER, """quoted""" INTEGER)'
     )
     declare_primary_keys(connection, SPECIAL_NAMES_PRIMARY_KEYS)
     for row in SPECIAL_NAMES_DATA[SPECIAL_NAMES_TABLE]:
-        columns = ", ".join(f'"{column}"' for column in row)
+        quoted_columns = ", ".join(quote_identifier(column) for column in row)
         placeholders = ", ".join("?" for _ in row)
         connection.execute(
-            f'INSERT INTO "{SPECIAL_NAMES_TABLE}" ({columns}) VALUES ({placeholders})',
+            f"INSERT INTO {quoted_table} ({quoted_columns}) VALUES ({placeholders})",
             list(row.values()),
         )
     return connection

@@ -39,6 +39,7 @@ from benchmarks.datasets import (
 from benchmarks.datasets.dataset import (
     build_dbf,
     declare_primary_keys,
+    quote_identifier,
     read_rows,
     read_sql_schema,
 )
@@ -328,6 +329,22 @@ def test_LoadedDataset_schema_reads_columns_from_connection(dataset):
     assert columns == {"genre": {"id": "INTEGER", "label": "VARCHAR"}}  # SQL types
 
 
+def test_LoadedDataset_schema_runs_no_SQL_from_a_table_name(dataset):
+    """A table name with `"` and a statement in it stays a name: `schema` runs none."""
+    name = 'genre"; CREATE TABLE injected (a INTEGER); --'  # closes an undoubled quote
+    quoted = '"genre""; CREATE TABLE injected (a INTEGER); --"'  # the name, doubled
+    dataset.execute_sql(f"CREATE TABLE {quoted} (a INTEGER)")  # a table of that name
+
+    columns = dataset.schema().columns  # DESCRIBEs every table, also the odd one
+    reread = dataset.schema().columns  # a second read lists every table again
+
+    assert columns == {
+        "genre": {"id": "INTEGER", "label": "VARCHAR"},  # the table of the fixture
+        name: {"a": "INTEGER"},  # the odd name, read as one name
+    }  # an undoubled quote would map the odd name to the wrong columns
+    assert columns == reread  # no new table or some other side effect
+
+
 def test_LoadedDataset_close_closes_connection(genre):
     """A loaded dataset's `close` also releases its DuckDB connection."""
     opened = []  # every connection the definition below hands out
@@ -353,40 +370,50 @@ def test_LoadedDataset_close_closes_connection(genre):
 def test_read_rows_reads_each_table_as_the_fdm_keeps_it():
     """One dict per row in scan order; every type native, DECIMAL as Decimal."""
     connection = duckdb.connect()  # a tiny reference database
-    table = '"order details"'  # a table name with a space, as in special_names
+    table = 'order "details"'  # a space and quotes: fails unless `"` is doubled
+    quoted_table = '"order ""details"""'  # that name, each quote doubled
     columns = "id INTEGER, price DECIMAL(5,2), day DATE"  # three column types
-    connection.execute(f"CREATE TABLE {table} ({columns})")  # the table
+    connection.execute(f"CREATE TABLE {quoted_table} ({columns})")  # the table
     rows = "(2, 1.50, '1995-12-15'), (1, 0.25, '1996-01-01')"  # two rows
-    connection.execute(f"INSERT INTO {table} VALUES {rows}")  # filled
+    connection.execute(f"INSERT INTO {quoted_table} VALUES {rows}")  # filled
 
-    read = read_rows(connection, ["order details"])  # a name that needs quoting
+    read = read_rows(connection, [table])  # a name that needs quoting
     connection.close()  # the rows are plain Python values now
 
     assert read == {
-        "order details": [
+        table: [
             {"id": 2, "price": Decimal("1.50"), "day": date(1995, 12, 15)},  # first
             {"id": 1, "price": Decimal("0.25"), "day": date(1996, 1, 1)},  # second
         ]
     }  # every column by name, as the FDM tuples will carry it
-    assert isinstance(read["order details"][0]["price"], Decimal)  # not a float
+    assert isinstance(read[table][0]["price"], Decimal)  # not a float
 
 
 def test_declare_primary_keys_makes_reference_database_reject_duplicates():
     """DuckDB rejects duplicates of single, composite and quoted-name keys."""
     connection = duckdb.connect()  # a fresh reference database
-    connection.execute('CREATE TABLE "a b" (x INTEGER, y INTEGER)')  # quoted name
+    quoted_table = '"a ""b"""'  # the table `a "b"`: a space and quotes in its name
+    columns = '"x""" INTEGER, y INTEGER'  # key column x": the key needs quoting too
+    connection.execute(f"CREATE TABLE {quoted_table} ({columns})")  # composite key
     connection.execute("CREATE TABLE c (id INTEGER)")  # a single-column key
-    keys = {"a b": PrimaryKey(("x", "y")), "c": ID}  # a composite and a single key
+    keys = {'a "b"': PrimaryKey(('x"', "y")), "c": ID}  # a composite and a single key
 
     declare_primary_keys(connection, keys)  # enforced by the reference database
-    connection.execute('INSERT INTO "a b" VALUES (1, 1), (1, 2)')  # distinct pairs
+    connection.execute(f"INSERT INTO {quoted_table} VALUES (1, 1), (1, 2)")  # distinct
     connection.execute("INSERT INTO c VALUES (1)")  # the first id 1
 
     with pytest.raises(duckdb.ConstraintException):  # the pair (1, 2) exists
-        connection.execute('INSERT INTO "a b" VALUES (1, 2)')  # a duplicate pair
+        connection.execute(f"INSERT INTO {quoted_table} VALUES (1, 2)")  # duplicate
     with pytest.raises(duckdb.ConstraintException):  # id 1 exists
         connection.execute("INSERT INTO c VALUES (1)")  # a duplicate id
     connection.close()  # the test owns this connection
+
+
+def test_quote_identifier_doubles_each_double_quote():
+    """Each `"` in a name is doubled inside the enclosing quotes."""
+    quoted = quote_identifier('say "hi"')  # a name with a space and two quotes
+
+    assert quoted == '"say ""hi"""'  # both quotes doubled, then the name enclosed
 
 
 def test_build_dbf_swizzles_foreign_keys_into_references():

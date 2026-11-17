@@ -25,7 +25,11 @@ from pathlib import Path
 
 import duckdb
 
-from benchmarks.datasets.dataset import DatasetDefinition, read_sql_schema
+from benchmarks.datasets.dataset import (
+    DatasetDefinition,
+    quote_identifier,
+    read_sql_schema,
+)
 from benchmarks.datasets.imdb.schema import IMDB_PRIMARY_KEYS, IMDB_REFERENCES
 
 JOB_DATA_DIR = Path(__file__).resolve().parent
@@ -59,8 +63,10 @@ def load_job_csvs(
         if not csv.is_file():
             raise FileNotFoundError(f"{csv} is missing: {path} is incomplete")
 
+        quoted_table = quote_identifier(table)
+        csv_literal = sql_path_literal(csv)
         connection.execute(
-            f'COPY "{table}" FROM {sql_path_literal(csv)} ({JOB_CSV_OPTIONS});'
+            f"COPY {quoted_table} FROM {csv_literal} ({JOB_CSV_OPTIONS});"
         )
 
 
