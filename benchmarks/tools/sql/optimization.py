@@ -28,8 +28,21 @@ from sqlglot.optimizer.annotate_types import annotate_types
 from sqlglot.optimizer.qualify import qualify
 from sqlglot.schema import Schema
 
+from benchmarks.datasets.dataset import quote_identifier
+from benchmarks.datasets.dataset_types import SqlSchema
 from benchmarks.tools.parse.node_args import sql_conjuncts
 from benchmarks.tools.parse.type_checks import reject_ill_typed_sql
+
+
+def quoted_schema(columns: SqlSchema) -> SqlSchema:
+    """`columns` with each table and column name quoted, so that sqlglot reads a
+    name as written, quotes included; names still match case-insensitively."""
+    return {
+        quote_identifier(table): {
+            quote_identifier(column): type_ for column, type_ in table_columns.items()
+        }
+        for table, table_columns in columns.items()
+    }
 
 
 def ill_typed_sql_rule(expression: Expr, schema: Schema, dialect: DialectType) -> Expr:

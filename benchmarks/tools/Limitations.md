@@ -30,15 +30,15 @@ piece of work:
 
 FDM swizzles a foreign key into a reference to the related tuple.
 
-| Limitation                            | Why                                                                     |
-|---------------------------------------|-------------------------------------------------------------------------|
-| `FOREIGN_KEY_AGAINST_SCALAR`          | A reference is not compared with a key value.                           |
-| `FOREIGN_KEY_AS_VALUE`                | A reference is not computed with, aggregated, grouped or assigned.      |
-| `FOREIGN_KEY_ORDERED`                 | References have no order.                                               |
-| `FOREIGN_KEY_TO_NON_KEY`              | A reference only leads to the target table's key.                       |
-| `FOREIGN_KEYS_COMPARED_AS_REFERENCES` | Keys into different tables never compare equal (SQL compares raw ids).  |
-| `REFERENCE_NOT_ROW_COMPARABLE`        | A result attribute holding a reference is not comparable with SQL's id. |
-| `REFERENTIAL_INTEGRITY`               | FDM refuses to delete a referenced tuple or to refer to a missing one.  |
+| Limitation                            | Why                                                                          |
+|---------------------------------------|------------------------------------------------------------------------------|
+| `FOREIGN_KEY_AGAINST_SCALAR`          | A reference is not compared with a key value.                                |
+| `FOREIGN_KEY_AS_VALUE`                | A reference is not selected, computed with, aggregated, grouped or assigned. |
+| `FOREIGN_KEY_ORDERED`                 | References have no order.                                                    |
+| `FOREIGN_KEY_TO_NON_KEY`              | A reference only leads to the target table's key.                            |
+| `FOREIGN_KEYS_COMPARED_AS_REFERENCES` | Keys into different tables never compare equal (SQL compares raw ids).       |
+| `REFERENCE_NOT_ROW_COMPARABLE`        | A result attribute holding a reference is not comparable with SQL's id.      |
+| `REFERENTIAL_INTEGRITY`               | FDM refuses to delete a referenced tuple or to refer to a missing one.       |
 
 ### R3 No arbitrary rows: FQL relations are unordered, and cardinality is not assumed
 
@@ -49,6 +49,8 @@ FDM swizzles a foreign key into a reference to the related tuple.
 | `SCALAR_SUBQUERY_ROWS`    | Relies on the data holding at most one row.                       |
 | `EXISTS_OVER_AGGREGATE`   | Always true.                                                      |
 | `HAVING_WITHOUT_GROUP_BY` | FQL's ungrouped aggregate is one value, not a relation to filter. |
+
+The renderer raises `LIMIT_WITHOUT_ORDER` and `EXISTS_OVER_AGGREGATE`; the parser raises the others.
 
 ### R4 Relations are keyed mappings
 
@@ -62,12 +64,12 @@ FDM swizzles a foreign key into a reference to the related tuple.
 
 ### R5 No FDM counterpart
 
-| Limitation                  | Why                                                                                                      |
-|-----------------------------|----------------------------------------------------------------------------------------------------------|
-| `WILDCARD_WITH_EXPRESSIONS` | Without a schema the star is not expanded, so it cannot be combined with other outputs or with DISTINCT. |
-| `UNSUPPORTED_STATEMENT`     | ALTER (FDM has no schema to alter), GRANT, REVOKE, COMMIT, ROLLBACK.                                     |
-| `SCHEMA_QUALIFIED_TABLE`    | A dataset is one namespace of relations; it has no schemas.                                              |
-| `EXTRACT_TIMEZONE`          | FDM dates carry no timezone.                                                                             |
+| Limitation                  | Why                                                                                                                                                         |
+|-----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `WILDCARD_WITH_EXPRESSIONS` | Without a schema the star is not expanded, so it cannot be combined with other outputs or with DISTINCT, and a star reads one root only.                    |
+| `UNSUPPORTED_STATEMENT`     | ALTER (FDM has no schema to alter), GRANT, REVOKE, COMMIT, ROLLBACK.                                                                                        |
+| `SCHEMA_QUALIFIED_TABLE`    | A dataset is one namespace of relations; it has no schemas.                                                                                                 |
+| `EXTRACT_TIMEZONE`          | FDM dates carry no timezone.                                                                                                                                |
 
 ### R6 Dialect-specific SQL, and SQL that Python reads otherwise
 
@@ -97,6 +99,7 @@ Local, self-contained additions to the expression IR and its renderer.
 | Limitation               | SQL                                                                              | How to implement                                                                            |
 |--------------------------|----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
 | `SUBSTRING_BOUNDS`       | bounds that are no integer literals                                              | Render SQL-92's positions as a slice expression, e.g. `s[max(a - 1, 0):max(a - 1 + n, 0)]`. |
+| `EXPRESSION_TOO_DEEP`    | about 400 chained `+` or 600 chained `OR`                                        | Read a chain of one operator iteratively, as sqlglot does.                                  |
 | `UNSUPPORTED_EXPRESSION` | SQL-92 kinds (COALESCE, UPPER, TRIM, …), `DEFAULT` in SET, a fractional INTERVAL | Add one IR node + render per function. Each new name must be bound in `FQL_RUNTIME`.        |
 
 ### T2 Type conversions — a conversion layer in `fql_runtime.py`
@@ -127,6 +130,7 @@ of a table.
 |-----------------------------|-------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `ALIAS_COLUMN_LIST`         | `AS a(x, y)` on a table, derived table or CTE   | Before the optimizer, rewrite the list into aliases of the derived table's or CTE's select items, in order; for a table, take the column order from the dataset's SQL schema.               |
 | `CTE_NOT_INLINABLE`         | grouping / aggregating / renaming CTE           | Bind the CTE's FQL once and treat the name as a relation with the CTE's outputs as attributes.                                                                                              |
+| `DERIVED_TABLE_IN_WRITE`    | `FROM (SELECT …) AS d` in a write's subquery    | Run sqlglot's `eliminate_subqueries` on a write too, so that the derived table becomes a CTE as in a query.                                                                                 |
 | `SET_OPERATION`             | UNION / INTERSECT / EXCEPT [ALL], CORRESPONDING | Bind both sides, re-key each by its projected values (FQL's `union` / `intersect` / `minus` are key-based), then apply the operator. UNION ALL keeps duplicates, so it needs distinct keys. |
 | `SELECT_SUBQUERY_RECURSION` | scalar subquery in the SELECT list              | Evaluate a subquery that is not correlated once (bind it), and render a correlated one with `add_computed_per_value` per tuple instead of `add_computed` on the relation.                   |
 | `SUBQUERY_PER_ROW`          | correlated subquery evaluated per row           | Decorrelate: compute the subquery grouped by its correlation key once, then look up per row. Bind an uncorrelated one once.                                                                 |

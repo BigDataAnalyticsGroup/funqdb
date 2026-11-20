@@ -24,6 +24,7 @@ import black
 import pytest
 import sqlglot
 
+from benchmarks.tools.shared import code_language
 from benchmarks.tools.shared.code_language import CodeLanguage
 
 
@@ -99,6 +100,18 @@ def test_code_language_pretty_returns_sql_verbatim_on_a_generation_error(monkeyp
     code = "SELECT a FROM t"  # valid SQL that parses
 
     assert CodeLanguage.SQL.pretty(code) == code  # shown verbatim, no exception
+
+
+def test_code_language_pretty_reads_and_writes_sql_in_the_read_dialect(monkeypatch):
+    """SQL is parsed and printed in `SQL_READ_DIALECT`, the dialect the transpiler reads."""
+    monkeypatch.setattr(
+        code_language, "SQL_READ_DIALECT", "mysql"
+    )  # a dialect with backtick names
+    code = "SELECT `a b` FROM t"  # the default dialect cannot parse the backticks
+
+    pretty = CodeLanguage.SQL.pretty(code)  # format it in MySQL
+
+    assert pretty == "SELECT\n  `a b`\nFROM t"  # parsed, and printed with MySQL quotes
 
 
 def test_code_language_pretty_formats_python_with_black():

@@ -531,3 +531,12 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` *Reject what SQL's types make FQL read otherwise*
   `reject_ill_typed_sql` rejects what would silently give another result than SQL: a comparison across type families, a decimal literal against a float column or the reverse, a sub-day interval that does not directly shift a datetime, an interval divided or scaled by a value that is no whole number, and a cast to a date or datetime of a value that is neither a text literal nor of that type. Other ill-typed SQL is not looked for. A value of unknown type is trusted. Test: `tests/benchmarks/tools/parse/test_type_checks.py`.
+
+- `[✅]` *Parse a query into its IR*
+  `parse_query` reads the WITH, FROM, ON and WHERE clauses into a `Query` with a join tree, then SELECT, GROUP BY, HAVING, DISTINCT, ORDER BY, LIMIT and OFFSET. Foreign keys become reference reads under `Reference.ref_key`. Tests: `tests/benchmarks/tools/parse/test_query_parser.py`, `tests/benchmarks/tools/parse/test_join_tree_parser.py`, `tests/benchmarks/tools/parse/test_expression_parser.py`, `tests/benchmarks/tools/parse/test_cte.py`.
+
+- `[✅]` *Parse a write or DDL statement into its IR*
+  `parse_statement` makes an `Insert`, `Update`, `Delete`, `CreateTable` or `DropTable`. Test: `tests/benchmarks/tools/parse/test_statement_parser.py`.
+
+- `[✅]` *Read keys and references from the schema*
+  `Schema.reference_of` gives the reference of one foreign-key column, and `PrimaryKey.missing_from` the key columns that a column list does not name. Test: `tests/benchmarks/datasets/test_schema.py`.

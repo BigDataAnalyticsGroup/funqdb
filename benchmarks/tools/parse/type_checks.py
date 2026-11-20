@@ -24,7 +24,7 @@ statement as written and typed. Other ill-typed SQL is not looked for."""
 
 from sqlglot import Expr, exp
 
-from benchmarks.tools.ir.expressions import IntervalUnit
+from benchmarks.tools.ir.expressions import TIME_OF_DAY_PARTS, ExtractPart, IntervalUnit
 from benchmarks.tools.limitations import Limitation, UnsupportedSql
 from benchmarks.tools.parse.node_args import is_negative_literal
 
@@ -198,6 +198,17 @@ def _check_interval(interval: exp.Interval) -> None:
         )
 
 
+def _check_extract(extract: exp.Extract) -> None:
+    """Rejects a time-of-day part of a date, which ISO SQL refuses and a Python date lacks."""
+    part = ExtractPart.__members__.get(extract.this.name.upper())
+    if part in TIME_OF_DAY_PARTS and extract.expression.is_type(*_DATE_TYPES):
+        raise UnsupportedSql(
+            Limitation.DIALECT_SPECIFIC,
+            f"Unsupported {extract.sql()}: ISO SQL reads no {part.name} of a DATE, "
+            "and a Python date has none.",
+        )
+
+
 def _check_node(node: Expr) -> None:
     """Runs the check of `node`'s kind, if it has one."""
     match node:
@@ -217,3 +228,5 @@ def _check_node(node: Expr) -> None:
             _check_cast(node)
         case exp.Interval():
             _check_interval(node)
+        case exp.Extract():
+            _check_extract(node)

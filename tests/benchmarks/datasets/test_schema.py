@@ -65,6 +65,28 @@ def test_PrimaryKey_key_of_returns_value_for_one_column_and_tuple_for_several():
     assert PrimaryKey(("line", "id")).key_of(row) == (2, 7)  # order matters
 
 
+def test_PrimaryKey_missing_from_returns_absent_key_columns_in_key_order():
+    """An INSERT has to supply every key column; `missing_from` names the others."""
+    key = PrimaryKey(("a", "b"))  # a composite key
+
+    assert key.missing_from(("a", "b", "c")) == ()  # every key column present
+    assert key.missing_from(("b", "c")) == ("a",)  # `a` not supplied
+    assert key.missing_from(()) == ("a", "b")  # nothing supplied, in key order
+
+
+def test_Schema_reference_of_returns_None_for_plain_column():
+    """A plain column, or a table without references, has no reference."""
+    assert SCHEMA.reference_of("movie", "title") is None  # a plain column
+    assert SCHEMA.reference_of("genre", "id") is None  # a table without references
+
+
+def test_Schema_reference_of_returns_ref_key_and_table():
+    """A foreign key gives the name it is swizzled into and its target table."""
+    reference = SCHEMA.reference_of("movie", "genre_id")  # a renamed reference
+
+    assert reference == Reference("genre", "genre")  # the name, then the table
+
+
 def test_Schema_references_of_returns_the_references_without_their_columns():
     """The references of a table in declaration order, without the foreign-key columns;
     none for a table without references."""

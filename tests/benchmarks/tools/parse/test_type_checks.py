@@ -96,6 +96,14 @@ def filtered(condition: str) -> str:
         ),  # the column a subquery selects
         filtered("t.id = (SELECT MAX(y.name) FROM t AS y)"),  # a scalar subquery
         selected("CASE t.id WHEN 'x' THEN 1 END"),  # a base value against its WHEN
+        selected(
+            "EXTRACT(HOUR FROM t.made)"
+        ),  # DuckDB answers 0, a Python date has no hour
+        selected("EXTRACT(MINUTE FROM t.made)"),  # no minute either
+        selected("EXTRACT(SECOND FROM t.made)"),  # no second either
+        selected(
+            "EXTRACT(HOUR FROM DATE '2020-01-01')"
+        ),  # a date literal, typed by its CAST
     ],
 )
 def test_reject_ill_typed_sql_rejects_as_dialect_specific(sql: str):
@@ -196,6 +204,9 @@ def test_reject_ill_typed_sql_rejects_an_interval_python_shifts_otherwise(value:
         selected("INTERVAL '1' DAY TO HOUR"),  # its own limitation refuses a span
         selected("CAST(t.made AS DATE)"),  # already of that type
         selected("CAST('2020-01-01' AS DATE)"),  # the literal form of a date
+        selected("EXTRACT(YEAR FROM t.made)"),  # a date holds its year
+        selected("EXTRACT(HOUR FROM t.shown)"),  # a datetime holds its hour
+        selected("EXTRACT(HOUR FROM t.clock)"),  # a time holds its hour
     ],
 )
 def test_reject_ill_typed_sql_keeps_what_fql_reads_as_sql_does(sql: str):

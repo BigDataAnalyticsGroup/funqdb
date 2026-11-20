@@ -100,7 +100,7 @@ class Limitation(Enum):
     FOREIGN_KEY_AS_VALUE = (
         _REJECTED,
         "A foreign key is swizzled into a reference in FDM, not the key value SQL "
-        "computes with, aggregates, groups or assigns.",
+        "selects, computes with, aggregates, groups or assigns.",
     )
     FOREIGN_KEY_ORDERED = (
         _REJECTED,
@@ -152,7 +152,8 @@ class Limitation(Enum):
     WILDCARD_WITH_EXPRESSIONS = (
         _REJECTED,
         "A star the schema does not expand cannot be combined with other SELECT "
-        "expressions or with DISTINCT.",
+        "expressions or with DISTINCT, and reads all attributes of the root only, "
+        "so a qualified star must name the only root.",
     )
     SCHEMA_QUALIFIED_TABLE = (
         _REJECTED,
@@ -210,6 +211,11 @@ class Limitation(Enum):
         "SUBSTRING translates only integer literal bounds, which fix the slice when "
         "transpiling.",
     )
+    EXPRESSION_TOO_DEEP = (
+        _TRANSPILER,
+        "The parser reads one nested expression per Python call, so an expression "
+        "nested some hundred levels deep exceeds Python's recursion limit.",
+    )
     INEXACT_CAST = (
         _TRANSPILER,
         "Only a CAST to DOUBLE converts as SQL does: int() truncates where SQL "
@@ -235,6 +241,11 @@ class Limitation(Enum):
         _TRANSPILER,
         "Only a CTE that filters a single table is inlined into the query "
         "reading it; a grouping, aggregating or renaming one is not.",
+    )
+    DERIVED_TABLE_IN_WRITE = (
+        _TRANSPILER,
+        "A derived table in FROM translates only as the CTE the optimizer turns it "
+        "into, and a write statement does not go through the optimizer.",
     )
     OUTER_JOIN = (
         _TRANSPILER,

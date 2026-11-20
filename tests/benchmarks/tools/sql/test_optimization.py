@@ -34,6 +34,7 @@ from benchmarks.tools.sql.optimization import (
     OPTIMIZER_RULES,
     factor_common_conjuncts,
     ill_typed_sql_rule,
+    quoted_schema,
 )
 
 
@@ -191,3 +192,31 @@ def test_optimizer_rules_keep_a_star_of_a_table_without_columns():
     )  # raises "requires star-free selections" from 30.21 on
 
     assert optimized.find(exp.Star) is not None  # the star stays unexpanded
+
+
+def test_quoted_schema_keeps_the_quotes_of_a_column_name():
+    """sqlglot reads a plain key as SQL, so `"quoted"` would become `quoted`."""
+    columns = {"t": {"id": "INT", '"quoted"': "INT"}}  # a name with quotes in it
+    ast = sqlglot.parse_one("SELECT * FROM t")  # the star expands to both columns
+
+    schema = quoted_schema(columns)  # the member under test
+    optimized = optimize(
+        ast, schema=schema, dialect=OPTIMIZER_DIALECT, rules=OPTIMIZER_RULES
+    )  # as the pipeline optimizes a query
+    names = [column.alias_or_name for column in optimized.selects]  # the outputs
+
+    assert names == ["id", '"quoted"']  # the quotes kept, not stripped
+
+
+def test_quoted_schema_still_matches_names_case_insensitively():
+    """A quoted key would match only its own case in a case-sensitive dialect."""
+    columns = {"Orders": {"First Name": "TEXT"}}  # names in mixed case
+    ast = sqlglot.parse_one('SELECT "first name" FROM orders')  # written in lower case
+
+    schema = quoted_schema(columns)  # the member under test
+    optimized = optimize(
+        ast, schema=schema, dialect=OPTIMIZER_DIALECT, rules=OPTIMIZER_RULES
+    )  # resolves the column, or raises an unknown-column error
+    column = optimized.find(exp.Column)  # the one column read
+
+    assert column.type.this is exp.DataType.Type.TEXT  # typed from the schema

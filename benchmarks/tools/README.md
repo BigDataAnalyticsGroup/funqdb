@@ -9,10 +9,9 @@ See [report/README.md](report/README.md) for the reports. This file describes th
 The transpiler changes SQL into FQL. It shows which SQL FQL can already express.
 It is not an SQL interface for funqDB.
 
-So far, the transpiler consists of the IR, the form in which the transpiler holds one SQL statement,
-and of the checks and rewrites that run on the SQL before the parser reads it.
-A parser and a renderer are planned. The parser will make the IR from SQL with the library sqlglot.
-The renderer will write the IR as FQL.
+So far, the transpiler consists of the part up to the IR: SQL goes in, and a `Statement` comes out.
+A renderer, which will write the IR as FQL, is planned. So is the pipeline, which will call the stages below in order:
+until then, no code calls them together.
 
 
 ### Files
@@ -24,6 +23,12 @@ The renderer will write the IR as FQL.
 | `sql/optimization.py`        | `factor_common_conjuncts`, and `OPTIMIZER_RULES`: sqlglot's rules, adapted.    |
 | `parse/sql_baseline.py`      | `reject_non_baseline_sql`: an allow-list of the SQL the transpiler looks at.   |
 | `parse/type_checks.py`       | `reject_ill_typed_sql`: rejects typed SQL that FQL would read otherwise.       |
+| `parse/statement_parser.py`  | `parse_statement`: the current entry point; returns a `Statement`.             |
+| `parse/query_parser.py`      | `parse_query`: returns a SELECT as a `Query`.                                  |
+| `parse/join_tree_parser.py`  | `read_from`, `split_conditions`; `build_join_tree` returns the `JoinTree`.     |
+| `parse/expression_parser.py` | `parse_where_expression`, `parse_value_expression` and others: `Expression`s.  |
+| `parse/cte.py`               | `CteDefinition`: a CTE as the query that reads it inlines it.                  |
+| `parse/parse_state.py`       | `ParseState`: what the parser knows about a query beyond its IR.               |
 | `parse/node_args.py`         | Helpers for sqlglot nodes: `arg_names`, `sql_conjuncts`.                       |
 | `ir/statements.py`           | The IR of a statement: `Statement` and its subtypes.                           |
 | `ir/query.py`                | The IR of a query: `Query`, `Output`, `OrderKey`, `Limit`, `GeneratedColumns`. |
@@ -41,6 +46,7 @@ The renderer will write the IR as FQL.
 | SQL Parsing      | sqlglot                                       | An sqlglot AST.                                |
 | Baseline check   | `parse/sql_baseline.py`                       | `UnsupportedSql` for SQL outside the baseline. |
 | SQL Optimization | `sql/optimization.py`, `parse/type_checks.py` | A normalized AST.                              |
+| IR Parsing       | `parse/`                                      | A `Statement` from `ir/`.                      |
 
 1. **SQL Parsing.** sqlglot reads the text in its default dialect (`SQL_READ_DIALECT`).
 2. **Baseline check.** The baseline is ISO SQL-92, plus what the JOB and TPC-H queries use,
@@ -50,14 +56,43 @@ The renderer will write the IR as FQL.
 3. **SQL Optimization.** `factor_common_conjuncts` moves conjuncts out of an OR,
    then sqlglot's rules normalize the SELECT, in the SQLite dialect, which resolves names case-insensitively.
    After `qualify`, every column names its alias.
+   The schema reaches sqlglot through `quoted_schema`, so that a name with quotes in it, such as `"quoted"`, keeps them.
    The rule `ill_typed_sql_rule` then runs the type checks on the statement as written,
    because later rules convert values.
    Other ill-typed SQL is not looked for. `OPTIMIZER_RULES` leaves out two of sqlglot's rules:
    - `unnest_subqueries` turns EXISTS and IN into a LEFT JOIN on a CTE, which do not translate.
      The IR holds the subquery instead.
    - `optimize_joins` raises a `Cycle error` when a subquery reuses an outer alias.
+4. **IR Parsing.** `parse_statement` reads the AST:
+   - `parse_query` reads FROM, ON and WHERE, and builds the join tree (see below).
+   - It then reads the remaining conditions, SELECT, GROUP BY, HAVING, DISTINCT, ORDER BY and LIMIT in this order.
+   - `Update` and `Delete` read their rows through a `Query`.
+     `Insert` holds its values, and `Update` holds its assignments.
 
-The planned parser will read the normalized AST into a `Statement` from `ir/`.
+### Write statements
+
+Stage 3 applies only to a SELECT. A write statement skips the optimizer,
+so `parse_statement` does this part itself:
+it normalizes the names, qualifies and types the statement, and runs the type checks.
+
+A value that INSERT or UPDATE writes must have exactly the type of its column:
+`2` into a DOUBLE is rejected, as SQL would convert it and FQL stores it as it is.
+A literal key written into a foreign key becomes a `ReferencedTupleExpression`, the tuple that the key names.
+
+### The schema
+
+The parser reads a `Schema` from `benchmarks.datasets`. It has three parts:
+
+| Part           | Needed for                                                       | Without it                                                                                                                                                                                                |
+|----------------|------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `references`   | Optional. Reading a foreign key as a reference, and join edges.  | The column is a plain value: its equality stays a filter, and both aliases stay roots.                                                                                                                    |
+| `primary_keys` | Required for INSERT, and for the target table of each reference. | INSERT raises `TABLE_WITHOUT_PRIMARY_KEY`, and a join along the reference raises `FOREIGN_KEY_TO_NON_KEY`. UPDATE does not protect the key.                                                               |
+| `columns`      | Optional. SQL types, star expansion and unqualified columns.     | Every type is unknown and trusted, so no type check refuses it. A star stays unexpanded, an unqualified column of several tables raises `OptimizeError`, and INSERT and UPDATE do not check column names. |
+
+A dataset without a reference database has empty `columns`.
+Table and column names in the schema must be lower case: a write lowercases the unquoted names of its statement
+and then looks them up as written, so a mixed-case name such as `Orders` is not found.
+
 
 ### The IR
 
@@ -110,18 +145,24 @@ An expression that a query uses twice gets one column.
 | References | `TupleIdentityExpression`: two reads lead to one tuple. `ReferencedTupleExpression`: the tuple a written key names. |
 
 A foreign key is no value in the IR. A `Column` with `is_reference_column` reads the reference under its `ref_key`,
-and two references compare by the tuple they lead to (`is`, not `==`).
+and two references into one table compare by the tuple they lead to (`is`, not `==`); the parser rejects
+an equality of references into different tables.
+A foreign key compared with the key of its target table, for example in a correlated subquery,
+becomes a `TupleIdentityExpression` with the tuple of that key.
+
+Names, such as output names, INSERT columns and LIKE patterns, reach the IR as written.
+The renderer must write each one with `repr()`, so that no name becomes code.
 
 A correlated column keeps the `Path` of the enclosing query: `Path.depth` tells which query it reads.
 
 ### From alias graph to join tree
 
 SQL states a join as equalities between aliases. FDM follows references from a tuple.
-So `AliasGraph.tree()` changes the equalities into a tree, with at most one join.
+So the parser changes the equalities into a tree, with at most one join.
 
 #### Step 1: read the equalities
 
-The parser (planned) will sort each condition of FROM, ON and WHERE:
+`split_conditions` sorts each condition of FROM, ON and WHERE:
 
 | Condition                                | Result               | Meaning                                         |
 |------------------------------------------|----------------------|-------------------------------------------------|
@@ -129,7 +170,8 @@ The parser (planned) will sort each condition of FROM, ON and WHERE:
 | A foreign key = a foreign key, one table | `ForeignKeyEquality` | The two references lead to one tuple.           |
 | Any other condition                      | Stays a condition    | A filter on the query.                          |
 
-An `AliasGraph` holds the edges and the foreign-key equalities. `AliasGraph.tree()` then does steps 2 to 6.
+`build_join_tree` removes an edge that is stated twice and makes an `AliasGraph`.
+`AliasGraph.tree()` then does steps 2 to 6.
 
 #### Step 2: attach the foreign-key equalities
 
@@ -222,7 +264,8 @@ A column reads along such a path: `t.year` is `mc.movie.year`. `path_of` gives t
 
 Each removed edge gives at most one `TupleIdentityExpression`, in stated order (see step 4 for the exception).
 An identity that is trivial or that repeats another is left out.
-`Query.condition` puts the identities in front of the stated conjuncts.
+`parse_query` sets the WHERE conjuncts as `Query.stated_condition`.
+`Query.condition` puts the identities in front of them.
 
 #### The result
 
@@ -250,6 +293,7 @@ It is empty when a table has several members, as FQL refuses a relation entered 
 
 `tests/benchmarks/tools/` has the same layout as this directory, with at most one test file per source file.
 Modules of plain dataclasses, such as `ir/paths.py`, have none.
+`tests/benchmarks/tools/framework/parsing.py` holds the helpers that parse SQL for a test.
 The section `## SQL transpiler` of `SPEC.md` names the tests of each feature.
 
 ### Limitations
@@ -262,5 +306,6 @@ The limitations are categorized as:
   due to limitations in its implementation or design.
 - `limitation (fql)`: SQL that cannot be expressed in FQL due to limitations in FQL or the functional data model itself.
 
-Invalid SQL is catalogued, or raises `ValueError` or, for a name that does not resolve,
+The parser assumes SQL that a database accepts; it does not look for every invalid statement.
+Invalid SQL that it meets is catalogued, or raises `ValueError` or, for a name that does not resolve,
 sqlglot's `OptimizeError`.

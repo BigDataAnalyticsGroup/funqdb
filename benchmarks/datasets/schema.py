@@ -53,6 +53,10 @@ class PrimaryKey:
         values = tuple(row[column] for column in self.columns)
         return values[0] if len(values) == 1 else values
 
+    def missing_from(self, columns: tuple[str, ...]) -> tuple[str, ...]:
+        """The key columns `columns` does not name, in key order."""
+        return tuple(column for column in self.columns if column not in columns)
+
 
 @dataclass(frozen=True)
 class Schema:
@@ -62,6 +66,11 @@ class Schema:
     references: References
     primary_keys: dict[str, PrimaryKey]
     columns: SqlSchema
+
+    def reference_of(self, table: str, column: str) -> Reference | None:
+        """The reference that the foreign-key `column` of `table` is swizzled into, or
+        `None` for a plain column."""
+        return self.references.get(table, {}).get(column)
 
     def references_of(self, table: str) -> tuple[Reference, ...]:
         """The references of the foreign keys of `table` in declaration order, on purpose without their column names."""

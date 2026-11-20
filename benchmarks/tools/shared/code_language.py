@@ -23,6 +23,8 @@ from enum import StrEnum
 import black
 import sqlglot
 
+from benchmarks.tools.parse.sql_baseline import SQL_READ_DIALECT
+
 
 class CodeLanguage(StrEnum):
     """A language code is shown in; the value is the page highlighter's tag."""
@@ -47,8 +49,12 @@ def _pretty_python(code: str) -> str:
 
 def _pretty_sql(code: str) -> str:
     try:
-        asts = sqlglot.parse(code)
-        pretty = ";\n".join(ast.sql(pretty=True) for ast in asts if ast is not None)
+        asts = sqlglot.parse(code, read=SQL_READ_DIALECT)
+        pretty = ";\n".join(
+            ast.sql(dialect=SQL_READ_DIALECT, pretty=True)
+            for ast in asts
+            if ast is not None
+        )
     except Exception:
         return code
     # sqlglot parses comment-only SQL to no statement at all
