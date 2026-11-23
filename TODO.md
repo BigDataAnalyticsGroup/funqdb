@@ -157,20 +157,26 @@
   joined relation such as `"O"`): raises `TypeError: unhashable type: 'TF'` because TFs define
   `__eq__` but no `__hash__`. Reproduction:
   `c = TF({"n": 1}); group_by(RF({1: TF({"customer": c}), 2: TF({"customer": c})}), "customer").result`.
-  Decide identity vs. content grouping there; content grouping would make `AggregateBox` edges
-  unsound. Blocks executing every `AggregateBox` that groups by tuples (011).
-- [ ] `AggregateBox` follow-ups (011, see its DECISION.md): derive boxes from FQL pipelines
-  (`LogicalPlan` -> `JoinGraph`; likely needs a node kind pointing at a plan subtree instead of a
-  live RF); derive box edges automatically from reference-valued grouping keys; execute a box
-  (`group_by_aggregate(join(...))`, with grouping keys carried as result attributes and `join`
-  accepting a `JoinGraph` / edge list instead of a DBF); aggregation without fan-out over the
-  flattened join; render nested boxes (ASCII / `funqdb-viz`); serialize the graph; edges with join
-  predicates; subqueries / correlated edges across box boundaries; edges through a grouping key of
-  an inner box; selection predicates on nodes / boxes (WHERE / HAVING); key-preserving `project`
-  as a node annotation.
+  Decide identity vs. content grouping there; content grouping would make `View` edges
+  unsound. Blocks executing every `View` that groups by tuples (011).
+- [ ] `View` follow-ups (011 and 015, see their DECISION.md): derive views, node filters and join
+  predicates from FQL pipelines or the transpiler IR (`benchmarks/tools/ir/query.py`:
+  `stated_condition`, `having_condition`, `outputs`; `LogicalPlan` -> `JoinGraph` likely needs a
+  node kind pointing at a plan subtree instead of a live RF); derive view edges automatically from
+  reference-valued grouping keys; execute a view (`group_by_aggregate(join(...))`, with grouping
+  keys carried as result attributes and `join` accepting a `JoinGraph` / edge list instead of a
+  DBF; node filters, join predicates and projections included); aggregation without fan-out over
+  the flattened join; render nested views and filters (ASCII / `funqdb-viz`); serialize the graph;
+  subqueries / correlated edges across view boundaries; edges through a grouping key of an inner
+  view; edges from a pass-through view; attribute checks for filters on base relations (needs a
+  schema); split a top-level `And` of single-relation parts into node filters.
+- [ ] `JoinGraph.from_dbf` ignores a DBF's `JoinPredicate`s (from `add_join_predicate`). Wrapping
+  them into a `View` (015) needs care: a view's join predicates must declare at least two relations
+  and a built-in structured one must read exactly what it declares, while `add_join_predicate` allows one
+  relation and `JoinPredicate.evaluate` lets a predicate read more or less than it declares.
 - [ ] `repr()` of an `RF` raises `TypeError: __repr__ returned non-string (type ABCMeta)`, so
-  any `JoinGraph` / `AggregateBox` repr fails too (unreadable pytest failure output).
-- [ ] `fql/plan/join_graph.py` lacks a module docstring.
+  any `JoinGraph` / `View` repr fails too (unreadable pytest failure output).
+- [x] `fql/plan/join_graph.py` lacks a module docstring (added in 015).
 - [ ] promote the definedness check onto the FDM type (`tf.defined(path)` /
   `tf.get(path, default)`), deferred in 004 until a third consumer appears;
   with `Attr` (007) there are three (predicates, aggregates, expressions).

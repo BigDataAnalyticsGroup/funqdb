@@ -18,21 +18,45 @@
 #
 #
 
+"""The join graph: relations as nodes, references as edges, plus node filters and
+views (boxes around subgraphs with join predicates, a grouping or a projection).
+
+A logical description of a query; `join` and `subdatabase` read only its
+topology. Designs: `docs/changes/011-join-graph-aggregate-boxes/DECISION.md`
+and `docs/changes/015-join-graph-views/DECISION.md`.
+"""
+
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fdm.attribute_functions import RF, DBF
-from fdm.schema import ForeignValueConstraint
-from fql.predicates.predicates import _split_attr_path
+from fdm.schema import ForeignValueConstraint, JoinPredicate
+from fql.predicates.predicates import (
+    And,
+    ComparisonPredicate,
+    Eq,
+    Exists,
+    Gt,
+    Gte,
+    In,
+    Like,
+    Lt,
+    Lte,
+    Missing,
+    Not,
+    Or,
+    Ref,
+    _split_attr_path,
+)
 
 if TYPE_CHECKING:
     from fql.operators.aggregates import AggregationFunction
 
-# Type aliases — all are `str` at runtime, but the alias names make
+# Type aliases — the first three are `str` for the type checker, but the alias names make
 # every signature in this file (and in operators that import these
 # types) self-documenting about which kind of name it is.
 #
@@ -43,20 +67,24 @@ if TYPE_CHECKING:
 # variable name used to hide that difference; these aliases surface
 # it.
 # `AttributePath` is a dot- or `__`-separated path into the rows of a
-# joined subgraph, e.g. `"O.customer"` (relation `O`, attribute
-# `customer`) — used by `AggregateBox`, whose output *names* are
-# `AttributeName`s.
+# joined subgraph, e.g. `"O.customer"` (relation `O`, attribute `customer`)
+# — used by `View`, whose output *names* are `AttributeName`s.
+# `FilterPredicate` is a node filter or the condition of a `JoinPredicate`:
+# a structured `Predicate` or a plain callable (e.g. a lambda), as
+# `filter_values` accepts; a `Predicate` is callable too, so one callable
+# type covers both.
 type RelationName = str
 type AttributeName = str
 type AttributePath = str
+type FilterPredicate = Callable[[Any], Any]
 
 
 @dataclass(frozen=True)
 class Node:
-    """A named node in the graph. `name` is a relation name or, for an
-    `AggregateBox`, the name of the box's result relation.
+    """A named node in the graph. `name` is a relation name or, for a
+    `View`, the name of the view's result relation.
 
-    Shared base of `JoinNode` (a base relation) and `AggregateBox`; a bare
+    Shared base of `JoinNode` (a base relation) and `View`; a bare
     `Node` is neither and only carries a name (e.g. in hand-built test graphs).
     """
 
@@ -71,47 +99,71 @@ class JoinNode(Node):
 
 
 @dataclass(frozen=True)
-class AggregateBox(Node):
-    """A box around a subgraph: groups the joined subgraph and aggregates each group.
+class View(Node):
+    """A view around a subgraph: the joined subgraph, filtered, then grouped,
+    projected or passed on.
 
-    The box's result is again a relation, so the box is a node of the
+    The view's result is again a relation, so the view is a node of the
     enclosing graph and can be joined over (see `JoinGraph.add_edge`), and a
-    subgraph may itself contain boxes (nesting). This is a *logical*
-    representation; nothing here executes a box.
+    subgraph may itself contain views (nesting). This is a *logical*
+    representation; nothing here executes a view.
 
-    `group_keys` maps an output name to an attribute path into the rows of the
-    joined subgraph, whose top-level keys are relation names (e.g.
-    `customer="O.customer"`, or `"O"` for the tuples of `O` themselves);
-    `aggregates` maps an output name to an aggregation over such a path
-    (e.g. `revenue=Sum("L.price")`). The output attributes are the
-    grouping-key names plus the aggregate names.
+    Paths address the rows of the joined subgraph, whose top-level keys are
+    relation names (e.g. `"O.customer"`, or `"O"` for the tuples of `O`):
 
-    Meaning (for a later executor): with grouping keys
-    `group_by_aggregate(join(subgraph), *paths, **aggregates)`, without
-    aggregates a DISTINCT projection (`is_projection()`), without grouping
-    keys a global aggregate (`aggregate(...)`, one result tuple). Not
-    executable today: `group_by` cannot group by tuples, and
-    `group_by_aggregate` does not write the grouping keys into the result
-    tuples. Box edges presuppose grouping by tuple identity.
+    - `join_predicates`: `JoinPredicate`s over several relations of the
+      subgraph (a predicate on one relation belongs on that node, see
+      `JoinGraph.add_filter`).
+    - `group_keys` / `aggregates`: grouping (011). With grouping keys and no
+      aggregates a DISTINCT projection (`is_distinct()`); with aggregates and
+      no grouping keys a global aggregate (one result tuple).
+    - `projection`: named output paths, one output tuple per joined row (no
+      DISTINCT). Projection and grouping exclude each other.
+
+    Output names: the projection names, else the grouping keys and
+    aggregates, else (pass-through view) the subgraph's relation names.
+
+    Meaning (for a later executor): (1) rows = join of the subgraph along its
+    own edges; (2) a row is kept iff each node's part satisfies that node's
+    filters and the row satisfies all join predicates (two-valued, as
+    `satisfies` evaluates filters: a comparison on a missing attribute is
+    false; `Missing` / `Not` hold there); (3) then grouping, or projection, or
+    neither. The keys of a projection view's result tuples are left to the
+    executor (a joined row has no single key). Not executable today:
+    `group_by` cannot group by tuples, and `group_by_aggregate` does not write
+    the grouping keys into the result tuples. Edges from a grouping view
+    presuppose grouping by tuple identity.
 
     Validation runs once, at construction. Details, limitations and the
-    rejected alternatives: `docs/changes/011-join-graph-aggregate-boxes/DECISION.md`.
+    rejected alternatives: `docs/changes/011-join-graph-aggregate-boxes/DECISION.md`
+    and `docs/changes/015-join-graph-views/DECISION.md`.
     """
 
     subgraph: JoinGraph
     group_keys: dict[AttributeName, AttributePath] = field(default_factory=dict)
     aggregates: dict[AttributeName, AggregationFunction] = field(default_factory=dict)
+    join_predicates: list[JoinPredicate] = field(default_factory=list)
+    projection: dict[AttributeName, AttributePath] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        """Validate the box against its subgraph.
+        """Validate the view against its subgraph.
 
-        Rules: the subgraph is non-empty; grouping keys and aggregates are not
-        both empty; the box name and all output names are single non-empty
-        segments (no `.` / `__`) and output names are unique; every path starts
-        with a relation of the subgraph and, if that relation is an inner box,
-        continues with one of its output names; every aggregate is an
-        `AggregationFunction`, and only `Count` among the built-ins may have
-        no attribute.
+        Rules:
+
+        - the subgraph is non-empty;
+        - projection and grouping (grouping keys / aggregates) exclude each
+          other;
+        - the view name and all named outputs are single non-empty segments
+          (no `.` / `__`), and output names are unique;
+        - every path starts with a relation of the subgraph and, if it
+          continues into an inner view, its next segment is one of the inner
+          view's output names (through inner views that pass rows on, at any
+          depth);
+        - every aggregate is an `AggregationFunction`, and only `Count` among
+          the built-ins may have no attribute;
+        - every join predicate is a `JoinPredicate` declaring at least two
+          relations of the subgraph, and a built-in structured one reads
+          exactly the relations it declares.
 
         @raises ValueError: If a rule is violated; each rule has its own message.
         """
@@ -120,28 +172,32 @@ class AggregateBox(Node):
         from fql.operators.aggregates import AggregationFunction
 
         if not self.subgraph.nodes:
-            raise ValueError(f"Box '{self.name}' needs a non-empty subgraph")
-        if not self.group_keys and not self.aggregates:
+            raise ValueError(f"View '{self.name}' needs a non-empty subgraph")
+        if self.projection and (self.group_keys or self.aggregates):
             raise ValueError(
-                f"Box '{self.name}' needs grouping keys or aggregates (or both)"
+                f"View '{self.name}' has a projection and a grouping; "
+                f"use one of them (or an outer view)"
             )
         clashes: set[AttributeName] = set(self.group_keys) & set(self.aggregates)
         if clashes:
             raise ValueError(
-                f"Box '{self.name}': output names used twice: {sorted(clashes)}"
+                f"View '{self.name}': output names used twice: {sorted(clashes)}"
             )
-        # the box name and the output names become path segments
-        # (`"A.revenue"` in an enclosing box) and output names become
-        # `ref_key`s, so each must be a single non-empty segment
-        self._check_name("box name", self.name)
-        for output_name in self.output_names():
+        # the view name and the named outputs become path segments
+        # (`"A.revenue"` in an enclosing view) and output names become
+        # `ref_key`s, so each must be a single non-empty segment; the outputs of
+        # a pass-through view are relation names of the subgraph, not checked
+        self._check_name("view name", self.name)
+        for output_name in [*self.group_keys, *self.aggregates, *self.projection]:
             self._check_name("output name", output_name)
-        for output_name, path in self.group_keys.items():
+        for output_name, path in [*self.group_keys.items(), *self.projection.items()]:
             self._check_path(output_name, path)
+        for index, join_predicate in enumerate(self.join_predicates):
+            self._check_join_predicate(index, join_predicate)
         for output_name, aggregation in self.aggregates.items():
             if not isinstance(aggregation, AggregationFunction):
                 raise ValueError(
-                    f"Box '{self.name}': aggregate '{output_name}' is not an "
+                    f"View '{self.name}': aggregate '{output_name}' is not an "
                     f"AggregationFunction: {aggregation!r}"
                 )
             if aggregation.attribute is not None:
@@ -151,61 +207,146 @@ class AggregateBox(Node):
             # would aggregate the joined rows themselves
             elif aggregation.op_name not in (None, "count"):
                 raise ValueError(
-                    f"Box '{self.name}': aggregate '{output_name}' needs an "
+                    f"View '{self.name}': aggregate '{output_name}' needs an "
                     f"attribute: {aggregation!r}"
                 )
 
     def _check_name(self, kind: str, name: RelationName | AttributeName) -> None:
         """Check that `name` is a single non-empty path segment.
 
-        @param kind: What the name is (`"box name"` / `"output name"`), for the
+        @param kind: What the name is (`"view name"` / `"output name"`), for the
             error message.
         @param name: The name to check.
         @raises ValueError: If `name` is empty or contains `.` or `__`.
         """
         if not name or "." in name or "__" in name:
             raise ValueError(
-                f"Box '{self.name}': {kind} {name!r} must be "
+                f"View '{self.name}': {kind} {name!r} must be "
                 f"non-empty and contain neither '.' nor '__'"
             )
 
-    def _check_path(self, output_name: AttributeName, path: AttributePath) -> None:
-        """Check that `path` starts with a relation of the subgraph and, if that
-        relation is an inner box, continues with one of the box's output names.
+    def _check_path(self, owner: str, path: AttributePath) -> None:
+        """Check that `path` starts with a relation of the subgraph and, if it
+        continues into an inner view, that its next segment is one of the inner
+        view's output names.
 
-        @param output_name: The grouping-key or aggregate name the path belongs
-            to (only used in error messages).
+        @param owner: What the path belongs to: an output name, a join-predicate
+            label (`"join predicate 0"`) or `"filter"` (only used in error
+            messages).
         @param path: The attribute path to check.
         @raises ValueError: If the first segment is not a subgraph node, or the
-            second segment is not an output name of the inner box it names.
-            An empty segment raises `_split_attr_path`'s own `ValueError`.
+            path continues into an inner view and its next segment is not an
+            output name of that inner view. Through an inner view that passes
+            rows on, whose outputs are relations again, the rest of the path is
+            checked the same way. An empty segment raises `_split_attr_path`'s
+            own `ValueError`.
         """
         segments: list[str] = _split_attr_path(path)
         inner: Node | None = self.subgraph.nodes.get(segments[0])
         if inner is None:
             raise ValueError(
-                f"Box '{self.name}': path {path!r} of '{output_name}' does not "
+                f"View '{self.name}': path {path!r} of '{owner}' does not "
                 f"start with a relation of the subgraph {sorted(self.subgraph.nodes)}"
             )
-        # an inner box's output names are known exactly, so a misspelt
+        if not isinstance(inner, View) or len(segments) == 1:
+            return
+        # an inner view's output names are known exactly, so a misspelt
         # attribute of it can be caught here (base relations have no schema)
-        if (
-            isinstance(inner, AggregateBox)
-            and len(segments) > 1
-            and segments[1] not in inner.output_names()
-        ):
+        if segments[1] not in inner.output_names():
             raise ValueError(
-                f"Box '{self.name}': path {path!r} of '{output_name}' names no "
-                f"output of inner box '{inner.name}': {inner.output_names()}"
+                f"View '{self.name}': path {path!r} of '{owner}' names no "
+                f"output of inner view '{inner.name}': {inner.output_names()}"
+            )
+        # the outputs of an inner view that passes rows on are its subgraph's
+        # relations, so the rest of the path is checked one level further down
+        if inner.passes_rows_on():
+            inner._check_path(owner, ".".join(segments[1:]))
+
+    def _check_join_predicate(self, index: int, join_predicate: JoinPredicate) -> None:
+        """Check one join predicate against the subgraph.
+
+        @param index: Position of the predicate in `join_predicates` (for
+            error messages).
+        @param join_predicate: The predicate to check.
+        @raises ValueError: If it is no `JoinPredicate`, declares fewer than two
+            distinct relations or one outside the subgraph, or (built-in
+            structured predicates only) reads a path that `_check_path` rejects
+            or other relations than it declares. Duplicate declared relations
+            count once.
+        """
+        label: str = f"join predicate {index}"
+        if not isinstance(join_predicate, JoinPredicate):
+            raise ValueError(
+                f"View '{self.name}': {label} is not a JoinPredicate: "
+                f"{join_predicate!r}"
+            )
+        declared: set[RelationName] = set(join_predicate.relations)
+        if len(declared) < 2:
+            raise ValueError(
+                f"View '{self.name}': {label} must declare at least two relations "
+                f"of the subgraph, declares {sorted(declared)}; a predicate on one "
+                f"relation belongs on that node (JoinGraph.add_filter on the "
+                f"subgraph, with paths relative to its tuples: 'O.date' becomes "
+                f"'date')"
+            )
+        unknown: set[RelationName] = declared - set(self.subgraph.nodes)
+        if unknown:
+            raise ValueError(
+                f"View '{self.name}': {label} declares relations outside the "
+                f"subgraph {sorted(self.subgraph.nodes)}: {sorted(unknown)}"
+            )
+        # a lambda or a user-defined predicate cannot be inspected (None)
+        paths: list[AttributePath] | None = _predicate_paths(join_predicate.predicate)
+        if paths is None:
+            return
+        for path in paths:
+            self._check_path(label, path)
+        # a built-in structured predicate must read exactly what it declares
+        read_relations: set[RelationName] = {
+            _split_attr_path(path)[0] for path in paths
+        }
+        if read_relations != declared:
+            raise ValueError(
+                f"View '{self.name}': {label} reads {sorted(read_relations)} but "
+                f"declares {sorted(declared)}"
             )
 
+    def passes_rows_on(self) -> bool:
+        """True iff the view has neither a grouping nor a projection, i.e. its
+        result rows are the (filtered) joined rows of the subgraph. Such a view
+        is called a *pass-through view*.
+
+        @return: Whether the view passes the joined rows on.
+        """
+        return not (self.group_keys or self.aggregates or self.projection)
+
     def output_names(self) -> list[AttributeName]:
-        """The box's output attribute names: grouping keys, then aggregates."""
+        """The view's output attribute names.
+
+        @return: The projection names, else the grouping keys then the
+            aggregates, else (pass-through view) the subgraph's relation names.
+        """
+        if self.projection:
+            return list(self.projection)
+        if self.passes_rows_on():
+            return list(self.subgraph.nodes)
         return [*self.group_keys, *self.aggregates]
 
-    def is_projection(self) -> bool:
-        """True iff the box has no aggregates, i.e. it is a DISTINCT projection."""
-        return not self.aggregates
+    def output_path(self, output_name: AttributeName) -> AttributePath | None:
+        """The path behind a grouping key or projection name.
+
+        @param output_name: An output name of the view.
+        @return: The path, or None for an aggregate, a pass-through output or
+            an unknown name (they have no single path).
+        """
+        return self.group_keys.get(output_name, self.projection.get(output_name))
+
+    def is_distinct(self) -> bool:
+        """True iff the view has grouping keys and no aggregates.
+
+        @return: Whether the view is a DISTINCT projection.
+        """
+        return bool(self.group_keys) and not self.aggregates
 
 
 @dataclass(frozen=True)
@@ -213,12 +354,14 @@ class Edge:
     """A directed reference edge: a source tuple's `ref_key` attribute
     references a tuple of `target` (`source_tf[ref_key] is target_tf`).
 
-    Edges and nodes are not hashable (they hold RFs, boxes hold dicts);
-    compare them by name, not with `==`.
+    Compare edges and nodes by name, not with `==`: `==` compares the
+    relations they hold by content, not by identity.
 
     Derived from a ForeignValueConstraint set via .references(), or added by
-    `JoinGraph.add_edge` from an `AggregateBox`; in that case the source tuple is a
-    result tuple of the box and `ref_key` one of its grouping keys.
+    `JoinGraph.add_edge` from a `View`; in that case the source tuple is a
+    result tuple of the view and `ref_key` one of its grouping keys or
+    projection names.
+
     The `ref_key` is the *attribute* name on a source tuple (as in
     `source_tf[ref_key] is target_tf`) — it is emphatically *not* a
     relation name; the endpoints' relation names are
@@ -249,10 +392,12 @@ class JoinGraph:
     """The join graph of a DBF, extracted from ForeignValueConstraint metadata.
 
     Nodes are named relations: the RFs of the DBF (`JoinNode`s) and
-    `AggregateBox`es added with `add_box`. Edges are directed references:
+    `View`s added with `add_view`. Edges are directed references:
     between RFs (found by `from_dbf`, `source_tf[ref_key] is target_tf`) and
-    from a box to a base relation (added by `add_edge`). The topology
-    queries treat a box like any other node.
+    from a view to a base relation (added by `add_edge`). The topology
+    queries treat a view like any other node. `filters` holds the per-node
+    filters added with `add_filter` (WHERE; HAVING on a view node); `from_dbf`
+    and the topology queries ignore them.
 
     Project convention: **every read-only query about the graph's
     topology lives here, not in the operator that happens to need it.**
@@ -266,6 +411,7 @@ class JoinGraph:
 
     nodes: dict[RelationName, Node] = field(default_factory=dict)
     edges: list[Edge] = field(default_factory=list)
+    filters: dict[RelationName, list[FilterPredicate]] = field(default_factory=dict)
 
     def __len__(self) -> int:
         """Number of relations in the graph — lets callers write
@@ -353,76 +499,135 @@ class JoinGraph:
 
         return graph
 
-    def add_box(self, box: AggregateBox) -> None:
-        """Add an aggregate box as a node of this graph.
+    def add_view(self, view: View) -> None:
+        """Add a view as a node of this graph.
 
-        @param box: The box; its name must not be used by another node.
-        @raises ValueError: If the name is already taken, or the box's subgraph
-            is this graph or encloses it through nested boxes (a box cannot
+        @param view: The view; its name must not be used by another node.
+        @raises ValueError: If the name is already taken, or the view's subgraph
+            is this graph or encloses it through nested views (a view cannot
             contain the graph it sits in, directly or indirectly).
         """
-        if box.name in self.nodes:
-            raise ValueError(f"Node name '{box.name}' is already used in the graph")
-        if box.subgraph._encloses(self):
+        if view.name in self.nodes:
+            raise ValueError(f"Node name '{view.name}' is already used in the graph")
+        if view.subgraph._encloses(self):
             raise ValueError(
-                f"Box '{box.name}' cannot contain the graph it is added to "
-                f"(directly or through nested boxes)"
+                f"View '{view.name}' cannot contain the graph it is added to "
+                f"(directly or through nested views)"
             )
-        self.nodes[box.name] = box
+        self.nodes[view.name] = view
 
     def _encloses(self, graph: JoinGraph) -> bool:
-        """True iff `graph` is this graph or the subgraph of a box nested in it
+        """True iff `graph` is this graph or the subgraph of a view nested in it
         (at any depth).
 
-        Terminates because `add_box` rejects every box that would close a
+        Terminates because `add_view` rejects every view that would close a
         loop; a loop built by writing to `nodes` directly bypasses that.
 
         @param graph: The graph to look for (compared by identity).
-        @return: Whether `graph` occurs in this graph's box nesting.
+        @return: Whether `graph` occurs in this graph's view nesting.
         """
         return graph is self or any(
-            isinstance(node, AggregateBox) and node.subgraph._encloses(graph)
+            isinstance(node, View) and node.subgraph._encloses(graph)
             for node in self.nodes.values()
         )
+
+    def add_filter(self, name: RelationName, predicate: FilterPredicate) -> None:
+        """Attach a filter to one node of this graph.
+
+        The predicate applies to the node's tuples, as in
+        `filter_values(X, predicate)` where X is the node's relation; several
+        filters on one node are a
+        conjunction. On a view node it is HAVING: it applies to the view's
+        result tuples, and a built-in structured predicate may only read the
+        view's output names. Filters of a view's inner nodes live in its subgraph
+        (`view.subgraph.add_filter(...)`).
+
+        @param name: Name of a node of this graph.
+        @param predicate: A structured `Predicate` or a plain callable.
+        @raises ValueError: If `name` is not a node of this graph, the
+            predicate is a `JoinPredicate` (it spans several relations and
+            belongs on a view), or a built-in structured predicate on a view
+            node reads a path that does not start with one of the view's output
+            names (on a view that passes rows on: a path the view's own path
+            check rejects). Lambdas and user-defined predicates are not checked.
+        """
+        node: Node | None = self.nodes.get(name)
+        if node is None:
+            raise ValueError(f"'{name}' is not a node of the graph")
+        if isinstance(predicate, JoinPredicate):
+            raise ValueError(
+                f"Filter on '{name}' is a JoinPredicate; a predicate over several "
+                f"relations belongs on a view (View.join_predicates)"
+            )
+        # a view's outputs are known exactly, so a misspelt one is caught
+        # here; it would otherwise drop every row silently
+        if isinstance(node, View):
+            outputs: list[AttributeName] = node.output_names()
+            # None (a lambda or user-defined predicate): accepted unchecked
+            for path in _predicate_paths(predicate) or []:
+                # a pass-through view's outputs are its subgraph relations, so
+                # its own path check applies (also into inner views)
+                if node.passes_rows_on():
+                    node._check_path("filter", path)
+                elif _split_attr_path(path)[0] not in outputs:
+                    raise ValueError(
+                        f"Filter on view '{name}': path {path!r} names no "
+                        f"output of the view: {outputs}"
+                    )
+        self.filters.setdefault(name, []).append(predicate)
 
     def add_edge(
         self, source: RelationName, target: RelationName, ref_key: AttributeName
     ) -> None:
-        """Add a reference edge from a box to a base relation of this graph.
+        """Add a reference edge from a view to a base relation of this graph.
 
-        The edge must be backed by a reference: `ref_key` is a grouping key of
-        the box whose path is either `X` (the box groups by the tuples of the
-        subgraph relation X; X's RF is the target's RF) or `X.attr` (X
+        The edge must be backed by a reference: `ref_key` is a grouping key or
+        a projection name of the view whose path is either `X` (the tuples of
+        the subgraph relation X; X's RF is the target's RF) or `X.attr` (X
         carries a `ForeignValueConstraint` on `attr` pointing at the target).
-        X must be a base relation of the subgraph, not an inner box.
+        X must be a base relation of the subgraph, not an inner view.
         Relations are compared by `uuid`, as in `from_dbf`.
 
-        @param source: Name of the box the edge starts at.
+        @param source: Name of the view the edge starts at.
         @param target: Name of the base relation the edge points to.
-        @param ref_key: Grouping-key name of the box that carries the reference.
+        @param ref_key: Grouping-key or projection name of the view that
+            carries the reference.
         @raises ValueError: If an endpoint is not a node of the graph, the
-            source is not a box, the target is not a base relation, `ref_key`
-            is not a grouping key, the key is not a reference to the target,
-            or the edge already exists; each rule has its own message.
+            source is not a view, the target is not a base relation, `ref_key`
+            is neither a grouping key nor a projection name, its path is not a
+            reference to the target, or the edge already exists; each rule
+            has its own message.
         """
         for name in (source, target):
             if name not in self.nodes:
                 raise ValueError(f"'{name}' is not a node of the graph")
         source_node: Node = self.nodes[source]
         target_node: Node = self.nodes[target]
-        if not isinstance(source_node, AggregateBox):
-            raise ValueError(f"Edge source '{source}' must be a box")
+        if not isinstance(source_node, View):
+            raise ValueError(
+                f"Edge source '{source}' must be a view (edges between base "
+                f"relations come from from_dbf)"
+            )
         if not isinstance(target_node, JoinNode):
             raise ValueError(f"Edge target '{target}' must be a base relation")
-        if ref_key not in source_node.group_keys:
-            raise ValueError(
-                f"'{ref_key}' is not a grouping key of box '{source}': "
-                f"{sorted(source_node.group_keys)}"
+        path: AttributePath | None = source_node.output_path(ref_key)
+        if path is None:
+            edge_keys: list[AttributeName] = sorted(
+                [*source_node.group_keys, *source_node.projection]
             )
-        if not _group_key_references(source_node, ref_key, target_node.rf):
             raise ValueError(
-                f"Grouping key '{ref_key}' of box '{source}' (path "
-                f"{source_node.group_keys[ref_key]!r}) is not a reference to '{target}'"
+                f"'{ref_key}' is neither a grouping key nor a projection name of "
+                f"view '{source}': {edge_keys}"
+            )
+        if not _path_references(source_node, path, target_node.rf):
+            kind: str = (
+                "Grouping key"
+                if ref_key in source_node.group_keys
+                else "Projection name"
+            )
+            raise ValueError(
+                f"{kind} '{ref_key}' of view '{source}' (path "
+                f"{path!r}) is not a reference to '{target}'"
             )
         # compare by names: `Edge ==` would compare relations by content
         if any(
@@ -771,25 +976,62 @@ class JoinGraph:
         return steps
 
 
-def _group_key_references(
-    box: AggregateBox, ref_key: AttributeName, target_rf: RF
-) -> bool:
-    """Whether the grouping key `ref_key` of `box` refers to the tuples of `target_rf`.
+#: The built-in leaf predicates `_predicate_paths` can read: each has an `attr`.
+_LEAF_PREDICATES: tuple[type, ...] = (Eq, Gt, Lt, Gte, Lte, Like, In, Exists, Missing)
 
-    The key's path must be `X` (X is `target_rf` itself) or `X.attr` (X
-    carries a `ForeignValueConstraint` on `attr` pointing at `target_rf`),
-    with X a base relation of the box's subgraph. Any other shape (more
-    segments, X an inner box) does not count as a reference.
 
-    @param box: The box the edge starts at.
-    @param ref_key: A grouping-key name of `box`.
-    @param target_rf: The RF of the edge's target relation.
-    @return: True iff the key's path is a reference to `target_rf`.
+def _predicate_paths(predicate: FilterPredicate) -> list[AttributePath] | None:
+    """All attribute paths a built-in structured predicate reads, or None if
+    the predicate cannot be inspected.
+
+    Only the built-in predicate classes are inspected, by exact type, so their
+    fields are known: `attr` of every leaf (`_LEAF_PREDICATES`), the `attr` of
+    a `Ref` used as a comparison value, and the parts of `And` / `Or` / `Not`.
+    Literal values (e.g. of `In`) are never read as paths. A lambda or a
+    user-defined `Predicate` subclass anywhere in the tree (also inside `And` /
+    `Or` / `Not`) makes the whole predicate uninspectable.
+
+    @param predicate: A structured predicate or any other callable.
+    @return: The paths in the order they occur, or None if not inspectable.
     """
-    segments: list[str] = _split_attr_path(box.group_keys[ref_key])
-    # `.get`: the box was validated at construction, but its dicts may have
+    if type(predicate) in (And, Or):
+        paths: list[AttributePath] = []
+        for part in predicate.predicates:
+            part_paths: list[AttributePath] | None = _predicate_paths(part)
+            if part_paths is None:
+                return None
+            paths.extend(part_paths)
+        return paths
+    if type(predicate) is Not:
+        return _predicate_paths(predicate.predicate)
+    if type(predicate) not in _LEAF_PREDICATES:
+        return None
+    # a comparison may compare with another attribute of the same subject
+    # through a `Ref`
+    leaf_paths: list[AttributePath] = [predicate.attr]
+    if isinstance(predicate, ComparisonPredicate) and isinstance(predicate.value, Ref):
+        leaf_paths.append(predicate.value.attr)
+    return leaf_paths
+
+
+def _path_references(view: View, path: AttributePath, target_rf: RF) -> bool:
+    """Whether `path` (of a grouping key or projection name of `view`) refers
+    to the tuples of `target_rf`.
+
+    The path must be `X` (X is `target_rf` itself) or `X.attr` (X
+    carries a `ForeignValueConstraint` on `attr` pointing at `target_rf`),
+    with X a base relation of the view's subgraph. Any other shape (more
+    segments, X an inner view) does not count as a reference.
+
+    @param view: The view the edge starts at.
+    @param path: The path behind the edge's `ref_key`.
+    @param target_rf: The RF of the edge's target relation.
+    @return: True iff the path is a reference to `target_rf`.
+    """
+    segments: list[str] = _split_attr_path(path)
+    # `.get`: the view was validated at construction, but its dicts may have
     # been changed since; a missing relation is then simply no reference
-    inner: Node | None = box.subgraph.nodes.get(segments[0])
+    inner: Node | None = view.subgraph.nodes.get(segments[0])
     if not isinstance(inner, JoinNode) or len(segments) > 2:
         return False
     if len(segments) == 1:

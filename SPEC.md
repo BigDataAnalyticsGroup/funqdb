@@ -448,16 +448,40 @@ its subtypes unless a subtype entry explicitly says otherwise.
 - `[✅]` *Build Yannakakis semijoin cascade (bottom-up + top-down passes)*  
   `build_semijoin_cascade(root)` performs a BFS from the root to construct a rooted spanning tree, then generates two passes: a bottom-up post-order traversal (reducing each tree parent by its child) followed by a top-down pre-order traversal (reducing each child by its parent). Each step is a `SemijoinStep(reduce, by, ref_key, source)` consumed by the `semijoin` operator to progressively filter the DBF. `source` is the edge's referencing relation, so the direction is never guessed.
 
-- `[✅]` *Aggregate and projection boxes (011)*  
-  `AggregateBox` is a node that holds a nested `JoinGraph` (its subgraph), named grouping keys (paths such as
-  `"O.customer"`) and named aggregates (`Sum("L.price")`); without aggregates it is a DISTINCT projection.
-  `add_box` adds it to an enclosing graph, `add_edge` connects it to a base relation through a grouping key that is a
-  reference (`X` or `X.attr`, relations compared by `uuid`). Boxes nest: a subgraph may contain boxes, and a path
-  into an inner box is checked against its output names; `add_box` rejects a box that would contain its own graph,
-  directly or through nested boxes. Logical representation only; not executable yet.
+- `[✅]` *Grouping views: aggregates and DISTINCT (011; `AggregateBox` until 015)*  
+  `View` is a node that holds a nested `JoinGraph` (its subgraph), named grouping keys (paths such as
+  `"O.customer"`) and named aggregates (`Sum("L.price")`); grouping keys without aggregates are a
+  DISTINCT projection (`is_distinct()`). `add_view` adds it to an enclosing graph, `add_edge` connects it to a base
+  relation through a grouping key that is a reference (`X` or `X.attr`, relations compared by `uuid`). Views nest: a
+  subgraph may contain views, and a path into an inner view is checked against its output names; `add_view` rejects a
+  view that would contain its own graph, directly or through nested views. Logical representation only; not
+  executable yet.
 
-- `[⚠️]` *Box edges: fresh `uuid`s and composite keys are not recognised*  
-  RFs of a filtered or cloned DBF have fresh `uuid`s, so a semantically correct edge is rejected (as retarget).
+- `[✅]` *Filters, projections and views (015)*  
+  `JoinGraph.add_filter(name, predicate)` attaches a filter to one node (WHERE; HAVING on a view node, where a
+  built-in structured predicate may only read the view's outputs). A `View` may also carry
+  `join_predicates` (`JoinPredicate`s declaring at least two relations of its subgraph; a built-in structured one must
+  read exactly those) and a `projection` (named output paths, no DISTINCT); projection and grouping exclude each other,
+  a view without both passes the joined rows on (`passes_rows_on()`). `add_edge` also accepts projection names.
+  Logical representation only. See `docs/changes/015-join-graph-views/DECISION.md`,
+  `test_structured_filter_on_base_relation_is_stored_under_its_name`,
+  `test_filter_inside_view_is_stored_in_the_view_subgraph`, `test_filter_on_view_node_is_having_in_outer_graph`,
+  `test_having_rejects_path_that_names_no_output_of_the_view`,
+  `test_view_around_whole_graph_with_join_predicate_projection_and_having`,
+  `test_view_construction_rejects_invalid_join_predicate`, `test_view_construction_rejects_invalid_projection`,
+  `test_pass_through_view_outputs_its_relation_names`, `test_passes_rows_on_only_without_grouping_and_projection`
+  and `test_view_joins_outer_graph_through_projection_name`.
+
+- `[⚠️]` *Views: documented checking gaps (015)*  
+  Accepted on purpose, each pinned by a test: `And` of single-relation parts as a join predicate; a filter on a view
+  that passes rows on may read one or several of its relations (a second place for WHERE / join predicates);
+  projection paths into base relations are not checked (no schema); a `JoinPredicate` nested inside `And` / `Or` /
+  `Not` is not refused by `add_filter`; no path reaches a relation whose name contains `__` or `.`. See the notes in
+  `docs/changes/015-join-graph-views/DECISION.md`.
+
+- `[⚠️]` *View edges: fresh `uuid`s and composite keys are not recognised*  
+  RFs of a filtered or cloned DBF have fresh `uuid`s, so a semantically correct edge is rejected (the same cause
+  as the lost edges into a filtered relation, see the join-graph tutorial).
   A reference held inside a composite key (RSF) never becomes an edge (no `ForeignValueConstraint`).
 
 - `[⚠️]` *Individual graph query methods tested only via integration, not in isolation*  

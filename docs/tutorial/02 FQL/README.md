@@ -116,4 +116,4 @@ operators which operate exclusively on DBFs (DBF → DBF).
 |:------|:------------|
 | [Structured predicates](predicates.md) | Serializable filter predicates (Eq, Gt, Like, In, And, Or, Not) |
 | [Plan extraction](plan.md) | Inspect operator pipelines via `explain()` and `to_plan()` |
-| [Join graph & aggregate boxes](join_graph.md) | Logical query graph with GROUP BY / DISTINCT boxes (not executable yet) |
+| [Join graph, filters & views](join_graph.md) | Logical query graph with node filters and views: join predicates, GROUP BY / DISTINCT, projections (not executable yet) |
