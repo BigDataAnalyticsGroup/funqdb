@@ -62,7 +62,7 @@ Until then, only tests call the stages together.
    The check also rejects a name with a schema and an alias with a column list (as in Q13),
    because the later stages would ignore them.
 3. **SQL Optimization.** `factor_common_conjuncts` moves conjuncts out of an OR,
-   then sqlglot's rules normalize the SELECT, in the SQLite dialect, which resolves names case-insensitively.
+   then sqlglot's rules normalize the SELECT, in the DuckDB dialect, which resolves names case-insensitively.
    After `qualify`, every column names its alias.
    The schema reaches sqlglot through `quoted_schema`, so that a name with quotes in it, such as `"quoted"`, keeps them.
    The rule `ill_typed_sql_rule` then runs the type checks on the statement as written,

@@ -404,6 +404,11 @@ def test_parse_statement_rejects_a_foreign_key_value_that_is_no_key_literal(valu
         ("made", "shown", Limitation.DIALECT_SPECIFIC),  # a datetime into a DATE
         ("shown", "made + INTERVAL '1' DAY", Limitation.DIALECT_SPECIFIC),  # a date
         ("ok", "year", Limitation.DIALECT_SPECIFIC),  # a number into a BOOLEAN
+        (
+            "made",
+            "CASE WHEN ok THEN made ELSE shown END",
+            Limitation.DIALECT_SPECIFIC,
+        ),  # typed DATE by its first result, yet a datetime for rows without ok
     ],
 )
 def test_parse_statement_update_rejects_a_computed_value_sql_converts(

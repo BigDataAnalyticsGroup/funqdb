@@ -49,12 +49,12 @@ def ill_typed_sql_rule(expression: Expr, schema: Schema, dialect: DialectType) -
     """Optimizer rule raising for what `reject_ill_typed_sql` rejects;
     it types a copy and returns `expression` unchanged."""
     typed = annotate_types(expression.copy(), schema=schema, dialect=dialect)
-    reject_ill_typed_sql(typed)
+    reject_ill_typed_sql(typed, dialect)
     return expression
 
 
-# the dialect the optimizer resolves and types names in: case-insensitive, as DuckDB
-OPTIMIZER_DIALECT = "sqlite"
+# the reference database DuckDB, whose dialect resolves names case-insensitively
+OPTIMIZER_DIALECT = "duckdb"
 # unnest_subqueries turns EXISTS and IN into joins that do not translate;
 # optimize_joins raises a Cycle error when a subquery reuses an outer alias
 _KEPT_RULES = tuple(

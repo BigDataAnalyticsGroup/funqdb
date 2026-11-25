@@ -97,6 +97,30 @@ def filtered(condition: str) -> str:
         filtered("t.id = (SELECT MAX(y.name) FROM t AS y)"),  # a scalar subquery
         selected("CASE t.id WHEN 'x' THEN 1 END"),  # a base value against its WHEN
         selected(
+            "CASE WHEN t.ok THEN t.made ELSE t.shown END"
+        ),  # a date and a datetime result
+        selected(
+            "CASE WHEN t.ok THEN t.shown ELSE t.made END"
+        ),  # the same in the other order
+        selected(
+            "CAST(CASE WHEN t.ok THEN t.made ELSE t.shown END AS DATE)"
+        ),  # sqlglot's DuckDB typing makes the CASE a DATE, which the cast check passes
+        filtered(
+            "t.made = CASE WHEN t.ok THEN t.made ELSE t.shown END"
+        ),  # the comparison check alone passes it
+        filtered(
+            "t.shown = CASE WHEN t.ok THEN t.made ELSE t.shown END"
+        ),  # sqlite would type the CASE TIMESTAMP; then only the CASE check catches it
+        selected(
+            "CASE t.id WHEN 1 THEN t.id ELSE t.name END"
+        ),  # a number and a text result, in a simple CASE
+        selected(
+            "CASE WHEN t.ok THEN t.made WHEN t.id = 1 THEN t.shown END"
+        ),  # two THEN values of two families, without an ELSE
+        selected(
+            "CASE WHEN t.ok THEN CAST(t.name AS BLOB) ELSE t.made END"
+        ),  # a BLOB is of no family, so only the DATE side catches the mix
+        selected(
             "EXTRACT(HOUR FROM t.made)"
         ),  # DuckDB answers 0, a Python date has no hour
         selected("EXTRACT(MINUTE FROM t.made)"),  # no minute either
@@ -109,7 +133,9 @@ def filtered(condition: str) -> str:
 def test_reject_ill_typed_sql_rejects_as_dialect_specific(sql: str):
     """FQL would read these otherwise than SQL, without an error."""
     with pytest.raises(UnsupportedSql) as raised:  # the results would differ
-        reject_ill_typed_sql(typed(sql))  # on the statement as written
+        reject_ill_typed_sql(
+            typed(sql), OPTIMIZER_DIALECT
+        )  # on the statement as written
 
     assert raised.value.limitation is Limitation.DIALECT_SPECIFIC  # the catalog entry
 
@@ -131,7 +157,9 @@ def test_reject_ill_typed_sql_rejects_as_dialect_specific(sql: str):
 def test_reject_ill_typed_sql_rejects_a_decimal_against_a_float(condition: str):
     """SQL converts the literal to the column's type; Python compares the exact values."""
     with pytest.raises(UnsupportedSql) as raised:  # the row would be lost
-        reject_ill_typed_sql(typed(filtered(condition)))  # valid SQL, another result
+        reject_ill_typed_sql(
+            typed(filtered(condition)), OPTIMIZER_DIALECT
+        )  # valid SQL, another result
 
     assert (
         raised.value.limitation is Limitation.LITERAL_TYPE_COERCION
@@ -145,14 +173,43 @@ def test_reject_ill_typed_sql_rejects_a_decimal_against_a_float(condition: str):
         "CAST(t.made AS TIMESTAMP) + INTERVAL '1' HOUR",  # FQL would keep the date
         "CAST(t.id AS DATE)",  # a number to a date
         "CAST(1 AS DATE)",  # a number literal is no text literal
+        "CAST(t.zoned AS TIMESTAMP)",  # a zoned datetime is outside the datetime family
+        "CAST(t.shown AS DATE)",  # a datetime is outside the date family
     ],
 )
 def test_reject_ill_typed_sql_rejects_a_cast_that_converts_a_value(value: str):
     """Nothing converts a value, so only a text literal or one of the target type may pass."""
     with pytest.raises(UnsupportedSql) as raised:  # no conversion exists in FQL
-        reject_ill_typed_sql(typed(selected(value)))  # the cast as the user wrote it
+        reject_ill_typed_sql(
+            typed(selected(value)), OPTIMIZER_DIALECT
+        )  # the cast as the user wrote it
 
     assert raised.value.limitation is Limitation.TEMPORAL_CAST  # the catalog entry
+
+
+@pytest.mark.parametrize(
+    "sql, named_types",
+    [
+        (
+            filtered("t.shown < t.made"),
+            "type TIMESTAMP with one of type DATE",
+        ),  # sqlglot's own name would be TIMESTAMPNTZ
+        (
+            selected("CAST(t.shown AS DATE)"),
+            "type TIMESTAMP to DATE",
+        ),  # the same for the operand of a cast
+        (
+            selected("CASE WHEN t.ok THEN t.shown ELSE t.made END"),
+            "results of type TIMESTAMP and DATE",
+        ),  # the same for the results of a CASE
+    ],
+)
+def test_reject_ill_typed_sql_names_types_in_the_dialect(sql: str, named_types: str):
+    """The message names a type as the dialect that typed the statement writes it."""
+    with pytest.raises(UnsupportedSql) as raised:  # a datetime is no date
+        reject_ill_typed_sql(typed(sql), OPTIMIZER_DIALECT)  # typed by DuckDB
+
+    assert named_types in str(raised.value)  # TIMESTAMPNTZ would fail this
 
 
 @pytest.mark.parametrize(
@@ -172,7 +229,9 @@ def test_reject_ill_typed_sql_rejects_a_cast_that_converts_a_value(value: str):
 def test_reject_ill_typed_sql_rejects_an_interval_python_shifts_otherwise(value: str):
     """relativedelta drops a fraction and a sub-day shift of a date without an error."""
     with pytest.raises(UnsupportedSql) as raised:  # the shift would be lost
-        reject_ill_typed_sql(typed(selected(value)))  # the interval as written
+        reject_ill_typed_sql(
+            typed(selected(value)), OPTIMIZER_DIALECT
+        )  # the interval as written
 
     assert raised.value.limitation is Limitation.INEXACT_INTERVAL  # the catalog entry
 
@@ -203,15 +262,27 @@ def test_reject_ill_typed_sql_rejects_an_interval_python_shifts_otherwise(value:
         selected("t.id / 2"),  # numbers divide
         selected("INTERVAL '1' DAY TO HOUR"),  # its own limitation refuses a span
         selected("CAST(t.made AS DATE)"),  # already of that type
+        selected("CAST(t.shown AS TIMESTAMP)"),  # DuckDB types the column TIMESTAMPNTZ
+        selected("CAST(t.shown AS DATETIME)"),  # another name of the datetime family
+        selected("CAST(t.id AS VARCHAR)"),  # no temporal target, so not checked
         selected("CAST('2020-01-01' AS DATE)"),  # the literal form of a date
         selected("EXTRACT(YEAR FROM t.made)"),  # a date holds its year
         selected("EXTRACT(HOUR FROM t.shown)"),  # a datetime holds its hour
         selected("EXTRACT(HOUR FROM t.clock)"),  # a time holds its hour
+        selected(
+            "CASE WHEN t.ok THEN t.made ELSE NULL END"
+        ),  # a NULL result has no type of its own
+        selected(
+            "CASE WHEN t.ok THEN t.id ELSE t.ratio END"
+        ),  # two numbers are one family
+        selected(
+            "CASE WHEN t.ok THEN t.shown ELSE TIMESTAMP '2020-01-01 00:00:00' END"
+        ),  # a datetime column and a datetime literal are one family
     ],
 )
 def test_reject_ill_typed_sql_keeps_what_fql_reads_as_sql_does(sql: str):
     """Each of these has one meaning in SQL and in Python."""
-    reject_ill_typed_sql(typed(sql))  # raises if a check refused it
+    reject_ill_typed_sql(typed(sql), OPTIMIZER_DIALECT)  # raises if a check refused it
 
 
 @pytest.mark.parametrize(
@@ -226,7 +297,9 @@ def test_reject_ill_typed_sql_keeps_what_fql_reads_as_sql_does(sql: str):
 )
 def test_reject_ill_typed_sql_trusts_a_value_of_unknown_type(sql: str):
     """A dataset without an SQL schema types nothing, so no type check can refuse."""
-    reject_ill_typed_sql(typed(sql, {}))  # raises if a check refused an untyped value
+    reject_ill_typed_sql(
+        typed(sql, {}), OPTIMIZER_DIALECT
+    )  # raises if a check refused an untyped value
 
 
 def test_has_other_type_of_an_untyped_node_is_false():

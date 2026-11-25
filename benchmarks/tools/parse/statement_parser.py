@@ -324,7 +324,7 @@ def _qualified_select(
     _qualify(select, schema)
     columns = quoted_schema(schema.columns)
     typed = annotate_types(select, schema=columns, dialect=OPTIMIZER_DIALECT)
-    reject_ill_typed_sql(typed)
+    reject_ill_typed_sql(typed, OPTIMIZER_DIALECT)
     return typed
 
 
@@ -338,10 +338,10 @@ def _typed_values(values_node: exp.Values, schema: Schema) -> exp.Values:
             typed_select = annotate_types(
                 select, schema=columns, dialect=OPTIMIZER_DIALECT
             )
-            reject_ill_typed_sql(typed_select)
+            reject_ill_typed_sql(typed_select, OPTIMIZER_DIALECT)
 
     typed = annotate_types(values, schema=columns, dialect=OPTIMIZER_DIALECT)
-    reject_ill_typed_sql(typed)
+    reject_ill_typed_sql(typed, OPTIMIZER_DIALECT)
     return typed
 
 

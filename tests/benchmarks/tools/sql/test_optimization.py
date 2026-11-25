@@ -164,6 +164,37 @@ def test_ill_typed_sql_rule_leaves_the_statement_unchanged():
     assert column.type is None  # the types went onto the copy only
 
 
+def test_optimizer_dialect_resolves_names_case_insensitively():
+    """Upper-case names in the query still find the lower-case schema names."""
+    ast = sqlglot.parse_one("SELECT T.ID FROM T")  # the names in upper case
+    columns = {"t": {"id": "INT"}}  # the schema in lower case
+
+    optimized = optimize(
+        ast, schema=columns, dialect=OPTIMIZER_DIALECT, rules=OPTIMIZER_RULES
+    )  # as the pipeline optimizes a query
+
+    assert (  # normalized to the schema names; snowflake would give "T"."ID"
+        optimized.sql() == 'SELECT "t"."id" AS "id" FROM "t" AS "t"'
+    )
+
+
+def test_optimizer_dialect_types_a_timestamp_column_as_duckdb_does():
+    """A TIMESTAMP column is typed TIMESTAMPNTZ, as DuckDB reads TIMESTAMP as a datetime
+    without time zone. The sqlglot type name guards the dialect setting: sqlite would
+    type the column TIMESTAMP."""
+    ast = sqlglot.parse_one("SELECT t.shown FROM t")  # one datetime column
+    columns = {"t": {"shown": "TIMESTAMP"}}  # declared as plain TIMESTAMP
+
+    optimized = optimize(
+        ast, schema=columns, dialect=OPTIMIZER_DIALECT, rules=OPTIMIZER_RULES
+    )  # as the pipeline optimizes a query, typing included
+    selected_type = optimized.selects[0].type.this  # the type of the one output
+
+    assert (  # sqlite would type it TIMESTAMP
+        selected_type is exp.DataType.Type.TIMESTAMPNTZ
+    )
+
+
 def test_optimizer_rules_keep_a_subquery_and_the_join_order_without_two_rules():
     """Without `optimize_joins`, which would raise a `Cycle error` here, and without
     `unnest_subqueries`, which would turn the IN into a join."""

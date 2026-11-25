@@ -236,7 +236,7 @@ class Limitation(Enum):
     )
     TEMPORAL_CAST = (
         _TRANSPILER,
-        "A temporal CAST passes only a value already of that type through; SQL "
+        "A temporal CAST passes only a value already of that type family through; SQL "
         "converts other values, which the FQL does not.",
     )
     TEMPORAL_LITERAL = (

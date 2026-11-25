@@ -22,7 +22,10 @@
 """The checks of what SQL's types make FQL read otherwise without an error, on a
 statement as written and typed. Other ill-typed SQL is not looked for."""
 
+from itertools import permutations
+
 from sqlglot import Expr, exp
+from sqlglot.dialects.dialect import DialectType
 
 from benchmarks.tools.ir.expressions import TIME_OF_DAY_PARTS, ExtractPart, IntervalUnit
 from benchmarks.tools.limitations import Limitation, UnsupportedSql
@@ -53,10 +56,10 @@ _COMPARABLE_FAMILIES = (
 )
 
 
-def reject_ill_typed_sql(typed_ast: Expr) -> None:
-    """Rejects a value FQL would read otherwise than SQL; runs before the optimizer hides it."""
+def reject_ill_typed_sql(typed_ast: Expr, dialect: DialectType) -> None:
+    """Rejects a value FQL would read otherwise than SQL, naming types in `dialect`; runs before the optimizer hides it."""
     for node in typed_ast.walk():
-        _check_node(node)
+        _check_node(node, dialect)
 
 
 def has_other_type(node: Expr, *expected: exp.DataType.Type) -> bool:
@@ -66,16 +69,18 @@ def has_other_type(node: Expr, *expected: exp.DataType.Type) -> bool:
     return not node.is_type(*expected)
 
 
-def _reject_incomparable(value: Expr, compared: Expr) -> None:
+def _reject_incomparable(value: Expr, compared: Expr, dialect: DialectType) -> None:
     """Rejects comparing two type families, or a decimal literal with a float."""
     left = _compared_operand(value)
     right = _compared_operand(compared)
     for family in _COMPARABLE_FAMILIES:
         if left.is_type(*family) and has_other_type(right, *family):
+            left_type = left.type.sql(dialect=dialect)
+            right_type = right.type.sql(dialect=dialect)
             raise UnsupportedSql(
                 Limitation.DIALECT_SPECIFIC,
-                f"Unsupported comparison of a value of type {left.type.sql()} with one "
-                f"of type {right.type.sql()}: ISO SQL compares only values of one type "
+                f"Unsupported comparison of a value of type {left_type} with one "
+                f"of type {right_type}: ISO SQL compares only values of one type "
                 "family, and Python finds them unequal.",
             )
 
@@ -109,32 +114,58 @@ def _compared_operand(node: Expr) -> Expr:
     return node.unnest()
 
 
-def _check_comparison(comparison: Expr) -> None:
+def _check_comparison(comparison: Expr, dialect: DialectType) -> None:
     """Rejects a comparison of incomparable sides."""
-    _reject_incomparable(comparison.this, comparison.expression)
+    _reject_incomparable(comparison.this, comparison.expression, dialect)
 
 
-def _check_between(between: exp.Between) -> None:
+def _check_between(between: exp.Between, dialect: DialectType) -> None:
     """Rejects a BETWEEN whose value is incomparable with a bound."""
-    _reject_incomparable(between.this, between.args["low"])
-    _reject_incomparable(between.this, between.args["high"])
+    _reject_incomparable(between.this, between.args["low"], dialect)
+    _reject_incomparable(between.this, between.args["high"], dialect)
 
 
-def _check_in(membership: exp.In) -> None:
+def _check_in(membership: exp.In, dialect: DialectType) -> None:
     """Rejects an IN whose value is incomparable with an option or the subquery's column."""
     query = membership.args.get("query")
     options = membership.expressions if query is None else [query]
     for option in options:
-        _reject_incomparable(membership.this, option)
+        _reject_incomparable(membership.this, option, dialect)
 
 
-def _check_case(case: exp.Case) -> None:
-    """Rejects a CASE whose base value is incomparable with a WHEN value."""
+def _check_case(case: exp.Case, dialect: DialectType) -> None:
+    """Rejects a CASE whose results are of two type families, or whose base value is
+    incomparable with a WHEN value."""
+    _reject_mixed_results(case, dialect)
     if case.this is None:
         return
 
     for branch in case.args.get("ifs", []):
-        _reject_incomparable(case.this, branch.this)
+        _reject_incomparable(case.this, branch.this, dialect)
+
+
+def _reject_mixed_results(case: exp.Case, dialect: DialectType) -> None:
+    """Rejects a CASE whose THEN and ELSE values are of two type families: the dialect
+    then picks the CASE's type, e.g. sqlglot's DuckDB typing the first result's, so the
+    other checks would rely on a type that the values of some rows do not have. A NULL
+    result is of unknown type and trusted."""
+    results = [branch.args["true"] for branch in case.args.get("ifs", [])]
+    default = case.args.get("default")
+    if default is not None:
+        results.append(default)
+
+    # both orders: a result of a type outside every family is only caught as the second one
+    for first, second in permutations(results, 2):
+        for family in _COMPARABLE_FAMILIES:
+            if first.is_type(*family) and has_other_type(second, *family):
+                first_type = first.type.sql(dialect=dialect)
+                second_type = second.type.sql(dialect=dialect)
+                raise UnsupportedSql(
+                    Limitation.DIALECT_SPECIFIC,
+                    f"Unsupported CASE with results of type {first_type} and "
+                    f"{second_type}: ISO SQL allows only results of one type family, "
+                    "and Python keeps the type of each value.",
+                )
 
 
 def _check_division(division: exp.Div) -> None:
@@ -162,17 +193,24 @@ def _check_multiplication(product: exp.Mul) -> None:
         )
 
 
-def _check_cast(cast: exp.Cast) -> None:
-    """Rejects a cast to a date or datetime of anything but a text literal or a value of that type."""
+def _check_cast(cast: exp.Cast, dialect: DialectType) -> None:
+    """Rejects a cast to a date or datetime of anything but a text literal or a value of that family."""
     target = cast.to.this
+    if target in DATETIME_TYPES:
+        family = DATETIME_TYPES
+    elif target in _DATE_TYPES:
+        family = _DATE_TYPES
+    else:
+        return
+
     operand = cast.this
-    is_temporal_target = target in _DATE_TYPES or target in DATETIME_TYPES
     is_literal = isinstance(operand, exp.Literal) and operand.is_string
-    if is_temporal_target and not is_literal and has_other_type(operand, target):
+    if not is_literal and has_other_type(operand, *family):
+        operand_type = operand.type.sql(dialect=dialect)
         raise UnsupportedSql(
             Limitation.TEMPORAL_CAST,
-            f"Unsupported CAST of a value of type {operand.type.sql()} to "
-            f"{target.value}: only a value already of that type passes through.",
+            f"Unsupported CAST of a value of type {operand_type} to "
+            f"{target.value}: only a value already of that type family passes through.",
         )
 
 
@@ -209,23 +247,23 @@ def _check_extract(extract: exp.Extract) -> None:
         )
 
 
-def _check_node(node: Expr) -> None:
+def _check_node(node: Expr, dialect: DialectType) -> None:
     """Runs the check of `node`'s kind, if it has one."""
     match node:
         case exp.EQ() | exp.NEQ() | exp.LT() | exp.LTE() | exp.GT() | exp.GTE():
-            _check_comparison(node)
+            _check_comparison(node, dialect)
         case exp.Between():
-            _check_between(node)
+            _check_between(node, dialect)
         case exp.In():
-            _check_in(node)
+            _check_in(node, dialect)
         case exp.Case():
-            _check_case(node)
+            _check_case(node, dialect)
         case exp.Div():
             _check_division(node)
         case exp.Mul():
             _check_multiplication(node)
         case exp.Cast():
-            _check_cast(node)
+            _check_cast(node, dialect)
         case exp.Interval():
             _check_interval(node)
         case exp.Extract():
