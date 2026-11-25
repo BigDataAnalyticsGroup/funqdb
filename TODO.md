@@ -12,6 +12,18 @@
 - [ ] report page (`benchmarks/tools/report/report.html`): add a browser test (Playwright or jsdom)
   that loads a report with a case that contains markup and asserts that the page shows it as text.
   The page already has `data-testid` attributes for this test.
+- [ ] transpiler, writes: `_reject_converted_value` (`benchmarks/tools/parse/statement_parser.py`) checks only the
+  overall type of a written CASE. `UPDATE title SET price = year` is rejected (`LITERAL_TYPE_COERCION`), but
+  `UPDATE title SET price = CASE WHEN ok THEN year ELSE price END` passes, as sqlglot widens the CASE to DOUBLE, and
+  FQL then stores an int for the rows with `ok`. Check each THEN/ELSE value against the column instead.
+- [ ] transpiler, type checks: a CASE with a DECIMAL and a DOUBLE result passes (`type_checks._reject_mixed_results`
+  sees one numeric family), e.g. `CASE WHEN t.ok THEN t.price ELSE t.ratio END > 0.1`. Python then holds a Decimal
+  on some rows and a float on others: a comparison with a float literal is exact for the Decimal rows (as for the
+  kept `t.price > t.ratio`), and `SUM` over it raises `TypeError`. Decide whether to reject it.
+- [ ] transpiler, NULL guards: `_operand_columns` (`benchmarks/tools/ir/expressions.py`) steps through OR/AND into
+  bare boolean columns, so `WHERE (t.a OR t.b) IS TRUE` renders `('a' in tf) and ('b' in tf) and ...`. For
+  `a = TRUE`, `b = NULL` SQL keeps the row and FQL drops it. Stop at OR/AND as at a nested comparison, and check
+  that the reference tests of `Query._needed_reference_tests` (which rely on these guards) stay sound.
 - [ ] subqueries — FQL's functional composition already subsumes SQL subqueries
   (uncorrelated = variable assignment, correlated = lambda closures, scalar =
   transforms). Needs a tutorial page demonstrating each SQL pattern in FQL.
