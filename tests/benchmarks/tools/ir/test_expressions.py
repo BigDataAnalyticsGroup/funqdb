@@ -20,6 +20,8 @@
 
 """The expression tree: what it reads, how it is walked and how it is rewritten."""
 
+from decimal import Decimal
+
 import pytest
 
 from benchmarks.datasets.dataset_types import Reference
@@ -229,6 +231,39 @@ def test_expression_is_comparison_is_true_for_comparing_expressions_only():
     assert InSubqueryExpression(note, SUBQUERY).is_comparison()  # note IN (subquery)
 
 
+def test_expression_columns_needed_to_hold_for_positive_tests_only():
+    """IS NOT NULL needs its column, and a comparison other than `<>` needs the columns
+    it compares; a test that may hold without them needs none."""
+    note = Column(MC, "note")  # any operand
+    one = Literal(1)  # any value
+    is_null = IsNullExpression(note)  # note IS NULL
+    is_not_null = UnaryExpression("not", is_null)  # note IS NOT NULL
+    equal = BinaryExpression("==", note, one)  # note = 1
+    plus = BinaryExpression("+", note, one)  # note + 1
+    computed = BinaryExpression(">", plus, Literal(2))  # note + 1 > 2
+    like = ParenExpression(LikeExpression(note, "a%"))  # (note LIKE 'a%')
+    unequal = BinaryExpression("!=", note, one)  # note <> 1, as Not(Eq(...))
+    movie = Column(MC, "movie", is_reference_column=True)  # a reference into title
+    sequel = Column(MC, "sequel", is_reference_column=True)  # another into title
+    other_tuple = BinaryExpression("is not", movie, sequel)  # movie_id <> sequel_id
+    not_like = UnaryExpression("not", like)  # NOT (note LIKE 'a%')
+    either = BinaryExpression("or", equal, computed)  # note = 1 OR note + 1 > 2
+    either_is_true = IsBooleanExpression(ParenExpression(either), True)  # (...) IS TRUE
+    equal_is_false = IsBooleanExpression(ParenExpression(equal), False)  # IS FALSE
+
+    assert is_not_null.columns_needed_to_hold() == [note]  # false without note
+    assert equal.columns_needed_to_hold() == [note]  # Eq is false without note
+    assert computed.columns_needed_to_hold() == [note]  # read inside the arithmetic
+    assert like.columns_needed_to_hold() == [note]  # through the parentheses
+    assert unequal.columns_needed_to_hold() == []  # Not(Eq) is true without note
+    assert other_tuple.columns_needed_to_hold() == []  # true without either tuple
+    assert is_null.columns_needed_to_hold() == []  # Missing is true without note
+    assert not_like.columns_needed_to_hold() == []  # a negation is true without note
+    assert either.columns_needed_to_hold() == []  # one branch may hold alone
+    assert either_is_true.columns_needed_to_hold() == []  # compares the OR, not note
+    assert equal_is_false.columns_needed_to_hold() == []  # holds where note = 1 fails
+
+
 def test_expression_null_tested_column_is_the_column_of_IS_NULL_only():
     """`column IS NULL` yields its column; anything else, None."""
     note = Column(MC, "note")  # a nullable column
@@ -351,6 +386,70 @@ def test_expression_children_are_the_operands_of_each_expression_type(make, chil
     a, b, c = Column(MC, "a"), Column(MC, "b"), Column(MC, "c")  # three distinct reads
 
     assert make(a, b, c).children() == children(a, b, c)  # all of them, in field order
+
+
+def test_literal_eq_tells_equal_values_of_other_types_apart():
+    """`1`, `1.0`, `TRUE` and `1.0` as DECIMAL are four literals, though `==` holds."""
+    one = Literal(1)  # INTEGER 1
+    one_float = Literal(1.0)  # 1e0, a DOUBLE
+    true = Literal(True)  # TRUE, which Python reads as 1
+    one_decimal = Literal(Decimal("1.0"))  # 1.0, a DECIMAL
+
+    assert one != one_float  # an int is not a float
+    assert one != true  # an int is not a bool
+    assert one_float != true  # a float is not a bool
+    assert one != one_decimal  # an int is not a DECIMAL
+    assert one_float != one_decimal  # a float is not a DECIMAL
+    assert Literal("1") != one  # a text is not a number
+    assert one != 1  # a literal is not its bare value
+    assert one.__eq__(1) is NotImplemented  # Python then asks the other side
+
+
+def test_literal_eq_matches_an_equal_value_of_the_same_type():
+    """Two literals of one type are equal by value: NULL, numbers and texts alike."""
+    plus_one = BinaryExpression("+", Column(MC, "id"), Literal(1))  # mc.id + 1
+    plus_one_float = BinaryExpression("+", Column(MC, "id"), Literal(1.0))  # + 1e0
+
+    assert Literal(None) == Literal(None)  # NULL is one literal
+    assert Literal(1) == Literal(1)  # the same int
+    assert Literal(Decimal("1.0")) == Literal(Decimal("1.00"))  # one DECIMAL value
+    assert plus_one == BinaryExpression("+", Column(MC, "id"), Literal(1))  # nested
+    assert plus_one != plus_one_float  # the operand's type tells them apart
+
+
+def test_literal_hash_keys_equal_values_of_other_types_apart():
+    """As dict keys, equal values of other types stay apart; equal literals do not."""
+    keys = {Literal(1): "one", Literal(True): "true", Literal(1.0): "float"}  # 3 keys
+
+    assert len(keys) == 3  # none replaced another
+    assert keys[Literal(True)] == "true"  # a new equal literal finds its key
+    assert hash(Literal(2)) == hash(Literal(2))  # equal literals hash alike
+    assert hash(Literal(Decimal("2.0"))) == hash(Literal(Decimal("2")))  # by value
+
+
+def test_column_segments_of_an_output_name_is_the_name():
+    """A column without a path reads an output by its name."""
+    output = Column(None, "c")  # an output name, such as an aggregate's
+
+    assert output.segments(joined=True) == ["c"]  # no root, also on a join tuple
+
+
+def test_column_segments_of_a_tuple_end_at_the_path():
+    """A column without a name is the tuple at the end of its path."""
+    title = Column(Path(0, "t", "mc", ("movie",)), "")  # the title tuple itself
+
+    assert title.segments(joined=False) == ["movie"]  # mc.movie, no attribute
+
+
+def test_column_segments_return_a_fresh_list_on_every_call():
+    """Callers extend or join the segments, so repeated calls must not share state."""
+    title = Column(Path(0, "t", "mc", ("movie",)), "title")  # t.title, read from mc
+
+    first = title.segments(joined=True)  # the join tuple's path, first call
+    first.append("changed")  # a caller extending its list
+    second = title.segments(joined=True)  # the same path, second call
+
+    assert second == ["mc", "movie", "title"]  # unaffected by the first caller
 
 
 def test_case_when_expression_children_without_a_branch_or_default_are_empty():

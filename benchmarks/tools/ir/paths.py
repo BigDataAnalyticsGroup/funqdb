@@ -32,3 +32,8 @@ class Path:
     alias: str
     root: str
     ref_keys: tuple[str, ...]
+
+    def segments(self, joined: bool) -> list[str]:
+        """The attribute names to the tuple of `alias`, led by the root when `joined`."""
+        lead = [self.root] if joined else []
+        return [*lead, *self.ref_keys]

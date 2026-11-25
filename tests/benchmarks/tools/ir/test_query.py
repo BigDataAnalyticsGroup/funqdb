@@ -26,8 +26,12 @@ from benchmarks.datasets.schema import Schema
 from benchmarks.tools.ir.expressions import (
     AggregateExpression,
     BinaryExpression,
+    CaseBranch,
+    CaseWhenExpression,
     Column,
+    IsBooleanExpression,
     Literal,
+    ParenExpression,
     conjunction,
 )
 from benchmarks.tools.ir.join_equalities import Edge
@@ -70,6 +74,10 @@ def column_of(alias: str, name: str, depth: int = 0) -> Column:
 
 T_ID = column_of("t", "id")  # t.id
 T_TITLE = column_of("t", "title")  # t.title
+K_NAME = Column(Path(0, "k", "t", ("kind",)), "name")  # k.name, read from t's kind
+TITLE_IS_A = BinaryExpression("==", T_TITLE, Literal("a"))  # t.title = 'a'
+KIND_IS_MOVIE = BinaryExpression("==", K_NAME, Literal("movie"))  # k.name = 'movie'
+TITLE_OR_KIND = BinaryExpression("or", TITLE_IS_A, KIND_IS_MOVIE)  # either holds
 
 
 def test_generated_columns_column_for_makes_a_column_once_per_expression():
@@ -86,6 +94,18 @@ def test_generated_columns_column_for_makes_a_column_once_per_expression():
     assert columns.column_for(later) is first  # repeated use, the same column
     assert columns.column_for(earlier, "e") == Column(None, "e")  # the given name
     assert columns.column_for(doubled) == Column(None, "_computed_1")  # next number
+
+
+def test_generated_columns_column_for_makes_a_column_per_literal_type():
+    """`1` and `TRUE` are equal in Python, but each gets a column of its own."""
+    columns = GeneratedColumns("_computed_")  # nothing generated yet
+
+    one = columns.column_for(Literal(1))  # SELECT 1
+    true = columns.column_for(Literal(True))  # SELECT TRUE
+
+    assert one == Column(None, "_computed_0")  # the first number
+    assert true == Column(None, "_computed_1")  # not the column of 1
+    assert columns.column_for(Literal(1)) is one  # 1 again reads its own column
 
 
 def test_query_post_init_rejects_a_tree_of_another_depth():
@@ -117,6 +137,85 @@ def test_query_condition_puts_the_identities_in_front_of_the_stated_condition():
     query.stated_condition = note  # WHERE t.title = 'a', set after construction
 
     assert query.condition == conjunction(identity, note)  # identity first, then WHERE
+
+
+def test_query_condition_puts_the_reference_tests_between_identities_and_where():
+    """A followed reference must be mapped, as the SQL join demands its tuple.
+
+    ⟲ p (removed)
+    t ── kind ──▶ k
+    """
+    tables = {"t": "title", "k": "kind_type"}  # k hangs off t
+    edges = (Edge("t", "p", "t"), Edge("t", "kind", "k"))  # a cycle and a reference
+    tree = tree_over(tables, edges)  # one root, one identity, one reference test
+    (identity,) = tree.identities  # t.p is t
+    kind_mapped = tree.reference_tests["k"]  # t.kind IS NOT NULL
+    query = Query(tree)  # nothing stated yet
+    note = BinaryExpression("==", T_TITLE, Literal("a"))  # t.title = 'a'
+    query.stated_condition = note  # WHERE t.title = 'a'
+
+    expected = conjunction(identity, kind_mapped, note)  # in this order
+    assert query.condition == expected  # identity, reference test, then WHERE
+
+
+@pytest.mark.parametrize(
+    ("op", "needs_test"),
+    [
+        ("==", False),  # false without k, so it drops the tuple itself
+        (">", False),  # the same for an order comparison
+        ("!=", True),  # renders as Not(Eq(...)), true without k
+    ],
+)
+def test_query_condition_leaves_out_a_reference_test_a_where_conjunct_covers(
+    op, needs_test
+):
+    """A conjunct that is false without the chain end needs no reference test.
+
+    t ── kind ──▶ k
+    """
+    tables = {"t": "title", "k": "kind_type"}  # k hangs off t
+    tree = tree_over(tables, (Edge("t", "kind", "k"),))  # one reference test, for k
+    kind_mapped = tree.reference_tests["k"]  # t.kind IS NOT NULL
+    k_name = Column(Path(0, "k", "t", ("kind",)), "name")  # k.name, read from t
+    on_k = BinaryExpression(op, k_name, Literal("movie"))  # WHERE k.name op 'movie'
+    query = Query(tree)  # nothing stated yet
+    query.stated_condition = on_k  # set after construction
+
+    expected = conjunction(kind_mapped, on_k) if needs_test else on_k  # per operator
+    assert query.condition == expected  # the test only where the WHERE keeps t
+
+
+@pytest.mark.parametrize(
+    "stated",
+    [
+        pytest.param(TITLE_OR_KIND, id="or"),  # true for t.title = 'a' alone
+        pytest.param(
+            IsBooleanExpression(ParenExpression(TITLE_OR_KIND), True), id="or-is-true"
+        ),  # IS TRUE compares, but reads k only under the OR
+        pytest.param(
+            BinaryExpression(
+                "==",
+                CaseWhenExpression((CaseBranch(TITLE_IS_A, Literal("movie")),), K_NAME),
+                Literal("movie"),
+            ),
+            id="case-branch",
+        ),  # CASE WHEN t.title = 'a' THEN 'movie' ELSE k.name END = 'movie'
+    ],
+)
+def test_query_condition_keeps_a_reference_test_for_a_read_that_may_be_skipped(
+    stated,
+):
+    """A conjunct that may hold without reading the chain end keeps its reference test.
+
+    t ── kind ──▶ k
+    """
+    tables = {"t": "title", "k": "kind_type"}  # k hangs off t
+    tree = tree_over(tables, (Edge("t", "kind", "k"),))  # one reference test, for k
+    kind_mapped = tree.reference_tests["k"]  # t.kind IS NOT NULL
+    query = Query(tree)  # nothing stated yet
+    query.stated_condition = stated  # WHERE as the parameter states it
+
+    assert query.condition == conjunction(kind_mapped, stated)  # the test stays
 
 
 def test_query_condition_holds_every_identity_in_stated_order():

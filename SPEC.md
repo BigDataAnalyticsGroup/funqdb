@@ -564,3 +564,12 @@ its subtypes unless a subtype entry explicitly says otherwise.
 
 - `[✅]` *Read keys and references from the schema*
   `Schema.reference_of` gives the reference of one foreign-key column, and `PrimaryKey.missing_from` the key columns that a column list does not name. Test: `tests/benchmarks/datasets/test_schema.py`.
+
+- `[✅]` *Render a statement as FQL*
+  `StatementRenderer.render_statement` renders a `Query` as one FQL expression, and a write or DDL statement as Python statements that change the database. Each tested query reads the same rows in FQL as in DuckDB under four `Config` styles. A literal foreign key is written under its `Reference.ref_key`. Tests: `tests/benchmarks/tools/render/test_query_renderer.py`, `tests/benchmarks/tools/render/test_statement_renderer.py`, `tests/benchmarks/tools/render/test_config.py`.
+
+- `[✅]` *Render filters as structured predicates*
+  With `PredicateForm.STRUCTURED`, each conjunct of a filter becomes `fql.predicates` objects where one fits, and a lambda where not, for example a LIKE with `_` or an IN with a column. Test: `tests/benchmarks/tools/render/test_structured_predicates.py`.
+
+- `[✅]` *Render LIKE as SQL matches it*
+  A LIKE that needs a regular expression renders as `re.fullmatch` with `(?s)`: the pattern matches the whole value, and `%` and `_` also match a line break. Tests: `tests/benchmarks/tools/render/test_like.py`, `tests/benchmarks/tools/render/test_query_renderer.py`.

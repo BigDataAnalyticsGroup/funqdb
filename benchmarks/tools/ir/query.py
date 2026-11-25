@@ -105,8 +105,9 @@ class Query(Statement):
 
     @property
     def condition(self) -> Expression | None:
-        """The tree's identities, then `stated_condition`; `None` if neither holds anything."""
-        conditions = list(self.tree.identities)
+        """The tree's identities and needed reference tests, then `stated_condition`; `None` if none holds anything."""
+        reference_tests = self._needed_reference_tests()
+        conditions = [*self.tree.identities, *reference_tests]
         if self.stated_condition is not None:
             conditions.append(self.stated_condition)
         if not conditions:
@@ -211,3 +212,23 @@ class Query(Statement):
         for output in self.outputs:
             first_outputs.setdefault(output.column, output)
         return first_outputs
+
+    def _needed_reference_tests(self) -> list[Expression]:
+        """The tree's reference tests, except for a chain end a WHERE conjunct needs mapped anyway."""
+        stated = (
+            [] if self.stated_condition is None else self.stated_condition.conjuncts()
+        )
+        needed_aliases: set[str] = set()
+        for conjunct in stated:
+            for column in conjunct.columns_needed_to_hold():
+                path = column.path
+                # an output name has no path; a correlated path names an alias of the
+                # enclosing query
+                if path is not None and path.depth == self.tree.depth:
+                    needed_aliases.add(path.alias)
+
+        return [
+            test
+            for alias, test in self.tree.reference_tests.items()
+            if alias not in needed_aliases
+        ]

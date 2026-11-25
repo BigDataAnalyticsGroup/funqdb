@@ -42,25 +42,27 @@ FDM swizzles a foreign key into a reference to the related tuple.
 
 ### R3 No arbitrary rows: FQL relations are unordered, and cardinality is not assumed
 
-| Limitation                | Why                                                               |
-|---------------------------|-------------------------------------------------------------------|
-| `LIMIT_WITHOUT_ORDER`     | Picks arbitrary rows.                                             |
-| `OFFSET_WITHOUT_LIMIT`    | A subset keeps a counted number of ranked tuples.                 |
-| `SCALAR_SUBQUERY_ROWS`    | Relies on the data holding at most one row.                       |
-| `EXISTS_OVER_AGGREGATE`   | Always true.                                                      |
-| `HAVING_WITHOUT_GROUP_BY` | FQL's ungrouped aggregate is one value, not a relation to filter. |
+| Limitation                | Why                                                                          |
+|---------------------------|------------------------------------------------------------------------------|
+| `LIMIT_WITHOUT_ORDER`     | Picks arbitrary rows.                                                        |
+| `OFFSET_WITHOUT_LIMIT`    | A subset keeps a counted number of ranked tuples.                            |
+| `LIMIT_ZERO`              | Reads only the column names of a result; a relation without tuples has none. |
+| `SCALAR_SUBQUERY_ROWS`    | Relies on the data holding at most one row.                                  |
+| `EXISTS_OVER_AGGREGATE`   | Always true.                                                                 |
+| `HAVING_WITHOUT_GROUP_BY` | FQL's ungrouped aggregate is one value, not a relation to filter.            |
 
 The renderer raises `LIMIT_WITHOUT_ORDER` and `EXISTS_OVER_AGGREGATE`; the parser raises the others.
 
 ### R4 Relations are keyed mappings
 
-| Limitation                      | Why                                                                                 |
-|---------------------------------|-------------------------------------------------------------------------------------|
-| `DUPLICATE_OUTPUT_NAME`         | A tuple holds one value per name.                                                   |
-| `INSERT_WITHOUT_COLUMNS`        | A tuple is a mapping, not a position list.                                          |
-| `TABLE_WITHOUT_PRIMARY_KEY`     | A relation stores its tuples under a key.                                           |
-| `UPDATE_PRIMARY_KEY`            | The key names the tuple; changing it is no update.                                  |
-| `COMPUTED_ALIAS_SHADOWS_COLUMN` | A computed key may not shadow a stored one; renaming around it would bloat the FQL. |
+| Limitation                      | Why                                                                                                                                                   |
+|---------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DUPLICATE_OUTPUT_NAME`         | A tuple holds one value per name.                                                                                                                     |
+| `INSERT_WITHOUT_COLUMNS`        | A tuple is a mapping, not a position list.                                                                                                            |
+| `TABLE_WITHOUT_PRIMARY_KEY`     | A relation stores its tuples under a key.                                                                                                             |
+| `UPDATE_PRIMARY_KEY`            | The key names the tuple; changing it is no update.                                                                                                    |
+| `COMPUTED_ALIAS_SHADOWS_COLUMN` | A computed key may not shadow a stored one, and one that names an unmapped column lands in the stored tuples; renaming around it would bloat the FQL. |
+| `OPERATOR_PARAMETER_NAME`       | An aggregate is a keyword argument of its operator, so it cannot be named like the operator's parameter (`self`, `input_function`).                   |
 
 ### R5 No FDM counterpart
 

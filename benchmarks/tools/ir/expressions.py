@@ -86,6 +86,29 @@ class Expression:
         """True when this compares values, which is false over an unmapped attribute."""
         return False
 
+    def columns_needed_to_hold(self) -> list[Column]:
+        """The columns that must be mapped for this to hold: the column of IS NOT NULL, or
+        the compared columns of a comparison other than `!=` / `is not`; an empty list
+        for any other expression, which may hold over unmapped columns.
+
+        A filter lambda guards exactly the compared columns, joined by `and`. A structured
+        predicate reads them as attribute paths; a path with an unmapped step is undefined,
+        and the predicate is false over it. A column below CASE, IS NULL or a nested
+        comparison, such as one in an OR, may stay unread, so it does not count."""
+        expression = self.unparenthesized()
+        tested = expression.not_null_tested_column()
+        if tested is not None:
+            return [tested]
+
+        unequal = (
+            isinstance(expression, BinaryExpression)
+            and expression.op in UNEQUAL_SYMBOLS
+        )
+        if not expression.is_comparison() or unequal:
+            return []
+
+        return list(expression.compared_columns({}))
+
     def null_tested_column(self) -> Column | None:
         """The column if this is `column IS NULL`; `None` otherwise."""
         return None
@@ -95,7 +118,9 @@ class Expression:
         return None
 
     def compared_columns(self, replaced: dict[Expression, Column]) -> Iterator[Column]:
-        """The columns the compared values read, `replaced` as its column; not CASE results or subqueries."""
+        """The columns the compared values read, `replaced` as its column; not CASE results or subqueries.
+        `columns_needed_to_hold` relies on the filter lambda guarding exactly these columns.
+        """
         for operand in self.children():
             yield from operand._operand_columns(replaced)
 
@@ -118,14 +143,30 @@ UNEQUAL_SYMBOLS = frozenset({"!=", "is not"})
 _COMPARISON_SYMBOLS = frozenset({"==", "<", "<=", ">", ">=", "is", *UNEQUAL_SYMBOLS})
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Literal(Expression):
-    """A constant; `None` is SQL's `NULL`."""
+    """A constant; `None` is SQL's `NULL`. It equals only a literal whose value has
+    the same type, so `1`, `1.0` and `TRUE` are three literals."""
 
     value: object
 
+    def __eq__(self, other: object) -> bool:
+        """True when `other` is a literal of an equal value of the same type."""
+        if not isinstance(other, Literal):
+            return NotImplemented
+        return self._typed_value() == other._typed_value()
+
+    def __hash__(self) -> int:
+        """The hash of the value with its type."""
+        typed_value = self._typed_value()
+        return hash(typed_value)
+
     def is_null_literal(self) -> bool:
         return self.value is None
+
+    def _typed_value(self) -> tuple[type, object]:
+        """The value with its type, which Python's `==` ignores for `1`, `1.0` and `True`."""
+        return type(self.value), self.value
 
 
 @dataclass(frozen=True)
@@ -366,6 +407,16 @@ class Column(Expression):
     def tuple_at(cls, path: Path) -> Column:
         """The tuple at the end of `path` itself, as a column without a name."""
         return cls(path, "")
+
+    def segments(self, joined: bool) -> list[str]:
+        """The attribute names reading this column; see `Path.segments`."""
+        if self.path is None:
+            return [self.name]
+
+        segments = self.path.segments(joined)
+        if self.name:
+            segments.append(self.name)
+        return segments
 
     def _operand_columns(self, replaced: dict[Expression, Column]) -> Iterator[Column]:
         """This column, or its replacement."""

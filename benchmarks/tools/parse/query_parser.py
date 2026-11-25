@@ -184,6 +184,38 @@ def _reject_duplicate_output_names(query: Query) -> None:
         )
 
 
+def _reject_computed_names_of_stored_columns(query: Query, schema: Schema) -> None:
+    """Rejects a computed column named as a key of the tuples it is added to."""
+    stored = _stored_names(query, schema)
+    for column in query.computed_columns.by_expression.values():
+        if column.name in stored:
+            raise UnsupportedSql(
+                Limitation.COMPUTED_ALIAS_SHADOWS_COLUMN,
+                f"Unsupported computed output {column.name!r}: the tuples it is "
+                "added to store a key of that name.",
+            )
+
+
+def _stored_names(query: Query, schema: Schema) -> set[str]:
+    """The keys of the tuples a computed column is added to: the aliases of a join
+    tuple, else the root's columns with each foreign key stored as its reference."""
+    tree = query.tree
+    if tree.is_joined:
+        return set(tree.join_members)
+
+    stored: set[str] = set()
+    # a query without FROM has no root and stores nothing
+    for root in tree.roots:
+        table = tree.table_of(root)
+        foreign_keys = schema.references.get(table, {})
+        for column in schema.columns.get(table, {}):
+            if column not in foreign_keys:
+                stored.add(column)
+        for reference in foreign_keys.values():
+            stored.add(reference.ref_key)
+    return stored
+
+
 def _parse_distinct(ast: Expr, query: Query) -> None:
     """SELECT DISTINCT as grouping by every selected column; a grouped query is grouped once more."""
     if not ast.args.get("distinct"):
@@ -245,6 +277,11 @@ def _parse_limit(
         return
 
     count = _literal_int(limit_node.expression, "LIMIT")
+    if count == 0:
+        raise UnsupportedSql(
+            Limitation.LIMIT_ZERO, "Unsupported LIMIT 0: it selects no rows."
+        )
+
     offset = (
         None if offset_node is None else _literal_int(offset_node.expression, "OFFSET")
     )
@@ -375,6 +412,7 @@ def _parse_definition(
 
     # SELECT first as it defines the alias of expressions used throughout the query (e.g. in GROUP BY, HAVING, ORDER BY)
     _parse_select(ast, state)
+    _reject_computed_names_of_stored_columns(query, schema)
     _parse_group_by(ast, state)
     _reject_ungrouped_columns(query)
     _parse_having(ast, state)

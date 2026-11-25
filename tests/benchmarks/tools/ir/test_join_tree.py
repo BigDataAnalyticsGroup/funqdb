@@ -29,6 +29,7 @@ from benchmarks.tools.ir.expressions import (
     Column,
     ExistsExpression,
     InSubqueryExpression,
+    IsNullExpression,
     Literal,
     SubqueryExpression,
     TupleIdentityExpression,
@@ -876,6 +877,135 @@ def test_join_tree_join_members_of_roots_no_hub_connects_are_the_roots():
     tree = build({"a": "A", "b": "B"}, ())  # FROM a, b
 
     assert tree.join_members == ("a", "b")  # the roots, without a hub
+
+
+def mapped(reference: Column) -> UnaryExpression:
+    """`reference IS NOT NULL`, the test that `reference` is mapped."""
+    unmapped = IsNullExpression(reference)  # reference IS NULL
+    return UnaryExpression("not", unmapped)  # negated
+
+
+def test_join_tree_reference_tests_of_one_alias_are_empty():
+    """A root alone follows no reference."""
+    tree = build({"t": "title"}, ())  # FROM title t
+
+    assert tree.reference_tests == {}  # nothing to test
+
+
+def test_join_tree_reference_tests_leave_out_the_edges_the_join_follows():
+    """The join itself drops a tuple without its reference into t."""
+    tree = build(MOVIES, MOVIE_EDGES)  # mc -> t <- mi, all three are members
+
+    assert tree.reference_tests == {}  # both edges lead to the hub t
+
+
+def test_join_tree_reference_tests_leave_out_a_reference_an_identity_reads():
+    """The identity reads mc.movie unguarded, so it drops a tuple without it already.
+
+    mc ──movie──▶ t ◀──movie── mi
+     │                         │
+     └──movie──▶ u ◀──movie────┘ (removed: mi.movie is mc.movie)
+    """
+    tables = {**MOVIES, "u": "title"}  # a second title
+    edges = (
+        *MOVIE_EDGES,
+        Edge("mc", "movie", "u"),
+        Edge("mi", "movie", "u"),
+    )  # both roots reach both titles
+    tree = build(tables, edges)  # keeps mc -> u outside the join
+    mc_movie = reference_at("mc", "mc", "movie")  # the reference mc -> u reads
+
+    assert mc_movie in {
+        tree.identities[0].left,
+        tree.identities[0].right,
+    }  # the identity reads it
+    assert tree.reference_tests == {}  # so no test is added for it
+
+
+def test_join_tree_reference_tests_leave_out_a_reference_an_identity_reads_through():
+    """The identity reads at.episode before its last hop, so it drops a tuple without it already.
+
+    at ── episode ──▶ e ── kind ──▶ k
+     └─── movie ──▶ t ── kind ───┘ (removed: at.movie.kind is at.episode.kind)
+    """
+    tables = {"at": "aka_title", "e": "title", "t": "title", "k": "kind_type"}
+    edges = (
+        Edge("at", "episode", "e"),
+        Edge("at", "movie", "t"),
+        Edge("e", "kind", "k"),
+        Edge("t", "kind", "k"),
+    )  # one root reaches the hub k twice
+    tree = build(tables, edges)  # keeps at -> e as a chain without its own end
+    episode_kind = reference_at("e", "at", "kind", "episode")  # at.episode.kind
+
+    assert episode_kind in {
+        tree.identities[0].left,
+        tree.identities[0].right,
+    }  # the identity reads at.episode on its way to kind
+    assert tree.reference_tests == {}  # so no test for the chain end e
+
+
+def test_join_tree_reference_tests_test_a_chain_an_identity_reads_only_part_of():
+    """The identity reads at.episode but not e.studio, the end of the chain to s.
+
+    at ── episode ──▶ e ── kind ──▶ k
+     │                └── studio ──▶ s
+     └─── movie ──▶ t ── kind ───┘ (removed: at.movie.kind is at.episode.kind)
+    """
+    tables = {
+        "at": "aka_title",
+        "e": "title",
+        "t": "title",
+        "k": "kind_type",
+        "s": "company_name",
+    }
+    edges = (
+        Edge("at", "episode", "e"),
+        Edge("at", "movie", "t"),
+        Edge("e", "kind", "k"),
+        Edge("t", "kind", "k"),
+        Edge("e", "studio", "s"),
+    )  # the diamond above, and a chain on from e
+    tree = build(tables, edges)  # keeps at -> e -> s outside any join
+    studio = reference_at("e", "at", "studio", "episode")  # at.episode.studio
+
+    assert tree.reference_tests == {
+        "s": mapped(studio)
+    }  # an identity reading the start of a chain does not test its end
+
+
+def test_join_tree_reference_tests_test_a_chain_once_at_its_end():
+    """Exists of the whole chain also tests its first reference.
+
+    mc ── company ──▶ cn ── country ──▶ c
+    """
+    tables = {"mc": "movie_companies", "cn": "company_name", "c": "country"}
+    edges = (
+        Edge("mc", "company", "cn"),
+        Edge("cn", "country", "c"),
+    )  # one root, a chain of two references
+    tree = build(tables, edges)  # no join
+    country = reference_at("cn", "mc", "country", "company")  # mc.company.country
+
+    assert tree.reference_tests == {
+        "c": mapped(country)
+    }  # by the chain end c, not mc.company on its own
+
+
+def test_join_tree_reference_tests_test_a_reference_off_the_join():
+    """mc.info leads to i2, which no other root reaches, so the join does not test it.
+
+    mc ── movie ──▶ t ◀── movie ── mi
+    └── info ──▶ i2
+    """
+    tables = {**MOVIES, "i2": "movie_info"}  # i2 is a second alias of mi's table
+    edges = (*MOVIE_EDGES, Edge("mc", "info", "i2"))  # i2 hangs off mc only
+    tree = build(tables, edges)  # the join of mc and mi
+    info = reference_at("mc", "mc", "info")  # mc.info
+
+    assert tree.reference_tests == {
+        "i2": mapped(info)
+    }  # the movie edges are join edges
 
 
 def test_join_tree_path_of_an_alias_of_another_query_is_none():

@@ -91,6 +91,10 @@ def parse(sql: str):
             Limitation.OFFSET_WITHOUT_LIMIT,
         ),  # a skip with no count
         (
+            "SELECT t.id FROM title AS t ORDER BY t.id LIMIT 0",
+            Limitation.LIMIT_ZERO,
+        ),  # no rows, only column names
+        (
             "SELECT t.id FROM title AS t LIMIT (SELECT 1)",
             Limitation.NON_LITERAL_LIMIT,
         ),  # a count that is no literal
@@ -160,6 +164,62 @@ def test_parse_query_rejects_sql_without_an_ir_for_its_limitation(sql, limitatio
         parse(sql)  # parsing is what refuses it
 
     assert raised.value.limitation is limitation  # the catalog entry of this case
+
+
+# The stored tuples of `title` hold `kind`, the reference its foreign key `kind_id`
+# becomes, and not `kind_id` itself.
+SHADOWING_SCHEMA = Schema(
+    references={"title": {"kind_id": Reference("kind", "kind_type")}},
+    primary_keys={"title": PrimaryKey(("id",)), "info": PrimaryKey(("id",))},
+    columns={
+        "title": {"id": "INTEGER", "year": "INTEGER", "kind_id": "INTEGER"},
+        "info": {"id": "INTEGER", "name": "VARCHAR"},
+    },
+)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT t.id + 1 AS year FROM title AS t",  # a column of the root
+        "SELECT t.id + 1 AS kind FROM title AS t",  # the reference of a foreign key
+        "SELECT t.id + 1 AS i FROM title AS t, info AS i",  # an alias of the join tuple
+    ],
+)
+def test_parse_query_rejects_a_computed_output_named_as_a_stored_key(sql):
+    """FDM refuses a computed key that the tuples it is added to store already."""
+    ast = sqlglot.parse_one(sql)  # the AST as written
+
+    with pytest.raises(UnsupportedSql) as raised:  # catalogued
+        parse_query(ast, SHADOWING_SCHEMA)  # parsing is what refuses it
+
+    assert raised.value.limitation is Limitation.COMPUTED_ALIAS_SHADOWS_COLUMN  # R4
+
+
+@pytest.mark.parametrize(
+    ("sql", "name"),
+    [
+        (
+            "SELECT t.year + 1 AS next_year FROM title AS t",
+            "next_year",
+        ),  # a fresh name
+        (
+            "SELECT t.id + 1 AS kind_id FROM title AS t",
+            "kind_id",
+        ),  # the foreign key, which the tuple stores as `kind`
+        (
+            "SELECT t.id + 1 AS name FROM title AS t, info AS i",
+            "name",
+        ),  # a column of a member, not a key of the join tuple
+    ],
+)
+def test_parse_query_accepts_a_computed_output_named_as_no_stored_key(sql, name):
+    """A computed output under a name its tuples do not store keeps that name."""
+    ast = sqlglot.parse_one(sql)  # the AST as written
+
+    query = parse_query(ast, SHADOWING_SCHEMA)  # no rejection
+
+    assert [output.name for output in query.outputs] == [name]  # as written
 
 
 @pytest.mark.parametrize(

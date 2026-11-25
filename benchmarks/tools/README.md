@@ -1,6 +1,6 @@
 # Benchmark Tools
 
-This directory holds the SQL transpiler (`ir/`, `parse/`, `sql/`, `limitations.py`)
+This directory holds the SQL transpiler (`ir/`, `parse/`, `render/`, `sql/`, `limitations.py`)
 and the code that writes reports (`report/`, `shared/`).
 See [report/README.md](report/README.md) for the reports. This file describes the transpiler.
 
@@ -9,34 +9,41 @@ See [report/README.md](report/README.md) for the reports. This file describes th
 The transpiler changes SQL into FQL. It shows which SQL FQL can already express.
 It is not an SQL interface for funqDB.
 
-So far, the transpiler consists of the part up to the IR: SQL goes in, and a `Statement` comes out.
-A renderer, which will write the IR as FQL, is planned. So is the pipeline, which will call the stages below in order:
-until then, no code calls them together.
+So far, the transpiler consists of the stages from SQL to FQL: SQL goes in, and FQL text comes out.
+The pipeline, which will call the stages below in order and run both sides, is planned.
+Until then, only tests call the stages together.
 
 
 ### Files
 
-| Path                         | Purpose                                                                        |
-|------------------------------|--------------------------------------------------------------------------------|
-| `limitations.py`             | `Limitation`, the catalogue, and `UnsupportedSql`, the error that names one.   |
-| `Limitations.md`             | Each limitation and why it exists; a test compares it with `limitations.py`.   |
-| `sql/optimization.py`        | `factor_common_conjuncts`, and `OPTIMIZER_RULES`: sqlglot's rules, adapted.    |
-| `parse/sql_baseline.py`      | `reject_non_baseline_sql`: an allow-list of the SQL the transpiler looks at.   |
-| `parse/type_checks.py`       | `reject_ill_typed_sql`: rejects typed SQL that FQL would read otherwise.       |
-| `parse/statement_parser.py`  | `parse_statement`: the current entry point; returns a `Statement`.             |
-| `parse/query_parser.py`      | `parse_query`: returns a SELECT as a `Query`.                                  |
-| `parse/join_tree_parser.py`  | `read_from`, `split_conditions`; `build_join_tree` returns the `JoinTree`.     |
-| `parse/expression_parser.py` | `parse_where_expression`, `parse_value_expression` and others: `Expression`s.  |
-| `parse/cte.py`               | `CteDefinition`: a CTE as the query that reads it inlines it.                  |
-| `parse/parse_state.py`       | `ParseState`: what the parser knows about a query beyond its IR.               |
-| `parse/node_args.py`         | Helpers for sqlglot nodes: `arg_names`, `sql_conjuncts`.                       |
-| `ir/statements.py`           | The IR of a statement: `Statement` and its subtypes.                           |
-| `ir/query.py`                | The IR of a query: `Query`, `Output`, `OrderKey`, `Limit`, `GeneratedColumns`. |
-| `ir/expressions.py`          | The IR of a value or condition: `Expression` and its subtypes.                 |
-| `ir/join_equalities.py`      | The equalities between aliases: `Edge`, `ForeignKeyEquality`, `ReferenceRead`. |
-| `ir/join_tree.py`            | `AliasGraph`, `JoinTree`, `Join`: see [below](#from-alias-graph-to-join-tree). |
-| `ir/paths.py`                | `Path`: how a query reaches the tuple of an alias.                             |
-| `ir/names.py`                | Names that the transpiler makes up: `fresh_name`, `as_python_name`.            |
+| Path                              | Purpose                                                                         |
+|-----------------------------------|---------------------------------------------------------------------------------|
+| `limitations.py`                  | `Limitation`, the catalogue, and `UnsupportedSql`, the error that names one.    |
+| `Limitations.md`                  | Each limitation and why it exists; a test compares it with `limitations.py`.    |
+| `sql/optimization.py`             | `factor_common_conjuncts`, and `OPTIMIZER_RULES`: sqlglot's rules, adapted.     |
+| `parse/sql_baseline.py`           | `reject_non_baseline_sql`: an allow-list of the SQL the transpiler looks at.    |
+| `parse/type_checks.py`            | `reject_ill_typed_sql`: rejects typed SQL that FQL would read otherwise.        |
+| `parse/statement_parser.py`       | `parse_statement`: the current entry point; returns a `Statement`.              |
+| `parse/query_parser.py`           | `parse_query`: returns a SELECT as a `Query`.                                   |
+| `parse/join_tree_parser.py`       | `read_from`, `split_conditions`; `build_join_tree` returns the `JoinTree`.      |
+| `parse/expression_parser.py`      | `parse_where_expression`, `parse_value_expression` and others: `Expression`s.   |
+| `parse/cte.py`                    | `CteDefinition`: a CTE as the query that reads it inlines it.                   |
+| `parse/parse_state.py`            | `ParseState`: what the parser knows about a query beyond its IR.                |
+| `parse/node_args.py`              | Helpers for sqlglot nodes: `arg_names`, `sql_conjuncts`.                        |
+| `render/statement_renderer.py`    | `StatementRenderer`: renders a `Statement` as FQL.                              |
+| `render/query_renderer.py`        | `QueryRenderer`: renders a `Query` as one FQL expression.                       |
+| `render/structured_predicates.py` | `StructuredPredicates`: a condition as `fql.predicates` objects where one fits. |
+| `render/config.py`                | `Config`: the database name and the style of the rendered FQL.                  |
+| `render/like.py`                  | `LikePattern`: the shape of a LIKE pattern, and its regular expression.         |
+| `render/fragments.py`             | Attribute paths and literals, as both predicate forms render them.              |
+| `render/fql_names.py`             | The names that rendered FQL binds, and the names FDM cannot address.            |
+| `ir/statements.py`                | The IR of a statement: `Statement` and its subtypes.                            |
+| `ir/query.py`                     | The IR of a query: `Query`, `Output`, `OrderKey`, `Limit`, `GeneratedColumns`.  |
+| `ir/expressions.py`               | The IR of a value or condition: `Expression` and its subtypes.                  |
+| `ir/join_equalities.py`           | The equalities between aliases: `Edge`, `ForeignKeyEquality`, `ReferenceRead`.  |
+| `ir/join_tree.py`                 | `AliasGraph`, `JoinTree`, `Join`: see [below](#from-alias-graph-to-join-tree).  |
+| `ir/paths.py`                     | `Path`: how a query reaches the tuple of an alias.                              |
+| `ir/names.py`                     | Names that the transpiler makes up: `fresh_name`, `as_python_name`.             |
 
 
 ### Stages
@@ -47,6 +54,7 @@ until then, no code calls them together.
 | Baseline check   | `parse/sql_baseline.py`                       | `UnsupportedSql` for SQL outside the baseline. |
 | SQL Optimization | `sql/optimization.py`, `parse/type_checks.py` | A normalized AST.                              |
 | IR Parsing       | `parse/`                                      | A `Statement` from `ir/`.                      |
+| Rendering        | `render/`                                     | FQL text.                                      |
 
 1. **SQL Parsing.** sqlglot reads the text in its default dialect (`SQL_READ_DIALECT`).
 2. **Baseline check.** The baseline is ISO SQL-92, plus what the JOB and TPC-H queries use,
@@ -68,6 +76,15 @@ until then, no code calls them together.
    - It then reads the remaining conditions, SELECT, GROUP BY, HAVING, DISTINCT, ORDER BY and LIMIT in this order.
    - `Update` and `Delete` read their rows through a `Query`.
      `Insert` holds its values, and `Update` holds its assignments.
+5. **Rendering.** `StatementRenderer` writes the `Statement` as FQL text in the style that `Config` selects:
+   - A query becomes one expression on the database `dbf_name`. A write statement becomes Python statements that
+     change it.
+   - Each SQL name is rendered as a Python string literal (`repr`), or as a dot access with `AttributeAccess.DOT`
+     where the name is a plain attribute.
+   - `PredicateForm.STRUCTURED` renders each conjunct of a filter as `fql.predicates` objects where it can, and as
+     a lambda where not.
+   - LIKE with `_`, or with `%` inside the pattern, becomes `re.fullmatch` with `(?s)`, so that `%` and `_` also
+     match a line break.
 
 ### Write statements
 
@@ -128,7 +145,11 @@ Statement
 | `regroups`                   | True for DISTINCT on a grouped query: its groups are grouped once more. |
 | `order_keys`, `limit`        | ORDER BY, and LIMIT with OFFSET.                                        |
 
-The property `condition` gives the tree's identities, then `stated_condition`.
+The property `condition` gives the tree's identities, its reference tests, then `stated_condition`.
+A reference test (`ref IS NOT NULL`) makes sure that each reference the tree follows outside the join is mapped.
+The SQL join drops a row without the referenced tuple, and a read in one branch of an OR may never happen.
+A test is left out where a WHERE conjunct is an IS NOT NULL test or a comparison other than `<>`, and that conjunct
+itself checks a column of the chain end: not below CASE, IS NULL or a nested comparison, and not as an IN option.
 The three `GeneratedColumns` fields give each expression a `Column` that the other clauses read by name.
 An expression that a query uses twice gets one column.
 
@@ -151,7 +172,7 @@ A foreign key compared with the key of its target table, for example in a correl
 becomes a `TupleIdentityExpression` with the tuple of that key.
 
 Names, such as output names, INSERT columns and LIKE patterns, reach the IR as written.
-The renderer must write each one with `repr()`, so that no name becomes code.
+The renderer writes each one with `repr()`, so that no name becomes code.
 
 A correlated column keeps the `Path` of the enclosing query: `Path.depth` tells which query it reads.
 
@@ -292,8 +313,9 @@ It is empty when a table has several members, as FQL refuses a relation entered 
 ### Tests
 
 `tests/benchmarks/tools/` has the same layout as this directory, with at most one test file per source file.
-Modules of plain dataclasses, such as `ir/paths.py`, have none.
+Modules of plain dataclasses, such as `ir/join_equalities.py`, have none.
 `tests/benchmarks/tools/framework/parsing.py` holds the helpers that parse SQL for a test.
+`framework/rendering.py` renders SQL as FQL and runs both on a dataset.
 The section `## SQL transpiler` of `SPEC.md` names the tests of each feature.
 
 ### Limitations

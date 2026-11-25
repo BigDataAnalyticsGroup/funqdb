@@ -31,8 +31,10 @@ from benchmarks.tools.ir.expressions import (
     ExistsExpression,
     Expression,
     InSubqueryExpression,
+    IsNullExpression,
     SubqueryExpression,
     TupleIdentityExpression,
+    UnaryExpression,
     conjunction,
 )
 from benchmarks.tools.ir.join_equalities import Edge, ForeignKeyEquality, ReferenceRead
@@ -116,6 +118,35 @@ class JoinTree:
             alias for alias in graph.tables if alias in graph.roots or alias in upstream
         )
 
+    @property
+    def reference_tests(self) -> dict[str, Expression]:
+        """Per reference chain the tree follows outside the join, by the alias it ends at, a test that it is mapped."""
+        graph = self._graph
+        join_members = self.join_members
+        # an identity reads every reference along its paths unguarded, so a tuple
+        # without one drops out; by alias, as an identity may reach it from another root
+        identity_reads: set[tuple[str, str]] = set()
+        for identity in self.identities:
+            identity_reads |= self._reads(identity.left)
+            identity_reads |= self._reads(identity.right)
+        tests: dict[str, Expression] = {}
+        for edge in graph.edges:
+            # the join itself drops a tuple without a reference between members
+            if edge.target in join_members:
+                continue
+            # a test of the longer chain covers this reference
+            if graph.outgoing(edge.target):
+                continue
+
+            if (edge.source, edge.ref_key) in identity_reads:
+                continue
+
+            source_path = self.path_of(edge.source)
+            reference = Column(source_path, edge.ref_key, True)
+            unmapped = IsNullExpression(reference)
+            tests[edge.target] = UnaryExpression("not", unmapped)
+        return tests
+
     def path_of(self, alias: str) -> Path | None:
         """The path to `alias` from the first root reaching it; `None` for an alias of another query."""
         paths = self._paths.get(alias)
@@ -134,6 +165,24 @@ class JoinTree:
             return None
 
         return self._split(condition)
+
+    def _reads(self, column: Column) -> set[tuple[str, str]]:
+        """The references `column` reads along its path, each by the alias it is read off."""
+        reached = _reached_tuple(column)
+        alias = reached.root
+        reads: set[tuple[str, str]] = set()
+        for ref_key in reached.ref_keys:
+            reads.add((alias, ref_key))
+            outgoing = self._graph.outgoing(alias)
+            followed = next(
+                (edge for edge in outgoing if edge.ref_key == ref_key), None
+            )
+            # the last read may follow an edge the tree removed
+            if followed is None:
+                break
+
+            alias = followed.target
+        return reads
 
     def _split(self, condition: Expression | None) -> Join:
         """The join with each conjunct of `condition` pushed into a root that answers it, else left on the join tuples.

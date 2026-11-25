@@ -144,6 +144,11 @@ class Limitation(Enum):
         "OFFSET without LIMIT is not translated: FQL's subset keeps a counted "
         "number of ranked tuples.",
     )
+    LIMIT_ZERO = (
+        _REJECTED,
+        "LIMIT 0 selects no rows; SQL uses it to read the column names of a result, "
+        "which a relation without tuples does not have.",
+    )
     HAVING_WITHOUT_GROUP_BY = (
         _REJECTED,
         "HAVING without GROUP BY filters the single aggregate row, which FQL "
@@ -167,8 +172,15 @@ class Limitation(Enum):
     )
     COMPUTED_ALIAS_SHADOWS_COLUMN = (
         _REJECTED,
-        "A computed output reuses the name of a stored column, and FDM refuses a "
-        "computed key that is already stored; renaming around it would bloat the FQL.",
+        "A computed output reuses a key of the tuples it is added to (a column, the "
+        "reference of a foreign key, or a join alias): FDM refuses a computed key that "
+        "is already stored, and adds one that is unmapped to the stored tuples; "
+        "renaming around it would bloat the FQL.",
+    )
+    OPERATOR_PARAMETER_NAME = (
+        _REJECTED,
+        "An aggregate is named like a parameter of the FQL operator that computes it "
+        "(self, input_function), so the call would bind that parameter twice.",
     )
     SCALAR_SUBQUERY_ROWS = (
         _REJECTED,
