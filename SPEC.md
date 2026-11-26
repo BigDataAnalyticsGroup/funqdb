@@ -551,7 +551,7 @@ its subtypes unless a subtype entry explicitly says otherwise.
   `UnsupportedSql` carries one `Limitation` and its category. `benchmarks/tools/Limitations.md` lists every `Limitation` under its category, and a test fails when the names or categories disagree. Test: `tests/benchmarks/tools/test_limitations.py`.
 
 - `[✅]` *Prepare SQL for the parser*
-  `factor_common_conjuncts` moves the conjuncts common to all branches of an OR out of the OR. `ill_typed_sql_rule` runs the type checks on the statement as written, before a later rule coerces its values. Test: `tests/benchmarks/tools/sql/test_optimization.py`.
+  `factor_common_conjuncts` moves the conjuncts common to all branches of an OR out of the OR. Conjuncts match by their SQL text after sqlglot's `simplify`, so `b = a` matches `a = b`. `ill_typed_sql_rule` runs the type checks on the statement as written, before a later rule coerces its values; a spelling that factoring drops is not checked (TODO.md). Test: `tests/benchmarks/tools/sql/test_optimization.py`.
 
 - `[✅]` *Reject what SQL's types make FQL read otherwise*
   `reject_ill_typed_sql` rejects what would silently give another result than SQL: a comparison across type families, a CASE whose results span type families, a decimal literal against a float column or the reverse, a sub-day interval that does not directly shift a datetime, an interval divided or scaled by a value that is no whole number, and a cast to a date or datetime of a value that is neither a text literal nor of that type. Other ill-typed SQL is not looked for. A value of unknown type is trusted. Test: `tests/benchmarks/tools/parse/test_type_checks.py`.

@@ -66,7 +66,7 @@ Until then, only tests call the stages together.
    After `qualify`, every column names its alias.
    The schema reaches sqlglot through `quoted_schema`, so that a name with quotes in it, such as `"quoted"`, keeps them.
    The rule `ill_typed_sql_rule` then runs the type checks on the statement as written,
-   because later rules convert values.
+   because later rules convert values. A spelling that `factor_common_conjuncts` drops is not checked (see TODO.md).
    Other ill-typed SQL is not looked for. `OPTIMIZER_RULES` leaves out two of sqlglot's rules:
    - `unnest_subqueries` turns EXISTS and IN into a LEFT JOIN on a CTE, which do not translate.
      The IR holds the subquery instead.

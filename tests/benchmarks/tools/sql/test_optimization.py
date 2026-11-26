@@ -70,6 +70,68 @@ def test_factor_common_conjuncts_matches_conjuncts_in_any_order():
     assert factored_where("(a AND x) OR (x AND a)") == "a AND x"  # same set, reordered
 
 
+def test_factor_common_conjuncts_matches_a_comparison_with_swapped_operands():
+    """`b = a` is `a = b`; the first branch's way of writing it is the one lifted."""
+    assert (  # fails if compared as written, or if a = b lifts instead of b = a
+        factored_where("(b = a AND x) OR (a = b AND y)") == "b = a AND (x OR y)"
+    )
+
+
+def test_factor_common_conjuncts_matches_a_comparison_flipped_in_direction():
+    """`b > a` is `a < b`: the operator flips with its operands."""
+    assert (  # fails if only the operands of = are put in order
+        factored_where("(a < b AND x) OR (b > a AND y)") == "a < b AND (x OR y)"
+    )
+
+
+def test_factor_common_conjuncts_lifts_the_first_of_two_alike_conjuncts_in_a_branch():
+    """`b = a` and `a = b` in the first branch are one conjunct; the first one lifts."""
+    assert (  # fails if the later of the two alike conjuncts is kept
+        factored_where("(b = a AND a = b AND x) OR (a = b AND y)")
+        == "b = a AND (x OR y)"
+    )
+
+
+def test_factor_common_conjuncts_keeps_a_remainder_as_written_and_once():
+    """What stays in a branch keeps its spelling, and alike conjuncts there stay once."""
+    assert (  # fails if the remainder is built from simplified text, or keeps b = c
+        factored_where("(a AND c = b AND b = c) OR (a AND y)") == "a AND (c = b OR y)"
+    )
+
+
+def test_factor_common_conjuncts_keeps_a_comparison_and_its_reverse_apart():
+    """`a < b` and `b < a` are different conjuncts, so nothing is lifted."""
+    assert (  # fails if the operands are put in order without flipping the operator
+        factored_where("(a < b AND x) OR (b < a AND y)")
+        == "(a < b AND x) OR (b < a AND y)"
+    )
+
+
+def test_factor_common_conjuncts_matches_what_simplify_folds_alike():
+    """`simplify` folds `1 + 1` into `2`, so `x = 1 + 1` and `x = 2` match too."""
+    assert (  # pins sqlglot's folding: fails if an upgrade stops writing both alike
+        factored_where("(x = 1 + 1 AND p) OR (x = 2 AND q)") == "x = 1 + 1 AND (p OR q)"
+    )
+
+
+def test_factor_common_conjuncts_matches_float_arithmetic_that_simplify_folds():
+    """A known hazard (see `_simplified_sql`): `simplify` folds `x + 0.1 = 0.3` into
+    `x = 0.2` without knowing the type of `x`, so the two match, although for a DOUBLE
+    `x` they differ, as 0.3 - 0.1 is not exactly 0.2 in floating point."""
+    assert (  # pins the hazard: once matching knows types, this test must change
+        factored_where("(x + 0.1 = 0.3 AND p) OR (x = 0.2 AND q)")
+        == "x + 0.1 = 0.3 AND (p OR q)"
+    )
+
+
+def test_factor_common_conjuncts_does_not_match_a_qualified_and_an_unqualified_column():
+    """A known gap (TODO.md): factoring runs before `qualify`, so `t.a` is not `a`."""
+    assert (  # pins the gap: once closed, t.a = 1 lifts and this test must change
+        factored_where("(t.a = 1 AND x) OR (a = 1 AND y)")
+        == "(t.a = 1 AND x) OR (a = 1 AND y)"
+    )
+
+
 def test_factor_common_conjuncts_keeps_a_conjunct_missing_from_one_branch_in_place():
     """Only the intersection of the branches lifts: `b` is in two of three and stays."""
     assert (  # only a is shared; b must not be lifted out

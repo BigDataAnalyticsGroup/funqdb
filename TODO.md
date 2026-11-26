@@ -24,6 +24,14 @@
   bare boolean columns, so `WHERE (t.a OR t.b) IS TRUE` renders `('a' in tf) and ('b' in tf) and ...`. For
   `a = TRUE`, `b = NULL` SQL keeps the row and FQL drops it. Stop at OR/AND as at a nested comparison, and check
   that the reference tests of `Query._needed_reference_tests` (which rely on these guards) stay sound.
+- [ ] transpiler, factoring: `factor_common_conjuncts` (`benchmarks/tools/sql/optimization.py`) runs before the
+  optimizer. (1) It runs before `qualify`, so `t.a = 1` in one branch of an OR and `a = 1` in another do not match
+  and stay where they are. (2) It runs before `ill_typed_sql_rule`, so a later spelling that `simplify` matches, in
+  the same or a later branch, is dropped unchecked:
+  `(t.d >= CAST('2020-01-01 01:00:00' AS DATE) AND p) OR (DATE '2020-01-01' + INTERVAL '1' HOUR <= t.d AND q)`
+  passes, while the unfactored statement is rejected. Running it as an optimizer rule right after
+  `ill_typed_sql_rule` would close both; its per-conjunct `simplify` is still needed there, as `qualify` does not
+  write `b = a` and `a = b` alike.
 - [ ] subqueries — FQL's functional composition already subsumes SQL subqueries
   (uncorrelated = variable assignment, correlated = lambda closures, scalar =
   transforms). Needs a tutorial page demonstrating each SQL pattern in FQL.
